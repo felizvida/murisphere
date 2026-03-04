@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ app_name }} | Mouse Colony Management</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="bg-grid"></div>
+    <header>
+      <div>
+        <h1>{{ app_name }}</h1>
+        <p>Mouse Colony & Vivarium Operations</p>
+      </div>
+      <div id="sessionChip" class="session-chip hidden"></div>
+    </header>
+
+    <main>
+      <section id="loginPanel" class="card">
+        <h2>Secure Login</h2>
+        <p class="muted">Role-based access with full audit trail.</p>
+        <form id="loginForm">
+          <label>Email<input type="email" id="email" required /></label>
+          <label>Password<input type="password" id="password" required /></label>
+          <button type="submit">Sign In</button>
+        </form>
+        <p class="hint">Demo: admin@murisphere.local / admin1234</p>
+      </section>
+
+      <section id="appPanel" class="hidden">
+        <nav class="tabs">
+          <button data-tab="scan" class="active">Scan/Edit</button>
+          <button data-tab="cages">Cages</button>
+          <button data-tab="breeding">Breeding</button>
+          <button data-tab="analytics">Analytics</button>
+          <button data-tab="reports">Reports</button>
+          <button data-tab="compliance">Compliance</button>
+        </nav>
+
+        <section id="tab-scan" class="tab-content active card">
+          <h3>Scan-to-Edit</h3>
+          <p class="muted">Enter cage ID or QR token from printed card.</p>
+          <div class="inline-form">
+            <input id="scanCode" placeholder="C-A1-001 or QR token" />
+            <button id="scanBtn">Open Cage</button>
+          </div>
+          <div id="scanResult"></div>
+        </section>
+
+        <section id="tab-cages" class="tab-content card">
+          <div class="inline-form between">
+            <h3>Cage Management</h3>
+            <button id="refreshCages">Refresh</button>
+          </div>
+          <div class="inline-form">
+            <input id="searchCages" placeholder="Search cage, strain, genotype" />
+            <button id="searchBtn">Search</button>
+            <button id="printCardsBtn">Generate Cage Cards</button>
+            <button id="quickPrintBtn">Generate + Print</button>
+          </div>
+          <div class="inline-form">
+            <input id="scanBaseUrl" placeholder="Scan Base URL (e.g., https://murisphere.your-org.org)" />
+            <button id="saveScanBaseBtn">Save Scan URL Base</button>
+          </div>
+          <p class="hint">Use a phone-reachable host/IP. Avoid localhost/127.0.0.1 for printed cards.</p>
+          <div id="cageTable"></div>
+          <div id="cardPreview"></div>
+        </section>
+
+        <section id="tab-breeding" class="tab-content card">
+          <h3>Breeding Scheduler</h3>
+          <form id="breedingForm" class="grid-form">
+            <label>Cage ID<input type="number" id="breedCageId" required /></label>
+            <label>Event Type
+              <select id="breedType">
+                <option>timed_mating</option>
+                <option>plug_check</option>
+                <option>weaning</option>
+                <option>harvest</option>
+                <option>retire</option>
+              </select>
+            </label>
+            <label>Date<input type="date" id="breedDate" required /></label>
+            <button type="submit">Create Event</button>
+          </form>
+          <div id="calendarList"></div>
+        </section>
+
+        <section id="tab-analytics" class="tab-content card">
+          <h3>Operations Dashboard</h3>
+          <div id="analyticsSummary" class="kpis"></div>
+        </section>
+
+        <section id="tab-reports" class="tab-content card">
+          <h3>Reporting & Interoperability</h3>
+          <div class="inline-form">
+            <a class="button-link" href="/api/reports/cages.csv" target="_blank">Export CSV</a>
+            <a class="button-link" href="/api/reports/cages.xlsx" target="_blank">Export Excel</a>
+            <a class="button-link" href="/api/reports/cages.pdf" target="_blank">Export PDF</a>
+          </div>
+          <h4>Genotyping Upload (CSV)</h4>
+          <form id="genoUploadForm" class="inline-form">
+            <input type="file" id="genoFile" accept=".csv" required />
+            <button type="submit">Upload Results</button>
+          </form>
+          <h4>Onboarding Import (Excel)</h4>
+          <form id="excelImportForm" class="inline-form">
+            <input type="file" id="excelFile" accept=".xlsx" required />
+            <button type="submit">Import Cages</button>
+          </form>
+        </section>
+
+        <section id="tab-compliance" class="tab-content card">
+          <h3>Compliance & Audit</h3>
+          <button id="loadAlertsBtn">Load Protocol Alerts</button>
+          <button id="loadAuditBtn">Load Audit Trail</button>
+          <div id="alerts"></div>
+          <div id="audit"></div>
+        </section>
+      </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

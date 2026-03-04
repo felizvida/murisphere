@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ app_name }} Scan</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; background: #f4f7f8; color: #122; }
+      .wrap { max-width: 680px; margin: 0 auto; padding: 14px; }
+      .card { background: #fff; border: 1px solid #d7e3df; border-radius: 12px; padding: 14px; }
+      h1 { margin: 0 0 10px; font-size: 1.15rem; }
+      .muted { color: #51626e; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 0.95rem; }
+      .k { color: #51626e; }
+      .v { font-weight: 700; }
+      .actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+      .btn { border: none; border-radius: 8px; padding: 10px 12px; text-decoration: none; color: #fff; background: #0b6e4f; }
+      @media (max-width: 560px) { .grid { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card" id="card">
+        <h1>Loading Cage Info...</h1>
+        <p class="muted">Token: {{ scan_token }}</p>
+      </div>
+    </div>
+    <script>
+      async function run() {
+        const token = {{ scan_token|tojson }};
+        const card = document.getElementById("card");
+        try {
+          const res = await fetch(`/api/public/scan/${encodeURIComponent(token)}`);
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || "Scan failed");
+          const c = data.cage;
+          card.innerHTML = `
+            <h1>Cage ${c.cageCode}</h1>
+            <p class="muted">Scan successful. Cage details loaded in browser.</p>
+            <div class="grid">
+              <div><span class="k">Strain:</span> <span class="v">${c.strain}</span></div>
+              <div><span class="k">Genotype:</span> <span class="v">${c.genotypeSummary}</span></div>
+              <div><span class="k">Status:</span> <span class="v">${c.breedingStatus}</span></div>
+              <div><span class="k">DOB:</span> <span class="v">${c.dob || "N/A"}</span></div>
+              <div><span class="k">Male Count:</span> <span class="v">${c.maleCount}</span></div>
+              <div><span class="k">Female Count:</span> <span class="v">${c.femaleCount}</span></div>
+              <div><span class="k">Protocol:</span> <span class="v">${c.protocol || "N/A"}</span></div>
+              <div><span class="k">Location:</span> <span class="v">${c.room} / ${c.rack}</span></div>
+              <div><span class="k">Lab:</span> <span class="v">${c.lab}</span></div>
+            </div>
+            <div class="actions">
+              <a class="btn" href="/?scanToken=${encodeURIComponent(token)}">Open Murisphere (login for edits)</a>
+            </div>
+          `;
+        } catch (e) {
+          card.innerHTML = `<h1>Scan failed</h1><p class="muted">${e.message}</p>`;
+        }
+      }
+      run();
+    </script>
+  </body>
+</html>
