@@ -34,15 +34,15 @@ class AppIntegrationTests(unittest.TestCase):
         return {"Authorization": f"Bearer {token}"}
 
     def test_auth_login_and_me(self) -> None:
+        unauth = self.client.get("/api/auth/me")
+        self.assertEqual(unauth.status_code, 401)
+
         token = self.login("admin@murisphere.local", "admin1234")
         me = self.client.get("/api/auth/me", headers=self.auth_headers(token))
         self.assertEqual(me.status_code, 200)
         payload = me.get_json()
         self.assertEqual(payload["email"], "admin@murisphere.local")
         self.assertEqual(payload["role"], "Admin")
-
-        unauth = self.client.get("/api/auth/me")
-        self.assertEqual(unauth.status_code, 401)
 
     def test_scan_edit_workflow_updates_and_audits(self) -> None:
         token = self.login("tech@murisphere.local", "tech1234")
@@ -211,6 +211,62 @@ class AppIntegrationTests(unittest.TestCase):
         audit = self.client.get("/api/audit", headers=self.auth_headers(token))
         self.assertEqual(audit.status_code, 200)
         self.assertIsInstance(audit.get_json(), list)
+
+    def test_technician_cannot_access_other_lab_cage(self) -> None:
+        tech_token = self.login("tech@murisphere.local", "tech1234")
+
+        with sqlite3.connect(appmod.DB_PATH) as conn:
+            now = datetime.now(UTC).isoformat()
+            conn.execute(
+                "INSERT INTO labs (name, pi_name, facility_id, created_at) VALUES (?, ?, ?, ?)",
+                ("Other Lab", "Dr. Other", 1, now),
+            )
+            other_lab_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute(
+                """
+                INSERT INTO cages (
+                    cage_code, strain, genotype_summary, breeding_status, dob, male_count, female_count,
+                    room_id, rack_id, lab_id, protocol_id, qr_token, notes, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "C-OTHER-001",
+                    "BALB/c",
+                    "WT/WT",
+                    "Holding",
+                    date.today().isoformat(),
+                    1,
+                    1,
+                    1,
+                    1,
+                    other_lab_id,
+                    1,
+                    "tok_other_001",
+                    "other lab cage",
+                    now,
+                    now,
+                ),
+            )
+            conn.commit()
+
+        # Should not be visible in list
+        cages = self.client.get("/api/cages", headers=self.auth_headers(tech_token)).get_json()
+        self.assertFalse(any(c["cageCode"] == "C-OTHER-001" for c in cages))
+
+        # Should not be scannable or editable by another lab's technician
+        scan = self.client.get("/api/scan/C-OTHER-001", headers=self.auth_headers(tech_token))
+        self.assertEqual(scan.status_code, 404)
+
+        other = self.client.get("/api/public/scan/tok_other_001")
+        self.assertEqual(other.status_code, 200)
+        other_id = other.get_json()["cage"]["id"]
+
+        edit = self.client.patch(
+            f"/api/cages/{other_id}",
+            headers=self.auth_headers(tech_token),
+            json={"notes": "attempted cross-lab edit"},
+        )
+        self.assertEqual(edit.status_code, 404)
 
 
 if __name__ == "__main__":

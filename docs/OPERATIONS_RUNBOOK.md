@@ -1,0 +1,29 @@
+# Operations Runbook
+
+## Monitoring
+Track:
+- API response times (especially scan lookup)
+- Error rate by endpoint
+- DB file growth and free disk space
+- Failed login attempts
+
+## Routine Tasks
+- Daily: DB backup verification
+- Weekly: audit log review for abnormal edits
+- Weekly: protocol expiration alert checks
+- Monthly: user/role review and stale session cleanup
+
+## Incident Response
+1. Identify impacted endpoint and users.
+2. Capture logs and DB snapshot.
+3. Disable public scan route if abuse suspected.
+4. Revoke active sessions if account compromise is possible.
+5. Apply patch and rerun CI suite.
+
+## Data Recovery
+- Restore DB from latest backup.
+- Run smoke checks:
+  - login
+  - cage search
+  - scan lookup
+  - audit endpoint

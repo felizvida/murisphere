@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
 import os
@@ -20,6 +21,7 @@ APP_NAME = "Murisphere"
 DB_PATH = os.getenv("MURISPHERE_DB", "murisphere.db")
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
+app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("MURISPHERE_MAX_UPLOAD_BYTES", "5242880"))
 
 
 @dataclass
@@ -33,6 +35,10 @@ class AuthContext:
 
 def now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def token_digest(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def db() -> sqlite3.Connection:
@@ -152,6 +158,8 @@ def audit_log(actor_id: int | None, entity_type: str, entity_id: int | str, acti
 def current_user() -> AuthContext | None:
     token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
     if not token:
+        token = request.cookies.get("murisphere_session", "").strip()
+    if not token:
         return None
     row = db().execute(
         """
@@ -160,7 +168,7 @@ def current_user() -> AuthContext | None:
         JOIN users u ON s.user_id = u.id
         WHERE s.token = ? AND s.expires_at > ?
         """,
-        (token, now_iso()),
+        (token_digest(token), now_iso()),
     ).fetchone()
     if not row:
         return None
@@ -190,6 +198,18 @@ def require_auth(roles: tuple[str, ...] | None = None):
     return decorator
 
 
+def is_admin(user: AuthContext) -> bool:
+    return user.role == "Admin"
+
+
+def ensure_cage_scope(cage_id: int, user: AuthContext) -> sqlite3.Row | None:
+    if is_admin(user):
+        return db().execute("SELECT * FROM cages WHERE id = ?", (cage_id,)).fetchone()
+    if user.lab_id is None:
+        return None
+    return db().execute("SELECT * FROM cages WHERE id = ? AND lab_id = ?", (cage_id, user.lab_id)).fetchone()
+
+
 def cage_payload(row: sqlite3.Row) -> dict[str, Any]:
     return {
         "id": row["id"],
@@ -208,6 +228,11 @@ def cage_payload(row: sqlite3.Row) -> dict[str, Any]:
         "qrToken": row["qr_token"],
         "updatedAt": row["updated_at"],
     }
+
+
+@app.errorhandler(413)
+def too_large(_err: Exception) -> Response:
+    return jsonify({"error": "Upload too large"}), 413
 
 
 def simple_pdf(lines: list[str]) -> bytes:
@@ -267,11 +292,11 @@ def login() -> Response:
     expires_at = (datetime.now(UTC) + timedelta(hours=12)).isoformat()
     db().execute(
         "INSERT INTO sessions (token, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)",
-        (token, row["id"], expires_at, now_iso()),
+        (token_digest(token), row["id"], expires_at, now_iso()),
     )
     db().commit()
 
-    return jsonify(
+    resp = jsonify(
         {
             "token": token,
             "user": {
@@ -284,15 +309,29 @@ def login() -> Response:
             "appName": APP_NAME,
         }
     )
+    resp.set_cookie(
+        "murisphere_session",
+        token,
+        httponly=True,
+        secure=os.getenv("MURISPHERE_COOKIE_SECURE", "0") == "1",
+        samesite="Lax",
+        max_age=12 * 60 * 60,
+    )
+    return resp
 
 
 @app.post("/api/auth/logout")
 @require_auth()
 def logout() -> Response:
     token = request.headers.get("Authorization", "").replace("Bearer ", "").strip()
-    db().execute("DELETE FROM sessions WHERE token = ?", (token,))
+    if not token:
+        token = request.cookies.get("murisphere_session", "").strip()
+    if token:
+        db().execute("DELETE FROM sessions WHERE token = ?", (token_digest(token),))
     db().commit()
-    return jsonify({"ok": True})
+    resp = jsonify({"ok": True})
+    resp.delete_cookie("murisphere_session")
+    return resp
 
 
 @app.get("/api/auth/me")
@@ -315,6 +354,9 @@ def list_cages() -> Response:
     if status:
         clauses.append("c.breeding_status = ?")
         params.append(status)
+    if not is_admin(g.user):
+        clauses.append("c.lab_id = ?")
+        params.append(g.user.lab_id)
 
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     rows = db().execute(
@@ -337,6 +379,10 @@ def list_cages() -> Response:
 @app.get("/api/cages/<int:cage_id>")
 @require_auth()
 def get_cage(cage_id: int) -> Response:
+    scope_clause = "" if is_admin(g.user) else "AND c.lab_id = ?"
+    params: list[Any] = [cage_id]
+    if not is_admin(g.user):
+        params.append(g.user.lab_id)
     row = db().execute(
         """
         SELECT c.*, r.name AS room_name, k.name AS rack_name, l.name AS lab_name, p.protocol_number
@@ -346,8 +392,9 @@ def get_cage(cage_id: int) -> Response:
         LEFT JOIN labs l ON c.lab_id = l.id
         LEFT JOIN iacuc_protocols p ON c.protocol_id = p.id
         WHERE c.id = ?
-        """,
-        (cage_id,),
+        """
+        + scope_clause,
+        params,
     ).fetchone()
     if not row:
         return jsonify({"error": "Not found"}), 404
@@ -374,7 +421,7 @@ def get_cage(cage_id: int) -> Response:
 @require_auth(("Technician", "PI", "Admin"))
 def update_cage(cage_id: int) -> Response:
     payload = request.get_json(force=True)
-    row = db().execute("SELECT * FROM cages WHERE id = ?", (cage_id,)).fetchone()
+    row = ensure_cage_scope(cage_id, g.user)
     if not row:
         return jsonify({"error": "Not found"}), 404
 
@@ -389,6 +436,11 @@ def update_cage(cage_id: int) -> Response:
     for api_field, db_field in allowed.items():
         if api_field in payload:
             updates[db_field] = payload[api_field]
+
+    if "male_count" in updates and int(updates["male_count"]) < 0:
+        return jsonify({"error": "maleCount cannot be negative"}), 400
+    if "female_count" in updates and int(updates["female_count"]) < 0:
+        return jsonify({"error": "femaleCount cannot be negative"}), 400
 
     if not updates:
         return jsonify({"error": "No changes supplied"}), 400
@@ -416,9 +468,13 @@ def create_cage() -> Response:
     dob = payload.get("dob")
     male_count = int(payload.get("maleCount", 0))
     female_count = int(payload.get("femaleCount", 0))
+    if male_count < 0 or female_count < 0:
+        return jsonify({"error": "Counts cannot be negative"}), 400
     room_id = int(payload.get("roomId", 1))
     rack_id = int(payload.get("rackId", 1))
     lab_id = int(payload.get("labId", g.user.lab_id or 1))
+    if not is_admin(g.user) and g.user.lab_id != lab_id:
+        return jsonify({"error": "Forbidden"}), 403
     protocol_id = int(payload.get("protocolId", 1))
 
     cur = db().execute(
@@ -455,6 +511,10 @@ def create_cage() -> Response:
 @require_auth()
 def scan_cage(code: str) -> Response:
     started = datetime.now(UTC)
+    scope_clause = "" if is_admin(g.user) else " AND c.lab_id = ?"
+    params: list[Any] = [code, code]
+    if not is_admin(g.user):
+        params.append(g.user.lab_id)
     row = db().execute(
         """
         SELECT c.*, r.name AS room_name, k.name AS rack_name, l.name AS lab_name, p.protocol_number
@@ -463,9 +523,12 @@ def scan_cage(code: str) -> Response:
         LEFT JOIN racks k ON c.rack_id = k.id
         LEFT JOIN labs l ON c.lab_id = l.id
         LEFT JOIN iacuc_protocols p ON c.protocol_id = p.id
-        WHERE c.cage_code = ? OR c.qr_token = ?
+        WHERE (c.cage_code = ? OR c.qr_token = ?)
+        """
+        + scope_clause
+        + """
         """,
-        (code, code),
+        params,
     ).fetchone()
     if not row:
         return jsonify({"error": "Cage not found"}), 404
@@ -489,7 +552,22 @@ def public_scan(token: str) -> Response:
     ).fetchone()
     if not row:
         return jsonify({"error": "Cage not found"}), 404
-    return jsonify({"cage": cage_payload(row)})
+    return jsonify(
+        {
+            "cage": {
+                "id": row["id"],
+                "cageCode": row["cage_code"],
+                "strain": row["strain"],
+                "breedingStatus": row["breeding_status"],
+                "maleCount": row["male_count"],
+                "femaleCount": row["female_count"],
+                "room": row["room_name"],
+                "rack": row["rack_name"],
+                "lab": row["lab_name"],
+                "updatedAt": row["updated_at"],
+            }
+        }
+    )
 
 
 @app.post("/api/cages/<int:cage_id>/wean")
@@ -499,6 +577,10 @@ def wean(cage_id: int) -> Response:
     male = int(payload.get("male", 0))
     female = int(payload.get("female", 0))
     date = payload.get("date", datetime.now(UTC).date().isoformat())
+    if male < 0 or female < 0:
+        return jsonify({"error": "Counts cannot be negative"}), 400
+    if not ensure_cage_scope(cage_id, g.user):
+        return jsonify({"error": "Not found"}), 404
 
     cur = db().execute(
         "INSERT INTO lifecycle_events (cage_id, event_type, details_json, event_date, created_by, created_at) VALUES (?, 'weaning', ?, ?, ?, ?)",
@@ -520,6 +602,9 @@ def transfer(cage_id: int) -> Response:
     target_room_id = int(payload["roomId"])
     target_rack_id = int(payload["rackId"])
 
+    scoped = ensure_cage_scope(cage_id, g.user)
+    if not scoped:
+        return jsonify({"error": "Not found"}), 404
     before = db().execute("SELECT room_id, rack_id FROM cages WHERE id = ?", (cage_id,)).fetchone()
     if not before:
         return jsonify({"error": "Not found"}), 404
@@ -547,6 +632,8 @@ def transfer(cage_id: int) -> Response:
 def add_note(cage_id: int) -> Response:
     payload = request.get_json(force=True)
     text = payload.get("text", "").strip()
+    if not ensure_cage_scope(cage_id, g.user):
+        return jsonify({"error": "Not found"}), 404
     if not text:
         return jsonify({"error": "Note cannot be empty"}), 400
     db().execute(
@@ -566,6 +653,10 @@ def create_litter() -> Response:
     birth_date = payload["birthDate"]
     size = int(payload.get("size", 0))
     survived = int(payload.get("survived", size))
+    if size < 0 or survived < 0:
+        return jsonify({"error": "Litter counts cannot be negative"}), 400
+    if not ensure_cage_scope(cage_id, g.user):
+        return jsonify({"error": "Not found"}), 404
 
     cur = db().execute(
         "INSERT INTO litters (cage_id, birth_date, litter_size, survived_count, created_at) VALUES (?, ?, ?, ?, ?)",
@@ -600,6 +691,8 @@ def create_litter() -> Response:
 @require_auth(("Technician", "PI", "Admin"))
 def breeding_event() -> Response:
     payload = request.get_json(force=True)
+    if not ensure_cage_scope(int(payload["cageId"]), g.user):
+        return jsonify({"error": "Not found"}), 404
     cur = db().execute(
         "INSERT INTO breeding_events (cage_id, event_type, event_date, details_json, assigned_to, created_at) VALUES (?, ?, ?, ?, ?, ?)",
         (
@@ -622,15 +715,23 @@ def calendar() -> Response:
     start = request.args.get("start", datetime.now(UTC).date().isoformat())
     end = request.args.get("end", (datetime.now(UTC).date() + timedelta(days=30)).isoformat())
 
+    scope_clause = ""
+    params: list[Any] = [start, end]
+    if not is_admin(g.user):
+        scope_clause = " AND c.lab_id = ?"
+        params.append(g.user.lab_id)
     events = db().execute(
         """
         SELECT b.id, b.cage_id, c.cage_code, b.event_type, b.event_date, b.assigned_to, b.details_json
         FROM breeding_events b
         JOIN cages c ON b.cage_id = c.id
         WHERE b.event_date BETWEEN ? AND ?
+        """
+        + scope_clause
+        + """
         ORDER BY b.event_date ASC
         """,
-        (start, end),
+        params,
     ).fetchall()
     return jsonify([dict(e) for e in events])
 
@@ -652,6 +753,18 @@ def genotype_upload() -> Response:
         animal = db().execute("SELECT id, genotype FROM animals WHERE animal_code = ?", (animal_code,)).fetchone()
         if not animal:
             continue
+        if not is_admin(g.user):
+            scoped = db().execute(
+                """
+                SELECT a.id
+                FROM animals a
+                JOIN cages c ON c.id = a.cage_id
+                WHERE a.id = ? AND c.lab_id = ?
+                """,
+                (animal["id"], g.user.lab_id),
+            ).fetchone()
+            if not scoped:
+                continue
         db().execute(
             "INSERT INTO genotype_results (animal_id, result, source, created_at) VALUES (?, ?, ?, ?)",
             (animal["id"], genotype, "CSV", now_iso()),
@@ -665,9 +778,31 @@ def genotype_upload() -> Response:
 @app.get("/api/analytics/summary")
 @require_auth()
 def analytics_summary() -> Response:
-    total_cages = db().execute("SELECT COUNT(*) AS c FROM cages").fetchone()["c"]
-    total_animals = db().execute("SELECT COUNT(*) AS c FROM animals WHERE status = 'Active'").fetchone()["c"]
-    sex = db().execute("SELECT sex, COUNT(*) AS c FROM animals WHERE status = 'Active' GROUP BY sex").fetchall()
+    if is_admin(g.user):
+        total_cages = db().execute("SELECT COUNT(*) AS c FROM cages").fetchone()["c"]
+        total_animals = db().execute("SELECT COUNT(*) AS c FROM animals WHERE status = 'Active'").fetchone()["c"]
+        sex = db().execute("SELECT sex, COUNT(*) AS c FROM animals WHERE status = 'Active' GROUP BY sex").fetchall()
+    else:
+        total_cages = db().execute("SELECT COUNT(*) AS c FROM cages WHERE lab_id = ?", (g.user.lab_id,)).fetchone()["c"]
+        total_animals = db().execute(
+            """
+            SELECT COUNT(*) AS c
+            FROM animals a
+            JOIN cages c ON c.id = a.cage_id
+            WHERE a.status = 'Active' AND c.lab_id = ?
+            """,
+            (g.user.lab_id,),
+        ).fetchone()["c"]
+        sex = db().execute(
+            """
+            SELECT a.sex, COUNT(*) AS c
+            FROM animals a
+            JOIN cages c ON c.id = a.cage_id
+            WHERE a.status = 'Active' AND c.lab_id = ?
+            GROUP BY a.sex
+            """,
+            (g.user.lab_id,),
+        ).fetchall()
     sex_map = {r["sex"]: r["c"] for r in sex}
 
     litters = db().execute("SELECT litter_size, survived_count FROM litters ORDER BY id DESC LIMIT 200").fetchall()
@@ -677,14 +812,25 @@ def analytics_summary() -> Response:
         total_survived = sum(r["survived_count"] for r in litters)
         survival = round((total_survived / total_litter_size) * 100, 2) if total_litter_size else 0.0
 
-    room_capacity = db().execute(
-        """
-        SELECT r.id, r.name, r.capacity, COUNT(c.id) AS occupied
-        FROM rooms r
-        LEFT JOIN cages c ON c.room_id = r.id
-        GROUP BY r.id
-        """
-    ).fetchall()
+    if is_admin(g.user):
+        room_capacity = db().execute(
+            """
+            SELECT r.id, r.name, r.capacity, COUNT(c.id) AS occupied
+            FROM rooms r
+            LEFT JOIN cages c ON c.room_id = r.id
+            GROUP BY r.id
+            """
+        ).fetchall()
+    else:
+        room_capacity = db().execute(
+            """
+            SELECT r.id, r.name, r.capacity, SUM(CASE WHEN c.lab_id = ? THEN 1 ELSE 0 END) AS occupied
+            FROM rooms r
+            LEFT JOIN cages c ON c.room_id = r.id
+            GROUP BY r.id
+            """,
+            (g.user.lab_id,),
+        ).fetchall()
 
     upcoming_tasks = db().execute(
         """
@@ -692,10 +838,15 @@ def analytics_summary() -> Response:
         FROM breeding_events b
         JOIN cages c ON b.cage_id = c.id
         WHERE b.event_date BETWEEN ? AND ?
+        """
+        + ("" if is_admin(g.user) else " AND c.lab_id = ? ")
+        + """
         ORDER BY b.event_date ASC
         LIMIT 20
         """,
-        (datetime.now(UTC).date().isoformat(), (datetime.now(UTC).date() + timedelta(days=14)).isoformat()),
+        (datetime.now(UTC).date().isoformat(), (datetime.now(UTC).date() + timedelta(days=14)).isoformat())
+        if is_admin(g.user)
+        else (datetime.now(UTC).date().isoformat(), (datetime.now(UTC).date() + timedelta(days=14)).isoformat(), g.user.lab_id),
     ).fetchall()
 
     return jsonify(
@@ -716,12 +867,34 @@ def forecast() -> Response:
     payload = request.get_json(force=True)
     needed_by = payload.get("neededBy")
     requested = int(payload.get("animalsNeeded", 0))
-    active = db().execute("SELECT COUNT(*) AS c FROM animals WHERE status = 'Active'").fetchone()["c"]
+    if is_admin(g.user):
+        active = db().execute("SELECT COUNT(*) AS c FROM animals WHERE status = 'Active'").fetchone()["c"]
+    else:
+        active = db().execute(
+            """
+            SELECT COUNT(*) AS c
+            FROM animals a
+            JOIN cages c ON c.id = a.cage_id
+            WHERE a.status = 'Active' AND c.lab_id = ?
+            """,
+            (g.user.lab_id,),
+        ).fetchone()["c"]
     deficit = max(requested - active, 0)
 
-    avg_litter_survival = db().execute(
-        "SELECT AVG(CAST(survived_count AS FLOAT) / NULLIF(litter_size, 0)) AS v FROM litters"
-    ).fetchone()["v"]
+    if is_admin(g.user):
+        avg_litter_survival = db().execute(
+            "SELECT AVG(CAST(survived_count AS FLOAT) / NULLIF(litter_size, 0)) AS v FROM litters"
+        ).fetchone()["v"]
+    else:
+        avg_litter_survival = db().execute(
+            """
+            SELECT AVG(CAST(l.survived_count AS FLOAT) / NULLIF(l.litter_size, 0)) AS v
+            FROM litters l
+            JOIN cages c ON c.id = l.cage_id
+            WHERE c.lab_id = ?
+            """,
+            (g.user.lab_id,),
+        ).fetchone()["v"]
     avg_litter_survival = float(avg_litter_survival) if avg_litter_survival else 0.75
     expected_per_litter = max(int(round(6 * avg_litter_survival)), 1)
 
@@ -788,9 +961,13 @@ def import_excel() -> Response:
 @app.get("/api/reports/cages.csv")
 @require_auth()
 def report_cages_csv() -> Response:
-    rows = db().execute(
-        "SELECT cage_code, strain, genotype_summary, breeding_status, male_count, female_count, dob FROM cages ORDER BY cage_code"
-    ).fetchall()
+    query = "SELECT cage_code, strain, genotype_summary, breeding_status, male_count, female_count, dob FROM cages"
+    params: tuple[Any, ...] = ()
+    if not is_admin(g.user):
+        query += " WHERE lab_id = ?"
+        params = (g.user.lab_id,)
+    query += " ORDER BY cage_code"
+    rows = db().execute(query, params).fetchall()
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow(["cage_code", "strain", "genotype", "status", "male", "female", "dob"])
@@ -802,9 +979,13 @@ def report_cages_csv() -> Response:
 @app.get("/api/reports/cages.xlsx")
 @require_auth()
 def report_cages_xlsx() -> Response:
-    rows = db().execute(
-        "SELECT cage_code, strain, genotype_summary, breeding_status, male_count, female_count, dob FROM cages ORDER BY cage_code"
-    ).fetchall()
+    query = "SELECT cage_code, strain, genotype_summary, breeding_status, male_count, female_count, dob FROM cages"
+    params: tuple[Any, ...] = ()
+    if not is_admin(g.user):
+        query += " WHERE lab_id = ?"
+        params = (g.user.lab_id,)
+    query += " ORDER BY cage_code"
+    rows = db().execute(query, params).fetchall()
     wb = Workbook()
     ws = wb.active
     ws.title = "Cages"
@@ -825,9 +1006,13 @@ def report_cages_xlsx() -> Response:
 @app.get("/api/reports/cages.pdf")
 @require_auth()
 def report_cages_pdf() -> Response:
-    rows = db().execute(
-        "SELECT cage_code, strain, genotype_summary, breeding_status, male_count, female_count, dob FROM cages ORDER BY cage_code"
-    ).fetchall()
+    query = "SELECT cage_code, strain, genotype_summary, breeding_status, male_count, female_count, dob FROM cages"
+    params: tuple[Any, ...] = ()
+    if not is_admin(g.user):
+        query += " WHERE lab_id = ?"
+        params = (g.user.lab_id,)
+    query += " ORDER BY cage_code"
+    rows = db().execute(query, params).fetchall()
     lines = [f"Murisphere Cage Report - generated {datetime.now(UTC).date().isoformat()}", ""]
     for r in rows:
         lines.append(
@@ -844,6 +1029,11 @@ def cage_cards() -> Response:
     if not ids:
         return jsonify({"error": "Provide at least one cage ID"}), 400
     placeholders = ",".join("?" for _ in ids)
+    scope_clause = ""
+    params: list[Any] = list(ids)
+    if not is_admin(g.user):
+        scope_clause = " AND c.lab_id = ?"
+        params.append(g.user.lab_id)
     rows = db().execute(
         f"""
         SELECT c.id, c.cage_code, c.strain, c.genotype_summary, c.breeding_status, c.dob,
@@ -854,9 +1044,9 @@ def cage_cards() -> Response:
         LEFT JOIN iacuc_protocols p ON c.protocol_id = p.id
         LEFT JOIN rooms r ON c.room_id = r.id
         LEFT JOIN racks k ON c.rack_id = k.id
-        WHERE c.id IN ({placeholders})
+        WHERE c.id IN ({placeholders}) {scope_clause}
         """,
-        ids,
+        params,
     ).fetchall()
 
     cards = []
@@ -894,22 +1084,47 @@ def protocol_alerts() -> Response:
 @app.get("/api/facility/capacity")
 @require_auth(("Admin", "PI"))
 def facility_capacity() -> Response:
-    rooms = db().execute(
-        """
-        SELECT r.id, r.name, r.capacity,
-               COUNT(c.id) AS occupied,
-               ROUND((COUNT(c.id) * 100.0) / NULLIF(r.capacity, 0), 2) AS utilization_pct
-        FROM rooms r
-        LEFT JOIN cages c ON c.room_id = r.id
-        GROUP BY r.id
-        ORDER BY utilization_pct DESC
-        """
-    ).fetchall()
+    if is_admin(g.user):
+        rooms = db().execute(
+            """
+            SELECT r.id, r.name, r.capacity,
+                   COUNT(c.id) AS occupied,
+                   ROUND((COUNT(c.id) * 100.0) / NULLIF(r.capacity, 0), 2) AS utilization_pct
+            FROM rooms r
+            LEFT JOIN cages c ON c.room_id = r.id
+            GROUP BY r.id
+            ORDER BY utilization_pct DESC
+            """
+        ).fetchall()
+    else:
+        facility = db().execute(
+            """
+            SELECT l.facility_id
+            FROM labs l
+            WHERE l.id = ?
+            """,
+            (g.user.lab_id,),
+        ).fetchone()
+        if not facility:
+            return jsonify([])
+        rooms = db().execute(
+            """
+            SELECT r.id, r.name, r.capacity,
+                   COUNT(c.id) AS occupied,
+                   ROUND((COUNT(c.id) * 100.0) / NULLIF(r.capacity, 0), 2) AS utilization_pct
+            FROM rooms r
+            LEFT JOIN cages c ON c.room_id = r.id
+            WHERE r.facility_id = ?
+            GROUP BY r.id
+            ORDER BY utilization_pct DESC
+            """,
+            (facility["facility_id"],),
+        ).fetchall()
     return jsonify([dict(r) for r in rooms])
 
 
 @app.get("/api/audit")
-@require_auth(("Admin", "PI"))
+@require_auth(("Admin",))
 def audit_list() -> Response:
     rows = db().execute(
         """
@@ -925,4 +1140,4 @@ def audit_list() -> Response:
 
 if __name__ == "__main__":
     init_db()
-    app.run(host="0.0.0.0", port=8000, debug=True)
+    app.run(host="0.0.0.0", port=8000, debug=os.getenv("FLASK_DEBUG", "0") == "1")

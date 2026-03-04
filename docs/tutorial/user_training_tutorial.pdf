@@ -1,0 +1,128 @@
+%PDF-1.4
+1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj
+2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
+3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj
+4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj
+5 0 obj << /Length 1776 >> stream
+BT
+/F1 11 Tf
+48 790 Td
+14 TL
+(Murisphere Step-by-Step Tutorial) Tj
+T*
+(Murisphere Step-by-Step Tutorial) Tj
+T*
+(Audience: Technicians, PIs, and Facility Admins) Tj
+T*
+(1. Sign In) Tj
+T*
+(Open Murisphere in a browser and log in with your assigned credentials.) Tj
+T*
+(Technician: routine room operations) Tj
+T*
+(PI: project and forecasting oversight) Tj
+T*
+(Admin: configuration, import, and governance) Tj
+T*
+(2. Set Phone-Reachable Scan URL) Tj
+T*
+(Go to) Tj
+T*
+(Cages) Tj
+T*
+(tab and set) Tj
+T*
+(Scan Base URL) Tj
+T*
+(.) Tj
+T*
+(Example:) Tj
+T*
+(http://10.0.0.24:8000) Tj
+T*
+(or your production domain.) Tj
+T*
+(3. Generate and Print Cage Cards) Tj
+T*
+(Click) Tj
+T*
+(Generate + Print) Tj
+T*
+(to produce cage cards with barcode links.) Tj
+T*
+(Allow browser pop-ups so the print dialog opens.) Tj
+T*
+(4. Scan in the Animal Room) Tj
+T*
+(Use your phone camera to scan the barcode on a cage card.) Tj
+T*
+(The scan opens cage info in browser immediately. Tap) Tj
+T*
+(Open Murisphere \(login for edits\)) Tj
+T*
+(to continue with authenticated editing.) Tj
+T*
+(5. Perform Cage Updates) Tj
+T*
+(In) Tj
+T*
+(Scan/Edit) Tj
+T*
+(tab, verify cage identity and update:) Tj
+T*
+(Male/Female counts) Tj
+T*
+(Breeding status) Tj
+T*
+(Notes) Tj
+T*
+(Click) Tj
+T*
+(Save Changes) Tj
+T*
+(. Updates are logged in audit history.) Tj
+T*
+(6. Record Lifecycle Events) Tj
+T*
+(Use lifecycle and breeding forms for:) Tj
+T*
+(Weaning) Tj
+T*
+(Transfers) Tj
+T*
+(Timed mating and plug checks) Tj
+T*
+(Harvest and retirement schedules) Tj
+T*
+(7. Use Reports and Imports) Tj
+T*
+(In) Tj
+T*
+(Reports) Tj
+T*
+(tab:) Tj
+T*
+(Export CSV/XLSX/PDF) Tj
+T*
+(Upload genotyping CSV) Tj
+T*
+(Import onboarding Excel \(Admin\)) Tj
+T*
+(8. Monitor Compliance and Capacity) Tj
+T*
+(\(truncated; see HTML tutorial for full detail\)) Tj
+T*
+ET
+endstream endobj
+xref
+0 6
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000241 00000 n 
+0000000311 00000 n 
+trailer << /Size 6 /Root 1 0 R >>
+startxref
+2139
+%%EOF

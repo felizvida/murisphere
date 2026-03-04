@@ -42,6 +42,12 @@ python -m unittest discover -s tests -v
   - Builds and publishes Docker image to GHCR on pushes to `main`
   - Image: `ghcr.io/<owner>/murisphere:latest` and `:sha-...`
 
+## Documentation
+- Documentation index: `docs/DOCUMENTATION_INDEX.md`
+- Code audit report: `docs/CODE_AUDIT_REPORT.md`
+- Step-by-step tutorial (HTML): `docs/tutorial/user_training_tutorial.html`
+- Step-by-step tutorial (PDF): `docs/tutorial/user_training_tutorial.pdf`
+
 ## Large demo dataset (20 labs / 3,000 cages)
 To populate a realistic large environment with variable lab sizes and multiple projects per lab:
 

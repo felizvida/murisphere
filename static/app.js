@@ -1,5 +1,5 @@
 const state = {
-  token: localStorage.getItem("murisphere_token") || "",
+  token: "",
   user: null,
   cages: [],
   cards: [],
@@ -10,7 +10,10 @@ const SCAN_BASE_KEY = "murisphere_scan_base_url";
 const el = (id) => document.getElementById(id);
 
 function headers(isJson = true) {
-  const base = { Authorization: `Bearer ${state.token}` };
+  const base = {};
+  if (state.token) {
+    base.Authorization = `Bearer ${state.token}`;
+  }
   if (isJson) base["Content-Type"] = "application/json";
   return base;
 }
@@ -19,13 +22,11 @@ function setAuth(token, user) {
   state.token = token;
   state.user = user;
   if (token) {
-    localStorage.setItem("murisphere_token", token);
     el("sessionChip").classList.remove("hidden");
     el("sessionChip").textContent = `${user.fullName} (${user.role})`;
     el("loginPanel").classList.add("hidden");
     el("appPanel").classList.remove("hidden");
   } else {
-    localStorage.removeItem("murisphere_token");
     el("sessionChip").classList.add("hidden");
     el("loginPanel").classList.remove("hidden");
     el("appPanel").classList.add("hidden");
@@ -38,7 +39,7 @@ function activateTab(name) {
 }
 
 async function api(path, opts = {}) {
-  const res = await fetch(path, opts);
+  const res = await fetch(path, { credentials: "same-origin", ...opts });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || `Request failed: ${res.status}`);
@@ -55,8 +56,8 @@ function tableFromCages(rows) {
           .map(
             (c) => `
           <tr>
-            <td>${c.id}</td><td>${c.cageCode}</td><td>${c.strain}</td><td>${c.genotypeSummary}</td><td>${c.breedingStatus}</td>
-            <td>${c.maleCount}/${c.femaleCount}</td><td>${c.room} / ${c.rack}</td>
+            <td>${esc(c.id)}</td><td>${esc(c.cageCode)}</td><td>${esc(c.strain)}</td><td>${esc(c.genotypeSummary)}</td><td>${esc(c.breedingStatus)}</td>
+            <td>${esc(c.maleCount)}/${esc(c.femaleCount)}</td><td>${esc(c.room)} / ${esc(c.rack)}</td>
           </tr>`
           )
           .join("")}
@@ -202,16 +203,16 @@ async function runScan() {
     const c = data.cage;
     el("scanResult").innerHTML = `
       <div class="cage-card">
-        <strong>${c.cageCode}</strong> (${data.lookupMs}ms)<br/>
-        ${c.strain} | ${c.genotypeSummary} | ${c.breedingStatus}<br/>
-        Counts: M ${c.maleCount} / F ${c.femaleCount}<br/>
-        ${c.room} / ${c.rack}
+        <strong>${esc(c.cageCode)}</strong> (${esc(data.lookupMs)}ms)<br/>
+        ${esc(c.strain)} | ${esc(c.genotypeSummary)} | ${esc(c.breedingStatus)}<br/>
+        Counts: M ${esc(c.maleCount)} / F ${esc(c.femaleCount)}<br/>
+        ${esc(c.room)} / ${esc(c.rack)}
       </div>
       <form id="quickUpdate" class="grid-form">
-        <label>Male Count<input id="uMale" type="number" value="${c.maleCount}" /></label>
-        <label>Female Count<input id="uFemale" type="number" value="${c.femaleCount}" /></label>
-        <label>Status<input id="uStatus" value="${c.breedingStatus}" /></label>
-        <label>Notes<input id="uNotes" value="${c.notes || ""}" /></label>
+        <label>Male Count<input id="uMale" type="number" value="${esc(c.maleCount)}" /></label>
+        <label>Female Count<input id="uFemale" type="number" value="${esc(c.femaleCount)}" /></label>
+        <label>Status<input id="uStatus" value="${esc(c.breedingStatus)}" /></label>
+        <label>Notes<input id="uNotes" value="${esc(c.notes || "")}" /></label>
         <button type="submit">Save Changes</button>
       </form>
     `;
@@ -267,7 +268,7 @@ async function loadAnalytics() {
 async function loadCalendar() {
   const events = await api("/api/calendar", { headers: headers(false) });
   el("calendarList").innerHTML = events
-    .map((e) => `<div class="cage-card">${e.event_date} | Cage ${e.cage_code} | ${e.event_type}</div>`)
+    .map((e) => `<div class="cage-card">${esc(e.event_date)} | Cage ${esc(e.cage_code)} | ${esc(e.event_type)}</div>`)
     .join("");
 }
 
@@ -336,7 +337,7 @@ async function init() {
     e.preventDefault();
     const fd = new FormData();
     fd.append("file", el("genoFile").files[0]);
-    const res = await fetch("/api/genotyping/upload", { method: "POST", headers: { Authorization: `Bearer ${state.token}` }, body: fd });
+    const res = await fetch("/api/genotyping/upload", { method: "POST", credentials: "same-origin", body: fd });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Upload failed");
     alert(`Updated ${data.updatedAnimals} animals.`);
@@ -346,7 +347,7 @@ async function init() {
     e.preventDefault();
     const fd = new FormData();
     fd.append("file", el("excelFile").files[0]);
-    const res = await fetch("/api/import/excel", { method: "POST", headers: { Authorization: `Bearer ${state.token}` }, body: fd });
+    const res = await fetch("/api/import/excel", { method: "POST", credentials: "same-origin", body: fd });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Import failed");
     alert(`Imported ${data.created} cages.`);
@@ -355,26 +356,26 @@ async function init() {
 
   el("loadAlertsBtn").addEventListener("click", async () => {
     const alerts = await api("/api/compliance/protocol-alerts", { headers: headers(false) });
-    el("alerts").innerHTML = alerts.map((a) => `<div class="cage-card">${a.protocol_number} | ${a.title} | Expires ${a.expires_on}</div>`).join("");
+    el("alerts").innerHTML = alerts
+      .map((a) => `<div class="cage-card">${esc(a.protocol_number)} | ${esc(a.title)} | Expires ${esc(a.expires_on)}</div>`)
+      .join("");
   });
 
   el("loadAuditBtn").addEventListener("click", async () => {
     const logs = await api("/api/audit", { headers: headers(false) });
     el("audit").innerHTML = logs
       .slice(0, 40)
-      .map((l) => `<div class="cage-card">${l.created_at} | ${l.actor || "System"} | ${l.entity_type}#${l.entity_id} | ${l.action}</div>`)
+      .map((l) => `<div class="cage-card">${esc(l.created_at)} | ${esc(l.actor || "System")} | ${esc(l.entity_type)}#${esc(l.entity_id)} | ${esc(l.action)}</div>`)
       .join("");
   });
 
-  if (state.token) {
-    try {
-      const me = await api("/api/auth/me", { headers: headers(false) });
-      setAuth(state.token, me);
-      await loadCages();
-      await openPendingScanIfAny();
-    } catch {
-      setAuth("", null);
-    }
+  try {
+    const me = await api("/api/auth/me", { headers: headers(false) });
+    setAuth("", me);
+    await loadCages();
+    await openPendingScanIfAny();
+  } catch {
+    setAuth("", null);
   }
 }
 
