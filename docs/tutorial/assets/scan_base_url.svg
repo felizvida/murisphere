@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="760" viewBox="0 0 1400 760">
+  <rect width="1400" height="760" fill="#eef5f8"/>
+  <text x="90" y="90" font-family="Arial" font-size="46" font-weight="700" fill="#183443">Set Scan Base URL Correctly</text>
+  <rect x="90" y="130" width="1220" height="540" rx="16" fill="#ffffff" stroke="#cfe0e8" stroke-width="3"/>
+
+  <rect x="140" y="190" width="1120" height="92" rx="10" fill="#f7fbfd" stroke="#d6e5eb"/>
+  <text x="170" y="248" font-family="Arial" font-size="28" fill="#245063">Scan Base URL</text>
+  <rect x="430" y="210" width="700" height="54" rx="8" fill="#ffffff" stroke="#bdd1da"/>
+  <text x="450" y="245" font-family="Arial" font-size="24" fill="#1f3641">http://10.0.0.24:8000</text>
+
+  <rect x="170" y="330" width="480" height="280" rx="12" fill="#f6fcf8" stroke="#cde4d8"/>
+  <text x="200" y="378" font-family="Arial" font-size="30" font-weight="700" fill="#1f684d">Use This</text>
+  <text x="200" y="420" font-family="Arial" font-size="22" fill="#355662">LAN IP or production domain</text>
+  <text x="200" y="458" font-family="Arial" font-size="22" fill="#355662">Reachable by phone browser</text>
+  <text x="200" y="496" font-family="Arial" font-size="22" fill="#355662">Same network as room devices</text>
+
+  <rect x="750" y="330" width="480" height="280" rx="12" fill="#fff6f4" stroke="#e9c9bf"/>
+  <text x="780" y="378" font-family="Arial" font-size="30" font-weight="700" fill="#a64231">Avoid This</text>
+  <text x="780" y="420" font-family="Arial" font-size="22" fill="#5f4e4b">http://localhost:8000</text>
+  <text x="780" y="458" font-family="Arial" font-size="22" fill="#5f4e4b">http://127.0.0.1:8000</text>
+  <text x="780" y="496" font-family="Arial" font-size="22" fill="#5f4e4b">Phone cannot reach your laptop loopback</text>
+</svg>

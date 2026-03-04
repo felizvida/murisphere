@@ -3,120 +3,174 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Murisphere Step-by-Step Tutorial</title>
+    <title>Murisphere Mobile Scan Tutorial</title>
     <style>
-      body { font-family: Arial, sans-serif; margin: 0; background: #f6faf9; color: #13242d; }
-      .wrap { max-width: 980px; margin: 0 auto; padding: 24px; }
-      h1, h2, h3 { margin-bottom: 8px; }
-      .card { background: #fff; border: 1px solid #d6e5df; border-radius: 12px; padding: 16px; margin-bottom: 14px; }
-      .step { border-left: 4px solid #0b6e4f; padding-left: 12px; margin: 12px 0; }
-      code { background: #eef5f3; padding: 2px 5px; border-radius: 5px; }
-      ul { margin-top: 6px; }
+      :root {
+        --bg: #eff5f2;
+        --ink: #12262f;
+        --muted: #4e636d;
+        --line: #ceded8;
+        --brand: #0f7a58;
+        --brand2: #17a175;
+        --card: #ffffff;
+      }
+      body {
+        margin: 0;
+        font-family: "Segoe UI", Arial, sans-serif;
+        color: var(--ink);
+        background: radial-gradient(circle at 85% -10%, rgba(23, 161, 117, 0.17), rgba(23, 161, 117, 0) 45%),
+          linear-gradient(160deg, #f4f8f7, #e4efea);
+      }
+      .wrap {
+        max-width: 1040px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 2rem;
+        letter-spacing: -0.02em;
+      }
+      .sub {
+        margin-top: 8px;
+        color: var(--muted);
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        padding: 18px;
+        margin-top: 14px;
+        box-shadow: 0 10px 28px rgba(14, 40, 53, 0.08);
+      }
+      h2, h3 { margin: 0 0 8px; }
+      p, li { line-height: 1.45; }
+      .kicker {
+        display: inline-block;
+        border-radius: 999px;
+        background: #e7f5ef;
+        color: #0f5d44;
+        border: 1px solid #bfe2d3;
+        padding: 6px 12px;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+      }
+      .steps li { margin-bottom: 7px; }
+      .fig {
+        border: 1px dashed #b9d2c8;
+        border-radius: 12px;
+        padding: 12px;
+        background: #f8fcfa;
+      }
+      svg {
+        width: 100%;
+        height: auto;
+        border-radius: 10px;
+        border: 1px solid #d0e2da;
+        background: #fff;
+      }
+      code {
+        background: #eef5f3;
+        border-radius: 5px;
+        padding: 2px 6px;
+      }
+      @media print {
+        body { background: #fff; }
+        .card { box-shadow: none; }
+      }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <h1>Murisphere Step-by-Step Tutorial</h1>
-      <p>Audience: Technicians, PIs, and Facility Admins</p>
+      <span class="kicker">Murisphere Training</span>
+      <h1>Mobile Scan Tutorial (Printed Cage Card)</h1>
+      <p class="sub">Professional step-by-step guide for technicians and trainers.</p>
 
       <section class="card">
-        <h2>1. Sign In</h2>
-        <div class="step">
-          <p>Open Murisphere in a browser and log in with your assigned credentials.</p>
-          <ul>
-            <li>Technician: routine room operations</li>
-            <li>PI: project and forecasting oversight</li>
-            <li>Admin: configuration, import, and governance</li>
-          </ul>
+        <h2>Goal</h2>
+        <p>Use a phone camera to scan a printed cage card and open the correct Murisphere cage record safely and quickly.</p>
+      </section>
+
+      <section class="card">
+        <h2>Figure A - Printed Card to Phone Flow (Illustration)</h2>
+        <div class="fig">
+          <svg viewBox="0 0 1200 520" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="20" width="520" height="470" rx="12" fill="#f7fcfa" stroke="#cfe2d9"/>
+            <text x="50" y="70" font-size="28" font-family="Arial" font-weight="700" fill="#173f33">Printed Cage Card</text>
+            <text x="50" y="110" font-size="20" font-family="Arial" fill="#29515f">Cage: C-A1-0243</text>
+            <text x="50" y="140" font-size="18" font-family="Arial" fill="#45626e">Strain: C57BL/6J</text>
+            <rect x="50" y="180" width="150" height="150" fill="#fff" stroke="#1e3f4a" stroke-width="3"/>
+            <text x="50" y="352" font-size="16" font-family="Arial" fill="#45626e">QR (scan this)</text>
+            <rect x="240" y="220" width="260" height="80" fill="#fff" stroke="#1e3f4a" stroke-width="2"/>
+            <line x1="250" y1="235" x2="490" y2="235" stroke="#1e3f4a" stroke-width="3"/>
+            <line x1="250" y1="252" x2="490" y2="252" stroke="#1e3f4a" stroke-width="2"/>
+            <line x1="250" y1="268" x2="490" y2="268" stroke="#1e3f4a" stroke-width="4"/>
+            <text x="240" y="320" font-size="16" font-family="Arial" fill="#45626e">Barcode (optional)</text>
+
+            <path d="M560 250 C620 250, 640 250, 700 250" stroke="#126249" stroke-width="8" fill="none"/>
+            <polygon points="700,250 680,238 680,262" fill="#126249"/>
+
+            <rect x="740" y="40" width="260" height="450" rx="28" fill="#1d3039"/>
+            <rect x="760" y="80" width="220" height="360" rx="16" fill="#f4faf7"/>
+            <rect x="780" y="110" width="180" height="58" rx="10" fill="#e3f1eb"/>
+            <text x="805" y="145" font-size="20" font-family="Arial" font-weight="700" fill="#1a5a42">Open Link</text>
+            <text x="790" y="210" font-size="18" font-family="Arial" fill="#365461">Verify cage ID</text>
+            <text x="790" y="240" font-size="18" font-family="Arial" fill="#365461">Open for edits</text>
+            <rect x="790" y="280" width="170" height="48" rx="9" fill="#0f7a58"/>
+            <text x="811" y="311" font-size="18" font-family="Arial" font-weight="700" fill="#fff">Open Murisphere</text>
+          </svg>
         </div>
       </section>
 
       <section class="card">
-        <h2>2. Set Phone-Reachable Scan URL</h2>
-        <div class="step">
-          <p>Go to <strong>Cages</strong> tab and set <code>Scan Base URL</code>.</p>
-          <p>Example: <code>http://10.0.0.24:8000</code> or your production domain.</p>
+        <h2>Step-by-Step: Phone Scan of Printed Card</h2>
+        <ol class="steps">
+          <li>Set <code>Scan Base URL</code> to a phone-reachable host (LAN IP or production domain).</li>
+          <li>Print cards from <strong>Generate + Print</strong>.</li>
+          <li>Open your phone camera and point to the printed <strong>QR code</strong>.</li>
+          <li>Tap the link banner that appears.</li>
+          <li>Verify cage ID before editing.</li>
+          <li>Tap <strong>Open Murisphere (login for edits)</strong>.</li>
+        </ol>
+      </section>
+
+      <section class="card">
+        <h2>Figure B - Troubleshooting (Illustration)</h2>
+        <div class="fig">
+          <svg viewBox="0 0 1200 420" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="20" width="1160" height="380" rx="12" fill="#fff" stroke="#ceded8"/>
+            <text x="55" y="70" font-size="24" font-family="Arial" font-weight="700" fill="#29434f">Issue</text>
+            <text x="430" y="70" font-size="24" font-family="Arial" font-weight="700" fill="#29434f">Cause</text>
+            <text x="790" y="70" font-size="24" font-family="Arial" font-weight="700" fill="#29434f">Action</text>
+            <line x1="40" y1="90" x2="1160" y2="90" stroke="#d4e3dd"/>
+
+            <text x="55" y="140" font-size="20" font-family="Arial" fill="#3f5a66">No scan prompt</text>
+            <text x="430" y="140" font-size="20" font-family="Arial" fill="#3f5a66">Low contrast / glare</text>
+            <text x="790" y="140" font-size="20" font-family="Arial" fill="#3f5a66">Improve lighting, flatten card</text>
+
+            <text x="55" y="200" font-size="20" font-family="Arial" fill="#3f5a66">Wrong page opens</text>
+            <text x="430" y="200" font-size="20" font-family="Arial" fill="#3f5a66">Bad Scan Base URL</text>
+            <text x="790" y="200" font-size="20" font-family="Arial" fill="#3f5a66">Use LAN IP/domain, not localhost</text>
+
+            <text x="55" y="260" font-size="20" font-family="Arial" fill="#3f5a66">Broken/blank QR</text>
+            <text x="430" y="260" font-size="20" font-family="Arial" fill="#3f5a66">Cached JS or blocked script</text>
+            <text x="790" y="260" font-size="20" font-family="Arial" fill="#3f5a66">Hard refresh, regenerate cards</text>
+
+            <text x="55" y="320" font-size="20" font-family="Arial" fill="#3f5a66">Slow loading</text>
+            <text x="430" y="320" font-size="20" font-family="Arial" fill="#3f5a66">Weak room network</text>
+            <text x="790" y="320" font-size="20" font-family="Arial" fill="#3f5a66">Retest on strong Wi-Fi</text>
+          </svg>
         </div>
       </section>
 
       <section class="card">
-        <h2>3. Generate and Print Cage Cards</h2>
-        <div class="step">
-          <p>Click <strong>Generate + Print</strong> to produce cage cards with barcode links.</p>
-          <p>Allow browser pop-ups so the print dialog opens.</p>
-        </div>
-      </section>
-
-      <section class="card">
-        <h2>4. Scan in the Animal Room</h2>
-        <div class="step">
-          <p><strong>How to use a phone to scan a printed cage card:</strong></p>
-          <ol>
-            <li>Hold the printed card flat under room lighting.</li>
-            <li>Open your phone's default Camera app (iPhone Camera or Android Camera).</li>
-            <li>Point the camera at the printed barcode until a link banner appears.</li>
-            <li>Tap the banner/link to open Murisphere in your mobile browser.</li>
-            <li>Confirm the cage ID on screen matches the printed card.</li>
-            <li>Tap <strong>Open Murisphere (login for edits)</strong> to move into authenticated edit mode.</li>
-          </ol>
-          <p><strong>If scanning fails:</strong> move closer, reduce glare, and verify the printed URL uses your phone-reachable host (not <code>localhost</code>).</p>
-        </div>
-      </section>
-
-      <section class="card">
-        <h2>5. Perform Cage Updates</h2>
-        <div class="step">
-          <p>In <strong>Scan/Edit</strong> tab, verify cage identity and update:</p>
-          <ul>
-            <li>Male/Female counts</li>
-            <li>Breeding status</li>
-            <li>Notes</li>
-          </ul>
-          <p>Click <strong>Save Changes</strong>. Updates are logged in audit history.</p>
-        </div>
-      </section>
-
-      <section class="card">
-        <h2>6. Record Lifecycle Events</h2>
-        <div class="step">
-          <p>Use lifecycle and breeding forms for:</p>
-          <ul>
-            <li>Weaning</li>
-            <li>Transfers</li>
-            <li>Timed mating and plug checks</li>
-            <li>Harvest and retirement schedules</li>
-          </ul>
-        </div>
-      </section>
-
-      <section class="card">
-        <h2>7. Use Reports and Imports</h2>
-        <div class="step">
-          <p>In <strong>Reports</strong> tab:</p>
-          <ul>
-            <li>Export CSV/XLSX/PDF</li>
-            <li>Upload genotyping CSV</li>
-            <li>Import onboarding Excel (Admin)</li>
-          </ul>
-        </div>
-      </section>
-
-      <section class="card">
-        <h2>8. Monitor Compliance and Capacity</h2>
-        <div class="step">
-          <p>Use <strong>Compliance</strong> tab to review protocol expiration alerts and audit history.</p>
-          <p>Use facility capacity views for room/rack utilization management.</p>
-        </div>
-      </section>
-
-      <section class="card">
-        <h2>9. Daily Checklist</h2>
-        <ol>
-          <li>Print cards if needed.</li>
-          <li>Perform in-room scan/update rounds.</li>
-          <li>Review scheduled breeding tasks.</li>
-          <li>Check protocol and compliance alerts.</li>
-          <li>Run end-of-day exports if required.</li>
+        <h2>Trainer Checklist</h2>
+        <ol class="steps">
+          <li>Demonstrate one full scan -> open -> verify -> edit -> save cycle.</li>
+          <li>Require trainee to repeat with a second cage.</li>
+          <li>Confirm trainee knows not to edit before cage ID verification.</li>
         </ol>
       </section>
     </div>
