@@ -27,6 +27,21 @@ python3 app.py
 
 Open [http://localhost:8000](http://localhost:8000).
 
+## Testing
+```bash
+pip install -r requirements-dev.txt
+python -m unittest discover -s tests -v
+```
+
+## CI/CD
+- CI workflow: `.github/workflows/ci.yml`
+  - Python matrix tests (3.11, 3.12)
+  - Backend syntax checks
+  - Frontend JS syntax checks
+- CD workflow: `.github/workflows/cd.yml`
+  - Builds and publishes Docker image to GHCR on pushes to `main`
+  - Image: `ghcr.io/<owner>/murisphere:latest` and `:sha-...`
+
 ## Large demo dataset (20 labs / 3,000 cages)
 To populate a realistic large environment with variable lab sizes and multiple projects per lab:
 
