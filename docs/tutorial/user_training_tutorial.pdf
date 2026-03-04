@@ -3,7 +3,7 @@
 2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj
 3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj
 4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj
-5 0 obj << /Length 1776 >> stream
+5 0 obj << /Length 1962 >> stream
 BT
 /F1 11 Tf
 48 790 Td
@@ -54,13 +54,31 @@ T*
 T*
 (4. Scan in the Animal Room) Tj
 T*
-(Use your phone camera to scan the barcode on a cage card.) Tj
+(How to use a phone to scan a printed cage card:) Tj
 T*
-(The scan opens cage info in browser immediately. Tap) Tj
+(Hold the printed card flat under room lighting.) Tj
+T*
+(Open your phone's default Camera app \(iPhone Camera or Android Camera\).) Tj
+T*
+(Point the camera at the printed barcode until a link banner appears.) Tj
+T*
+(Tap the banner/link to open Murisphere in your mobile browser.) Tj
+T*
+(Confirm the cage ID on screen matches the printed card.) Tj
+T*
+(Tap) Tj
 T*
 (Open Murisphere \(login for edits\)) Tj
 T*
-(to continue with authenticated editing.) Tj
+(to move into authenticated edit mode.) Tj
+T*
+(If scanning fails:) Tj
+T*
+(move closer, reduce glare, and verify the printed URL uses your phone-reachable host \(not) Tj
+T*
+(localhost) Tj
+T*
+(\).) Tj
 T*
 (5. Perform Cage Updates) Tj
 T*
@@ -92,24 +110,6 @@ T*
 T*
 (Timed mating and plug checks) Tj
 T*
-(Harvest and retirement schedules) Tj
-T*
-(7. Use Reports and Imports) Tj
-T*
-(In) Tj
-T*
-(Reports) Tj
-T*
-(tab:) Tj
-T*
-(Export CSV/XLSX/PDF) Tj
-T*
-(Upload genotyping CSV) Tj
-T*
-(Import onboarding Excel \(Admin\)) Tj
-T*
-(8. Monitor Compliance and Capacity) Tj
-T*
 (\(truncated; see HTML tutorial for full detail\)) Tj
 T*
 ET
@@ -124,5 +124,5 @@ xref
 0000000311 00000 n 
 trailer << /Size 6 /Root 1 0 R >>
 startxref
-2139
+2325
 %%EOF

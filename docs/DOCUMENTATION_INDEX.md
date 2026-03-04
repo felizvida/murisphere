@@ -1,5 +1,6 @@
 # Documentation Index
 
+- `docs/CHECKPOINT_2026-03-04.md` - full project checkpoint and resume instructions
 - `docs/CODE_AUDIT_REPORT.md` - formal audit findings and remediation priorities
 - `docs/POST_REMEDIATION_AUDIT.md` - remediation status and residual risk summary
 - `docs/ARCHITECTURE.md` - system and data architecture

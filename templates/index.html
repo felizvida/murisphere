@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f7a58" />
     <title>{{ app_name }} | Mouse Colony Management</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -14,7 +15,7 @@
     <header>
       <div>
         <h1>{{ app_name }}</h1>
-        <p>Mouse Colony & Vivarium Operations</p>
+        <p>Cage-first colony operations for modern vivaria</p>
       </div>
       <div id="sessionChip" class="session-chip hidden"></div>
     </header>
@@ -125,6 +126,7 @@
     </main>
 
     <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.4/build/qrcode.min.js"></script>
     <script src="/static/app.js"></script>
   </body>
 </html>

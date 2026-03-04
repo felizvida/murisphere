@@ -94,8 +94,8 @@ function renderBarcodes(root = document) {
     window.JsBarcode(svg, value, {
       format: "CODE128",
       lineColor: "#111111",
-      width: 1.5,
-      height: 46,
+      width: 2,
+      height: 54,
       margin: 0,
       displayValue: true,
       text: label,
@@ -103,6 +103,44 @@ function renderBarcodes(root = document) {
       textMargin: 3,
     });
   });
+}
+
+async function renderQRCodes(root = document) {
+  if (!window.QRCode || !window.QRCode.toDataURL) {
+    const node = el("cardPreview");
+    if (node) {
+      node.insertAdjacentHTML("afterbegin", '<div class="cage-card">QR library unavailable. Reload page and regenerate cards.</div>');
+    }
+    return;
+  }
+  const nodes = Array.from(root.querySelectorAll("img.qrcode"));
+  await Promise.all(
+    nodes.map(
+      (img) =>
+        new Promise((resolve) => {
+          const value = img.getAttribute("data-qr");
+          if (!value) return resolve(null);
+          window.QRCode.toDataURL(
+            value,
+            {
+              width: 220,
+              margin: 1,
+              errorCorrectionLevel: "M",
+              color: { dark: "#0f2027", light: "#ffffff" },
+            },
+            (err, url) => {
+              if (err || !url) {
+                img.alt = "QR render failed";
+                img.style.borderColor = "#ca513d";
+              } else {
+                img.src = url;
+              }
+              resolve(null);
+            }
+          );
+        })
+    )
+  );
 }
 
 function cardMarkup(c) {
@@ -121,16 +159,20 @@ function cardMarkup(c) {
         <div>M/F: ${esc(c.animalCount.M)}/${esc(c.animalCount.F)}</div>
         <div>Protocol: ${esc(c.protocol || "N/A")}</div>
       </div>
-      <svg class="barcode" data-barcode="${esc(scanUrlForCard(c))}" data-label="${esc(c.cageCode)}"></svg>
+      <div class="scan-block">
+        <img class="qrcode" data-qr="${esc(scanUrlForCard(c))}" alt="QR code" />
+        <svg class="barcode" data-barcode="${esc(c.cageCode)}" data-label="${esc(c.cageCode)}"></svg>
+      </div>
       <div class="card-foot">Scan URL: ${esc(scanUrlForCard(c))}</div>
     </article>
   `;
 }
 
-function renderCards(cards) {
+async function renderCards(cards) {
   state.cards = cards;
   el("cardPreview").innerHTML = `<div class="card-grid">${cards.map(cardMarkup).join("")}</div>`;
   renderBarcodes(el("cardPreview"));
+  await renderQRCodes(el("cardPreview"));
 }
 
 async function fetchCards() {
@@ -149,16 +191,29 @@ async function fetchCards() {
 async function generateCards() {
   const cards = await fetchCards();
   if (!cards.length) return;
-  renderCards(cards);
+  await renderCards(cards);
 }
 
 async function printCardsDirect() {
   if (!state.cards.length) {
     const cards = await fetchCards();
     if (!cards.length) return;
-    renderCards(cards);
+    await renderCards(cards);
+  } else {
+    await renderQRCodes(el("cardPreview"));
   }
-  const source = el("cardPreview").innerHTML;
+  const printableRoot = el("cardPreview").cloneNode(true);
+  printableRoot.querySelectorAll("canvas.qrcode").forEach((canvas) => {
+    const img = document.createElement("img");
+    img.className = "qrcode";
+    try {
+      img.src = canvas.toDataURL("image/png");
+    } catch {
+      img.alt = "QR unavailable";
+    }
+    canvas.replaceWith(img);
+  });
+  const source = printableRoot.innerHTML;
   const win = window.open("", "_blank", "width=1100,height=800");
   if (!win) {
     alert("Please allow popups to print cage cards.");
@@ -176,7 +231,9 @@ async function printCardsDirect() {
           .print-card { border: 1px solid #222; border-radius: 6px; padding: 8px; break-inside: avoid; min-height: 205px; }
           .card-top { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
           .card-meta { font-size: 11px; line-height: 1.25; margin-bottom: 8px; }
-          .barcode { width: 100%; height: 54px; }
+          .scan-block { display: grid; grid-template-columns: 102px minmax(0, 1fr); gap: 8px; align-items: center; }
+          .qrcode { width: 98px; height: 98px; border: 1px solid #111; border-radius: 4px; object-fit: contain; background: #fff; }
+          .barcode { width: 100%; height: 66px; }
           .card-foot { margin-top: 6px; font-size: 10px; }
           @page { size: letter portrait; margin: 0.35in; }
         </style>
