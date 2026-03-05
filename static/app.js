@@ -188,6 +188,15 @@ function toNum(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function fmtDate(v) {
+  if (!v) return "N/A";
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return String(v);
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${mm}/${dd}/${d.getFullYear()}`;
+}
+
 function chartCard(title, subtitle, inner, legend = "") {
   return `
     <article class="viz-card">
@@ -524,26 +533,105 @@ async function waitForImages(root = document) {
 }
 
 function cardMarkup(c) {
+  const male = toNum(c.animalCount?.M);
+  const female = toNum(c.animalCount?.F);
+  const total = male + female;
+  const projects = (c.projects || []).length ? c.projects.join(", ") : "Unassigned";
+  const location = [c.roomName, c.rackName].filter(Boolean).join(", ") || c.location || "N/A";
+  const animals = (c.animals || []).slice(0, 5);
+  const litters = (c.litters || []).slice(0, 4);
+
+  const animalRows = animals
+    .map(
+      (a) => `
+      <tr>
+        <td>${esc(a.animalCode || "")}</td>
+        <td>${esc(a.sex || "U")}</td>
+        <td>${esc(fmtDate(a.dob))}</td>
+        <td>${esc(a.genotype || "Pending")}</td>
+        <td>${esc(a.status || "Active")}</td>
+      </tr>`
+    )
+    .join("");
+  const animalFill = Array.from({ length: Math.max(0, 5 - animals.length) })
+    .map(
+      () => `
+      <tr class="empty">
+        <td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>
+      </tr>`
+    )
+    .join("");
+
+  const litterRows = litters
+    .map(
+      (l, idx) => `
+      <tr>
+        <td>${esc(idx + 1)}</td>
+        <td>${esc(fmtDate(l.birthDate))}</td>
+        <td>${esc(l.born)}</td>
+        <td>${esc(l.survived)}</td>
+        <td>${esc(`${toNum(l.maleCount)}/${toNum(l.femaleCount)}`)}</td>
+      </tr>`
+    )
+    .join("");
+  const litterFill = Array.from({ length: Math.max(0, 4 - litters.length) })
+    .map(
+      () => `
+      <tr class="empty">
+        <td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>
+      </tr>`
+    )
+    .join("");
+
   return `
     <article class="print-card">
-      <div class="card-top">
-        <strong>${esc(c.cageCode)}</strong>
-        <span>${esc(c.location)}</span>
+      <div class="print-card-header">
+        <div class="print-card-identity">
+          <div class="card-kv"><span class="k">Cage:</span><strong>${esc(c.cageCode)}</strong></div>
+          <div class="card-kv"><span class="k">Location:</span><strong>${esc(location)}</strong></div>
+          <div class="card-kv"><span class="k">Breeding:</span><strong>${esc(c.breedingStatus)}</strong></div>
+        </div>
+        <div class="card-code-block">
+          <img class="qrcode" data-qr="${esc(scanUrlForCard(c))}" alt="QR code" />
+          <div class="qr-caption">Scan with phone camera</div>
+        </div>
       </div>
-      <div class="card-meta">
-        <div>Strain: ${esc(c.strain)}</div>
-        <div>Genotype: ${esc(c.genotype)}</div>
-        <div>PI/Lab: ${esc(c.piLab)}</div>
-        <div>Status: ${esc(c.breedingStatus)}</div>
-        <div>DOB: ${esc(c.dob || "N/A")}</div>
-        <div>M/F: ${esc(c.animalCount.M)}/${esc(c.animalCount.F)}</div>
-        <div>Protocol: ${esc(c.protocol || "N/A")}</div>
+      <div class="print-card-core">
+        <div class="card-kv"><span class="k">Group Owner:</span><strong>${esc(c.groupOwner || "N/A")}</strong></div>
+        <div class="card-kv"><span class="k">Group Name:</span><strong>${esc(c.groupName || c.piLab || "N/A")}</strong></div>
+        <div class="card-kv"><span class="k">Projects:</span><strong>${esc(projects)}</strong></div>
+        <div class="card-kv"><span class="k">Protocol:</span><strong>${esc(c.protocol || "N/A")}</strong></div>
+        <div class="card-kv"><span class="k">Description:</span><strong>${esc(c.protocolDescription || "N/A")}</strong></div>
+        <div class="card-kv"><span class="k">Expires:</span><strong>${esc(fmtDate(c.protocolExpiresOn))}</strong></div>
+        <div class="card-kv"><span class="k">Strain:</span><strong>${esc(c.strain)}</strong></div>
+        <div class="card-kv"><span class="k">Genotype:</span><strong>${esc(c.genotype)}</strong></div>
+        <div class="card-kv"><span class="k">Cage DOB:</span><strong>${esc(fmtDate(c.dob))}</strong></div>
+        <div class="card-kv"><span class="k">Population:</span><strong>${esc(`M${male} / F${female} / T${total}`)}</strong></div>
       </div>
+
+      <table class="card-table">
+        <thead>
+          <tr><th>ID</th><th>Sex</th><th>DOB</th><th>Genotype</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          ${animalRows}${animalFill}
+        </tbody>
+      </table>
+
+      <div class="litters-title">Litters</div>
+      <table class="card-table litters-table">
+        <thead>
+          <tr><th>#</th><th>DOB</th><th>Born</th><th>Survived</th><th>M/F</th></tr>
+        </thead>
+        <tbody>
+          ${litterRows}${litterFill}
+        </tbody>
+      </table>
+
       <div class="scan-block">
-        <img class="qrcode" data-qr="${esc(scanUrlForCard(c))}" alt="QR code" />
         <img class="barcode" data-barcode="${esc(c.cageCode)}" alt="Barcode" />
+        <div class="card-foot">Scan URL: ${esc(scanUrlForCard(c))}</div>
       </div>
-      <div class="card-foot">Scan URL: ${esc(scanUrlForCard(c))}</div>
     </article>
   `;
 }
@@ -597,14 +685,24 @@ async function printCardsDirect() {
         <title>Murisphere Cage Cards</title>
         <style>
           body { font-family: Arial, sans-serif; margin: 12px; color: #111; }
-          .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(325px, 1fr)); gap: 10px; }
-          .print-card { border: 1px solid #222; border-radius: 6px; padding: 8px; break-inside: avoid; min-height: 205px; }
-          .card-top { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 6px; }
-          .card-meta { font-size: 11px; line-height: 1.25; margin-bottom: 8px; }
-          .scan-block { display: grid; grid-template-columns: 102px minmax(0, 1fr); gap: 8px; align-items: center; }
-          .qrcode { width: 98px; height: 98px; border: 1px solid #111; border-radius: 4px; object-fit: contain; background: #fff; }
-          .barcode { width: 100%; height: 66px; }
-          .card-foot { margin-top: 6px; font-size: 10px; }
+          .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(540px, 1fr)); gap: 10px; }
+          .print-card { border: 1px solid #222; border-radius: 6px; padding: 8px; break-inside: avoid; min-height: 350px; }
+          .print-card-header { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+          .print-card-identity { flex: 1; display: grid; gap: 3px; align-content: start; }
+          .card-kv { font-size: 11px; line-height: 1.2; display: flex; gap: 6px; }
+          .card-kv .k { min-width: 78px; font-weight: 700; }
+          .card-code-block { width: 108px; text-align: center; }
+          .qrcode { width: 102px; height: 102px; border: 1px solid #111; border-radius: 4px; object-fit: contain; background: #fff; }
+          .qr-caption { margin-top: 2px; font-size: 9px; color: #2d4956; }
+          .print-card-core { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 8px; margin-bottom: 6px; }
+          .card-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 5px; table-layout: fixed; }
+          .card-table th, .card-table td { border: 1px solid #111; padding: 3px 4px; vertical-align: top; }
+          .card-table thead th { background: #f7f7f7; text-align: left; }
+          .card-table tr.empty td { color: transparent; }
+          .litters-title { font-size: 10px; font-weight: 700; margin: 2px 0; }
+          .scan-block { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; align-items: center; }
+          .barcode { width: 100%; height: 58px; border: 1px solid #111; }
+          .card-foot { font-size: 9px; word-break: break-all; }
           @page { size: letter portrait; margin: 0.35in; }
         </style>
       </head>

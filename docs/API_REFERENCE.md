@@ -18,7 +18,8 @@ Browser scan landing page:
 - `PATCH /api/cages/<id>`
 - `GET /api/scan/<code>`
 - `GET /api/public/scan/<token>`
-- `POST /api/cages/cards`
+- `POST /api/cages/cards`  
+  Returns complete cage-card payload including owner/lab, projects, protocol details, animal rows, litter summary, QR token URL, and barcode value.
 - `POST /api/cages/bulk-actions` (PI/Admin)
 - `POST /api/cages/<id>/wean`
 - `POST /api/cages/<id>/transfer`

@@ -110,6 +110,15 @@ class AppIntegrationTests(unittest.TestCase):
         card = cards.get_json()[0]
         self.assertTrue(card["scanUrl"].startswith("/scan/"))
         self.assertTrue(card["qrValue"])
+        self.assertIn("groupOwner", card)
+        self.assertIn("groupName", card)
+        self.assertIn("protocolDescription", card)
+        self.assertIn("projects", card)
+        self.assertIn("animals", card)
+        self.assertIn("litters", card)
+        self.assertIsInstance(card["projects"], list)
+        self.assertIsInstance(card["animals"], list)
+        self.assertIsInstance(card["litters"], list)
 
         public_scan = self.client.get(f"/api/public/scan/{card['qrValue']}")
         self.assertEqual(public_scan.status_code, 200)

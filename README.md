@@ -7,6 +7,9 @@ Current release: `v0.3.0` (2026-03-05)
 ## Product Name
 `Murisphere`
 
+## GitHub About Message
+`Cage-first mouse colony management for modern vivaria: print QR cage cards, scan with any phone, run breeding and compliance workflows, and stay audit-ready.`
+
 ## Core Product Capabilities
 - Cage-centric workflow with direct scan-to-edit on phone browsers.
 - Printable cage cards with server-rendered QR code and CODE128 barcode.
@@ -14,6 +17,18 @@ Current release: `v0.3.0` (2026-03-05)
 - Facility operations (capacity, quotas, requests, wash workflow, billing/chargeback).
 - Compliance stack (protocol expiry hard-stop, deviations, quarantine, audit, signatures).
 - Research support (genotyping orders/callbacks, pedigree, planner scenarios, recommendations).
+
+## Cage Card Showcase
+![Murisphere complete cage card preview](docs/tutorial/assets/cage_card_complete.svg)
+
+Card content includes:
+- Cage code and room/rack location.
+- Group owner (PI), group/lab name, and linked project codes.
+- Protocol number, protocol description, and protocol expiration date.
+- Breeding status, cage DOB, and current population counts (M/F/Total).
+- Animal table (ID, sex, DOB, genotype, status).
+- Litter table (DOB, born, survived, sex split).
+- QR code for direct phone-browser scan and barcode for optional scanner workflows.
 
 ## Technology
 - Backend: Flask + SQLite

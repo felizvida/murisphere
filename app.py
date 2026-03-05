@@ -2001,8 +2001,16 @@ def cage_cards() -> Response:
     rows = db().execute(
         f"""
         SELECT c.id, c.cage_code, c.strain, c.genotype_summary, c.breeding_status, c.dob,
-               c.male_count, c.female_count, l.name AS lab_name, p.protocol_number,
-               r.name AS room_name, k.name AS rack_name, c.qr_token
+               c.male_count, c.female_count,
+               l.name AS lab_name, l.pi_name AS pi_name,
+               p.protocol_number, p.title AS protocol_title, p.expires_on AS protocol_expires_on,
+               r.name AS room_name, k.name AS rack_name, c.qr_token,
+               (
+                   SELECT GROUP_CONCAT(pj.project_code, ', ')
+                   FROM project_cages pc
+                   JOIN projects pj ON pj.id = pc.project_id
+                   WHERE pc.cage_id = c.id
+               ) AS project_codes
         FROM cages c
         LEFT JOIN labs l ON c.lab_id = l.id
         LEFT JOIN iacuc_protocols p ON c.protocol_id = p.id
@@ -2013,20 +2021,82 @@ def cage_cards() -> Response:
         params,
     ).fetchall()
 
+    cage_ids = [int(r["id"]) for r in rows]
+    animals_by_cage: dict[int, list[dict[str, Any]]] = {cage_id: [] for cage_id in cage_ids}
+    litters_by_cage: dict[int, list[dict[str, Any]]] = {cage_id: [] for cage_id in cage_ids}
+    if cage_ids:
+        animal_placeholders = ",".join("?" for _ in cage_ids)
+        animal_rows = db().execute(
+            f"""
+            SELECT cage_id, animal_code, sex, dob, genotype, status
+            FROM animals
+            WHERE cage_id IN ({animal_placeholders})
+            ORDER BY cage_id, created_at ASC, id ASC
+            """,
+            cage_ids,
+        ).fetchall()
+        for a in animal_rows:
+            animals_by_cage[int(a["cage_id"])].append(
+                {
+                    "animalCode": a["animal_code"],
+                    "sex": a["sex"],
+                    "dob": a["dob"],
+                    "genotype": a["genotype"],
+                    "status": a["status"],
+                }
+            )
+
+        litter_rows = db().execute(
+            f"""
+            SELECT l.id, l.cage_id, l.birth_date, l.litter_size, l.survived_count,
+                   COALESCE(SUM(CASE WHEN a.sex = 'M' THEN 1 ELSE 0 END), 0) AS male_count,
+                   COALESCE(SUM(CASE WHEN a.sex = 'F' THEN 1 ELSE 0 END), 0) AS female_count
+            FROM litters l
+            LEFT JOIN animals a ON a.litter_id = l.id
+            WHERE l.cage_id IN ({animal_placeholders})
+            GROUP BY l.id, l.cage_id, l.birth_date, l.litter_size, l.survived_count
+            ORDER BY l.cage_id, l.birth_date DESC, l.id DESC
+            """,
+            cage_ids,
+        ).fetchall()
+        for l in litter_rows:
+            litters_by_cage[int(l["cage_id"])].append(
+                {
+                    "litterId": l["id"],
+                    "birthDate": l["birth_date"],
+                    "born": l["litter_size"],
+                    "survived": l["survived_count"],
+                    "maleCount": l["male_count"],
+                    "femaleCount": l["female_count"],
+                }
+            )
+
     cards = []
     for r in rows:
+        projects = []
+        if r["project_codes"]:
+            projects = [x.strip() for x in str(r["project_codes"]).split(",") if x.strip()]
         cards.append(
             {
                 "cageId": r["id"],
                 "cageCode": r["cage_code"],
                 "strain": r["strain"],
                 "genotype": r["genotype_summary"],
+                "groupOwner": r["pi_name"],
+                "groupName": r["lab_name"],
                 "piLab": r["lab_name"],
                 "breedingStatus": r["breeding_status"],
                 "dob": r["dob"],
                 "animalCount": {"M": r["male_count"], "F": r["female_count"]},
                 "protocol": r["protocol_number"],
+                "protocolDescription": r["protocol_title"],
+                "protocolExpiresOn": r["protocol_expires_on"],
+                "projects": projects,
+                "roomName": r["room_name"],
+                "rackName": r["rack_name"],
                 "location": f"{r['room_name']} / {r['rack_name']}",
+                "animals": animals_by_cage.get(int(r["id"]), []),
+                "litters": litters_by_cage.get(int(r["id"]), []),
                 "qrValue": r["qr_token"],
                 "scanUrl": f"/scan/{r['qr_token']}",
             }

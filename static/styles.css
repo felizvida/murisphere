@@ -361,27 +361,96 @@ button:active,
   border: 1px solid #bdd3cb;
   border-radius: 11px;
   padding: 0.66rem;
+  min-height: 360px;
 }
 
-.card-top {
+.print-card-header {
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: flex-start;
   gap: 0.6rem;
-  font-size: 0.78rem;
   margin-bottom: 0.35rem;
 }
 
-.card-meta {
-  font-size: 0.74rem;
-  line-height: 1.26;
+.print-card-identity {
+  flex: 1;
+  display: grid;
+  gap: 0.18rem;
+}
+
+.card-kv {
+  display: flex;
+  gap: 0.38rem;
+  font-size: 0.72rem;
+  line-height: 1.24;
+}
+
+.card-kv .k {
+  min-width: 82px;
+  color: #34535f;
+  font-weight: 700;
+}
+
+.card-kv strong {
+  color: #162f39;
+  font-weight: 700;
+}
+
+.card-code-block {
+  width: 108px;
+  text-align: center;
+}
+
+.qr-caption {
+  margin-top: 0.2rem;
+  font-size: 0.62rem;
+  color: #375664;
+}
+
+.print-card-core {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.16rem 0.55rem;
+  margin-bottom: 0.35rem;
+}
+
+.card-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  margin-bottom: 0.3rem;
+  font-size: 0.66rem;
+}
+
+.card-table th,
+.card-table td {
+  border: 1px solid #8faea2;
+  padding: 0.17rem 0.2rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.card-table thead th {
+  background: #eff6f3;
+  color: #193744;
+}
+
+.card-table tr.empty td {
+  color: transparent;
+}
+
+.litters-title {
+  margin: 0.08rem 0 0.2rem;
+  font-size: 0.65rem;
+  color: #2c4f5a;
+  font-weight: 700;
 }
 
 .scan-block {
-  margin-top: 0.35rem;
+  margin-top: 0.22rem;
   display: grid;
-  grid-template-columns: 108px minmax(0, 1fr);
-  gap: 0.55rem;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.25rem;
   align-items: center;
 }
 
@@ -396,15 +465,17 @@ button:active,
 .barcode {
   display: block;
   width: 100%;
-  height: 72px;
+  height: 56px;
   margin: 0;
   background: #fff;
+  border: 1px solid #d4e3dc;
 }
 
 .card-foot {
   font-family: var(--mono);
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   color: #30464f;
+  overflow-wrap: anywhere;
 }
 
 .viz-heading {
@@ -596,7 +667,7 @@ button:active,
 
 @media (min-width: 1060px) {
   .card-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
@@ -626,12 +697,8 @@ button:active,
   }
 
   .card-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(1, minmax(0, 1fr));
     gap: 0.2in;
-  }
-
-  .scan-block {
-    grid-template-columns: 102px minmax(0, 1fr);
   }
 
   .qrcode {
@@ -642,6 +709,16 @@ button:active,
 
   .print-card {
     break-inside: avoid;
+    border: 1px solid #111;
+    min-height: 0;
+  }
+
+  .card-table th,
+  .card-table td {
+    border: 1px solid #111;
+  }
+
+  .barcode {
     border: 1px solid #111;
   }
 }

@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 980">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#edf7f3"/>
+      <stop offset="100%" stop-color="#d9ebe2"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f7fcf9"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1600" height="980" fill="url(#bg)"/>
+
+  <rect x="50" y="40" width="1500" height="900" rx="22" fill="url(#card)" stroke="#bdd5ca" stroke-width="2"/>
+  <text x="92" y="104" font-family="Arial" font-size="38" font-weight="700" fill="#12323e">Murisphere Cage Card (Rendered Preview)</text>
+  <text x="92" y="138" font-family="Arial" font-size="20" fill="#3f606c">Designed for fast room-floor scanning, complete husbandry context, and compliance readiness</text>
+
+  <rect x="90" y="168" width="1240" height="228" rx="10" fill="#ffffff" stroke="#163947" stroke-width="3"/>
+  <rect x="1334" y="168" width="176" height="228" rx="10" fill="#f8fcfa" stroke="#163947" stroke-width="3"/>
+
+  <text x="112" y="210" font-family="Arial" font-size="28" fill="#102f3c"><tspan font-weight="700">Cage:</tspan> F1-L03-C0215</text>
+  <text x="112" y="252" font-family="Arial" font-size="28" fill="#102f3c"><tspan font-weight="700">Group Owner:</tspan> Dr. Meosha Hudson</text>
+  <text x="112" y="294" font-family="Arial" font-size="28" fill="#102f3c"><tspan font-weight="700">Group Name:</tspan> Hudson Lab</text>
+  <text x="112" y="336" font-family="Arial" font-size="28" fill="#102f3c"><tspan font-weight="700">Projects:</tspan> L03-PRJ-01, L03-PRJ-05</text>
+  <text x="112" y="378" font-family="Arial" font-size="28" fill="#102f3c"><tspan font-weight="700">Location:</tspan> Room 1, Breeding Rack 1, Slot 6A</text>
+
+  <text x="748" y="210" font-family="Arial" font-size="28" fill="#102f3c"><tspan font-weight="700">Protocol:</tspan> IACUC-2026-0312</text>
+  <text x="748" y="252" font-family="Arial" font-size="28" fill="#102f3c"><tspan font-weight="700">Description:</tspan> PdxCre longitudinal cohort</text>
+  <text x="748" y="294" font-family="Arial" font-size="28" fill="#102f3c"><tspan font-weight="700">Breeding:</tspan> Pairing 35 (Timed Mating)</text>
+  <text x="748" y="336" font-family="Arial" font-size="28" fill="#102f3c"><tspan font-weight="700">Protocol Expires:</tspan> 12/31/2026</text>
+  <text x="748" y="378" font-family="Arial" font-size="28" fill="#102f3c"><tspan font-weight="700">Population:</tspan> M2 / F3 / T5</text>
+
+  <rect x="1370" y="204" width="108" height="108" fill="#fff" stroke="#102f3c" stroke-width="3"/>
+  <rect x="1382" y="216" width="26" height="26" fill="#102f3c"/>
+  <rect x="1414" y="216" width="20" height="20" fill="#102f3c"/>
+  <rect x="1440" y="216" width="26" height="26" fill="#102f3c"/>
+  <rect x="1382" y="248" width="20" height="20" fill="#102f3c"/>
+  <rect x="1410" y="248" width="30" height="30" fill="#102f3c"/>
+  <rect x="1446" y="248" width="20" height="20" fill="#102f3c"/>
+  <rect x="1382" y="282" width="26" height="26" fill="#102f3c"/>
+  <rect x="1414" y="282" width="20" height="20" fill="#102f3c"/>
+  <rect x="1440" y="282" width="26" height="26" fill="#102f3c"/>
+  <text x="1366" y="340" font-family="Arial" font-size="16" fill="#355865">Scan with phone camera</text>
+
+  <rect x="90" y="418" width="1420" height="314" rx="10" fill="#fff" stroke="#163947" stroke-width="3"/>
+  <line x1="90" y1="486" x2="1510" y2="486" stroke="#163947" stroke-width="3"/>
+
+  <line x1="260" y1="418" x2="260" y2="732" stroke="#163947" stroke-width="3"/>
+  <line x1="360" y1="418" x2="360" y2="732" stroke="#163947" stroke-width="3"/>
+  <line x1="560" y1="418" x2="560" y2="732" stroke="#163947" stroke-width="3"/>
+  <line x1="1180" y1="418" x2="1180" y2="732" stroke="#163947" stroke-width="3"/>
+
+  <text x="104" y="466" font-family="Arial" font-size="28" font-weight="700" fill="#102f3c">ID</text>
+  <text x="286" y="466" font-family="Arial" font-size="28" font-weight="700" fill="#102f3c">Sex</text>
+  <text x="388" y="466" font-family="Arial" font-size="28" font-weight="700" fill="#102f3c">DOB</text>
+  <text x="590" y="466" font-family="Arial" font-size="28" font-weight="700" fill="#102f3c">Genotype</text>
+  <text x="1208" y="466" font-family="Arial" font-size="28" font-weight="700" fill="#102f3c">Status</text>
+
+  <line x1="90" y1="554" x2="1510" y2="554" stroke="#163947" stroke-width="2"/>
+  <line x1="90" y1="622" x2="1510" y2="622" stroke="#163947" stroke-width="2"/>
+  <line x1="90" y1="690" x2="1510" y2="690" stroke="#163947" stroke-width="2"/>
+
+  <text x="104" y="530" font-family="Arial" font-size="42" fill="#102f3c">258</text>
+  <text x="286" y="530" font-family="Arial" font-size="42" fill="#102f3c">M</text>
+  <text x="388" y="530" font-family="Arial" font-size="42" fill="#102f3c">10/10/2024</text>
+  <text x="590" y="530" font-family="Arial" font-size="42" fill="#102f3c">PdxCre Tg/Azelia</text>
+  <text x="1208" y="530" font-family="Arial" font-size="42" fill="#102f3c">Breeder</text>
+
+  <text x="104" y="598" font-family="Arial" font-size="42" fill="#102f3c">1L</text>
+  <text x="286" y="598" font-family="Arial" font-size="42" fill="#102f3c">F</text>
+  <text x="388" y="598" font-family="Arial" font-size="42" fill="#102f3c">10/28/2024</text>
+  <text x="590" y="598" font-family="Arial" font-size="42" fill="#102f3c">PdxCre +/tg</text>
+  <text x="1208" y="598" font-family="Arial" font-size="42" fill="#102f3c">Breeder</text>
+
+  <text x="104" y="666" font-family="Arial" font-size="42" fill="#102f3c">1L1R</text>
+  <text x="286" y="666" font-family="Arial" font-size="42" fill="#102f3c">F</text>
+  <text x="388" y="666" font-family="Arial" font-size="42" fill="#102f3c">10/28/2024</text>
+  <text x="590" y="666" font-family="Arial" font-size="42" fill="#102f3c">PdxCre +/+</text>
+  <text x="1208" y="666" font-family="Arial" font-size="42" fill="#102f3c">Breeder</text>
+
+  <text x="94" y="770" font-family="Arial" font-size="44" font-weight="700" fill="#102f3c">Litters</text>
+
+  <rect x="90" y="788" width="700" height="136" rx="8" fill="#fff" stroke="#163947" stroke-width="3"/>
+  <line x1="90" y1="842" x2="790" y2="842" stroke="#163947" stroke-width="3"/>
+  <line x1="146" y1="788" x2="146" y2="924" stroke="#163947" stroke-width="3"/>
+  <line x1="368" y1="788" x2="368" y2="924" stroke="#163947" stroke-width="3"/>
+  <line x1="500" y1="788" x2="500" y2="924" stroke="#163947" stroke-width="3"/>
+  <line x1="620" y1="788" x2="620" y2="924" stroke="#163947" stroke-width="3"/>
+  <text x="106" y="826" font-family="Arial" font-size="28" font-weight="700" fill="#102f3c">#</text>
+  <text x="170" y="826" font-family="Arial" font-size="28" font-weight="700" fill="#102f3c">DOB</text>
+  <text x="390" y="826" font-family="Arial" font-size="28" font-weight="700" fill="#102f3c">Born</text>
+  <text x="522" y="826" font-family="Arial" font-size="28" font-weight="700" fill="#102f3c">Survived</text>
+  <text x="648" y="826" font-family="Arial" font-size="28" font-weight="700" fill="#102f3c">M/F</text>
+  <text x="106" y="892" font-family="Arial" font-size="34" fill="#102f3c">1</text>
+  <text x="170" y="892" font-family="Arial" font-size="34" fill="#102f3c">11/12/2024</text>
+  <text x="406" y="892" font-family="Arial" font-size="34" fill="#102f3c">3</text>
+  <text x="548" y="892" font-family="Arial" font-size="34" fill="#102f3c">3</text>
+  <text x="658" y="892" font-family="Arial" font-size="34" fill="#102f3c">2/1</text>
+
+  <rect x="810" y="788" width="700" height="136" rx="8" fill="#fff" stroke="#163947" stroke-width="3"/>
+  <line x1="810" y1="842" x2="1510" y2="842" stroke="#163947" stroke-width="3"/>
+  <line x1="866" y1="788" x2="866" y2="924" stroke="#163947" stroke-width="3"/>
+  <line x1="1088" y1="788" x2="1088" y2="924" stroke="#163947" stroke-width="3"/>
+  <line x1="1220" y1="788" x2="1220" y2="924" stroke="#163947" stroke-width="3"/>
+  <line x1="1340" y1="788" x2="1340" y2="924" stroke="#163947" stroke-width="3"/>
+  <text x="826" y="826" font-family="Arial" font-size="28" font-weight="700" fill="#102f3c">#</text>
+  <text x="890" y="826" font-family="Arial" font-size="28" font-weight="700" fill="#102f3c">DOB</text>
+  <text x="1110" y="826" font-family="Arial" font-size="28" font-weight="700" fill="#102f3c">Born</text>
+  <text x="1242" y="826" font-family="Arial" font-size="28" font-weight="700" fill="#102f3c">Survived</text>
+  <text x="1368" y="826" font-family="Arial" font-size="28" font-weight="700" fill="#102f3c">M/F</text>
+  <text x="826" y="892" font-family="Arial" font-size="34" fill="#102f3c">2</text>
+  <text x="890" y="892" font-family="Arial" font-size="34" fill="#102f3c">01/08/2025</text>
+  <text x="1126" y="892" font-family="Arial" font-size="34" fill="#102f3c">5</text>
+  <text x="1268" y="892" font-family="Arial" font-size="34" fill="#102f3c">5</text>
+  <text x="1378" y="892" font-family="Arial" font-size="34" fill="#102f3c">1/4</text>
+
+  <rect x="1338" y="410" width="172" height="62" fill="#fff" stroke="#163947" stroke-width="2"/>
+  <line x1="1348" y1="422" x2="1498" y2="422" stroke="#163947" stroke-width="3"/>
+  <line x1="1348" y1="436" x2="1498" y2="436" stroke="#163947" stroke-width="2"/>
+  <line x1="1348" y1="450" x2="1498" y2="450" stroke="#163947" stroke-width="4"/>
+  <text x="1340" y="478" font-family="Arial" font-size="14" fill="#3f606c">Barcode (optional)</text>
+</svg>
