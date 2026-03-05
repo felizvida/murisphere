@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+from collections import deque
 import hashlib
 import io
 import json
@@ -8,6 +9,7 @@ import mimetypes
 import os
 import secrets
 import sqlite3
+import threading
 import time
 from contextlib import closing
 from dataclasses import dataclass
@@ -32,6 +34,17 @@ ATTACHMENT_DIR = Path(os.getenv("MURISPHERE_ATTACHMENT_DIR", "uploads"))
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("MURISPHERE_MAX_UPLOAD_BYTES", "5242880"))
 
+LOGIN_RATE_LIMIT_MAX_FAILURES = int(os.getenv("MURISPHERE_LOGIN_RATE_LIMIT_MAX_FAILURES", "8"))
+LOGIN_RATE_LIMIT_WINDOW_SEC = int(os.getenv("MURISPHERE_LOGIN_RATE_LIMIT_WINDOW_SEC", "300"))
+LOGIN_RATE_LIMIT_BLOCK_SEC = int(os.getenv("MURISPHERE_LOGIN_RATE_LIMIT_BLOCK_SEC", "900"))
+PUBLIC_SCAN_RATE_LIMIT_MAX = int(os.getenv("MURISPHERE_PUBLIC_SCAN_RATE_LIMIT_MAX", "120"))
+PUBLIC_SCAN_RATE_LIMIT_WINDOW_SEC = int(os.getenv("MURISPHERE_PUBLIC_SCAN_RATE_LIMIT_WINDOW_SEC", "60"))
+
+_rate_limit_lock = threading.Lock()
+_login_failures: dict[str, deque[float]] = {}
+_login_blocked_until: dict[str, float] = {}
+_public_scan_hits: dict[str, deque[float]] = {}
+
 
 @dataclass
 class AuthContext:
@@ -48,6 +61,72 @@ def now_iso() -> str:
 
 def token_digest(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _client_ip() -> str:
+    forwarded = request.headers.get("X-Forwarded-For", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip() or "unknown"
+    return request.remote_addr or "unknown"
+
+
+def _prune_hits(bucket: deque[float], now_ts: float, window_sec: int) -> None:
+    cutoff = now_ts - max(1, window_sec)
+    while bucket and bucket[0] <= cutoff:
+        bucket.popleft()
+
+
+def _is_login_blocked(key: str) -> tuple[bool, int]:
+    now_ts = time.monotonic()
+    with _rate_limit_lock:
+        blocked_until = _login_blocked_until.get(key, 0)
+        if blocked_until <= now_ts:
+            if key in _login_blocked_until:
+                _login_blocked_until.pop(key, None)
+            return (False, 0)
+        retry = max(1, int(blocked_until - now_ts) + 1)
+        return (True, retry)
+
+
+def _record_login_failure(key: str) -> tuple[bool, int]:
+    now_ts = time.monotonic()
+    with _rate_limit_lock:
+        bucket = _login_failures.setdefault(key, deque())
+        _prune_hits(bucket, now_ts, LOGIN_RATE_LIMIT_WINDOW_SEC)
+        bucket.append(now_ts)
+        if len(bucket) >= max(1, LOGIN_RATE_LIMIT_MAX_FAILURES):
+            blocked_until = now_ts + max(1, LOGIN_RATE_LIMIT_BLOCK_SEC)
+            _login_blocked_until[key] = blocked_until
+            bucket.clear()
+            retry = max(1, int(blocked_until - now_ts) + 1)
+            return (True, retry)
+        return (False, 0)
+
+
+def _clear_login_failures(key: str) -> None:
+    with _rate_limit_lock:
+        _login_failures.pop(key, None)
+        _login_blocked_until.pop(key, None)
+
+
+def _consume_public_scan_hit(client_ip: str) -> tuple[bool, int]:
+    now_ts = time.monotonic()
+    with _rate_limit_lock:
+        bucket = _public_scan_hits.setdefault(client_ip, deque())
+        _prune_hits(bucket, now_ts, PUBLIC_SCAN_RATE_LIMIT_WINDOW_SEC)
+        if len(bucket) >= max(1, PUBLIC_SCAN_RATE_LIMIT_MAX):
+            retry_after = max(1, int(PUBLIC_SCAN_RATE_LIMIT_WINDOW_SEC - (now_ts - bucket[0])) + 1)
+            return (False, retry_after)
+        bucket.append(now_ts)
+        return (True, 0)
+
+
+def reset_rate_limit_state() -> None:
+    """Test hook to clear in-memory rate-limit trackers."""
+    with _rate_limit_lock:
+        _login_failures.clear()
+        _login_blocked_until.clear()
+        _public_scan_hits.clear()
 
 
 def db() -> sqlite3.Connection:
@@ -610,13 +689,22 @@ def login() -> Response:
     payload = request.get_json(force=True)
     email = payload.get("email", "").strip().lower()
     password = payload.get("password", "")
+    login_key = f"{_client_ip()}|{email}"
+    blocked, retry_after = _is_login_blocked(login_key)
+    if blocked:
+        return jsonify({"error": "Too many login attempts. Retry later.", "retryAfterSec": retry_after}), 429
+
     row = db().execute(
         "SELECT id, email, full_name, role, lab_id, password_hash, is_active FROM users WHERE email = ?",
         (email,),
     ).fetchone()
     if not row or not row["is_active"] or not check_password_hash(row["password_hash"], password):
+        now_blocked, block_retry = _record_login_failure(login_key)
+        if now_blocked:
+            return jsonify({"error": "Too many login attempts. Retry later.", "retryAfterSec": block_retry}), 429
         return jsonify({"error": "Invalid credentials"}), 401
 
+    _clear_login_failures(login_key)
     token = secrets.token_urlsafe(24)
     expires_at = (datetime.now(UTC) + timedelta(hours=12)).isoformat()
     db().execute(
@@ -1004,6 +1092,10 @@ def scan_cage(code: str) -> Response:
 
 @app.get("/api/public/scan/<token>")
 def public_scan(token: str) -> Response:
+    allowed, retry_after = _consume_public_scan_hit(_client_ip())
+    if not allowed:
+        return jsonify({"error": "Too many scan requests. Retry later.", "retryAfterSec": retry_after}), 429
+
     row = db().execute(
         """
         SELECT c.*, r.name AS room_name, k.name AS rack_name, l.name AS lab_name, p.protocol_number

@@ -60,7 +60,7 @@ def main() -> None:
             str(tmp_md),
             "--from=markdown",
             f"--pdf-engine={pdf_engine}",
-            f"--resource-path={tmp_dir}:docs/tutorial",
+            f"--resource-path={tmp_dir}{os.pathsep}docs/tutorial",
             "-o",
             str(PDF_PATH),
         ]

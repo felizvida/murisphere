@@ -20,10 +20,12 @@ class AppIntegrationTests(unittest.TestCase):
         appmod.DB_PATH = f"{self._tmp.name}/test_murisphere.db"
         appmod.ATTACHMENT_DIR = Path(self._tmp.name) / "uploads"
         appmod.init_db()
+        appmod.reset_rate_limit_state()
         appmod.app.config.update(TESTING=True)
         self.client = appmod.app.test_client()
 
     def tearDown(self) -> None:
+        appmod.reset_rate_limit_state()
         appmod.DB_PATH = self._old_db
         appmod.ATTACHMENT_DIR = self._old_attachment_dir
         self._tmp.cleanup()
@@ -47,6 +49,63 @@ class AppIntegrationTests(unittest.TestCase):
         payload = me.get_json()
         self.assertEqual(payload["email"], "admin@murisphere.local")
         self.assertEqual(payload["role"], "Admin")
+
+    def test_login_rate_limit_blocks_repeated_failures(self) -> None:
+        old_cfg = (
+            appmod.LOGIN_RATE_LIMIT_MAX_FAILURES,
+            appmod.LOGIN_RATE_LIMIT_WINDOW_SEC,
+            appmod.LOGIN_RATE_LIMIT_BLOCK_SEC,
+        )
+        try:
+            appmod.LOGIN_RATE_LIMIT_MAX_FAILURES = 3
+            appmod.LOGIN_RATE_LIMIT_WINDOW_SEC = 60
+            appmod.LOGIN_RATE_LIMIT_BLOCK_SEC = 60
+            appmod.reset_rate_limit_state()
+
+            for _ in range(2):
+                bad = self.client.post("/api/auth/login", json={"email": "admin@murisphere.local", "password": "wrong"})
+                self.assertEqual(bad.status_code, 401)
+
+            blocked = self.client.post("/api/auth/login", json={"email": "admin@murisphere.local", "password": "wrong"})
+            self.assertEqual(blocked.status_code, 429)
+            self.assertIn("retryAfterSec", blocked.get_json())
+
+            still_blocked = self.client.post("/api/auth/login", json={"email": "admin@murisphere.local", "password": "admin1234"})
+            self.assertEqual(still_blocked.status_code, 429)
+        finally:
+            (
+                appmod.LOGIN_RATE_LIMIT_MAX_FAILURES,
+                appmod.LOGIN_RATE_LIMIT_WINDOW_SEC,
+                appmod.LOGIN_RATE_LIMIT_BLOCK_SEC,
+            ) = old_cfg
+            appmod.reset_rate_limit_state()
+
+    def test_public_scan_rate_limit(self) -> None:
+        old_cfg = (
+            appmod.PUBLIC_SCAN_RATE_LIMIT_MAX,
+            appmod.PUBLIC_SCAN_RATE_LIMIT_WINDOW_SEC,
+        )
+        try:
+            appmod.PUBLIC_SCAN_RATE_LIMIT_MAX = 2
+            appmod.PUBLIC_SCAN_RATE_LIMIT_WINDOW_SEC = 60
+            appmod.reset_rate_limit_state()
+
+            token = self.login("admin@murisphere.local", "admin1234")
+            cages = self.client.get("/api/cages", headers=self.auth_headers(token)).get_json()
+            cards = self.client.post("/api/cages/cards", headers=self.auth_headers(token), json={"ids": [cages[0]["id"]]})
+            card = cards.get_json()[0]
+
+            ok1 = self.client.get(f"/api/public/scan/{card['qrValue']}")
+            ok2 = self.client.get(f"/api/public/scan/{card['qrValue']}")
+            blocked = self.client.get(f"/api/public/scan/{card['qrValue']}")
+
+            self.assertEqual(ok1.status_code, 200)
+            self.assertEqual(ok2.status_code, 200)
+            self.assertEqual(blocked.status_code, 429)
+            self.assertIn("retryAfterSec", blocked.get_json())
+        finally:
+            appmod.PUBLIC_SCAN_RATE_LIMIT_MAX, appmod.PUBLIC_SCAN_RATE_LIMIT_WINDOW_SEC = old_cfg
+            appmod.reset_rate_limit_state()
 
     def test_scan_edit_workflow_updates_and_audits(self) -> None:
         token = self.login("tech@murisphere.local", "tech1234")

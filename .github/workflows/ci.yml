@@ -27,13 +27,32 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc librsvg2-bin texlive-xetex
+          sudo apt-get install -y chromium || sudo apt-get install -y chromium-browser
+
       - name: Python syntax check
         run: |
-          python -m py_compile app.py seed_large_demo.py
+          python -m py_compile app.py seed_large_demo.py alert_coverage_verifier.py cage_card_layout_audit.py docs/tutorial/build_tutorial_pdf.py
 
       - name: Run tests
         run: |
           python -m unittest discover -s tests -v
+
+      - name: Cage card layout audit
+        run: |
+          CHROME_BIN=$(command -v chromium || command -v chromium-browser || command -v google-chrome || true)
+          if [ -z "$CHROME_BIN" ]; then
+            echo "Chrome/Chromium binary not found"
+            exit 1
+          fi
+          python cage_card_layout_audit.py --chrome-bin "$CHROME_BIN"
+
+      - name: Build tutorial PDF (LaTeX)
+        run: |
+          python docs/tutorial/build_tutorial_pdf.py
 
       - name: Setup Node
         uses: actions/setup-node@v4
