@@ -1,0 +1,36 @@
+{
+  "ok": true,
+  "generated_at": "2026-03-05T22:30:00.096271+00:00",
+  "static_checks": [
+    {
+      "name": "print_css_panels_single_column",
+      "ok": true,
+      "source": "static/app.js"
+    },
+    {
+      "name": "print_css_cell_wrap_guard",
+      "ok": true,
+      "source": "static/app.js"
+    },
+    {
+      "name": "print_css_cell_overflow_hidden",
+      "ok": true,
+      "source": "static/app.js"
+    },
+    {
+      "name": "preview_css_cell_wrap_guard",
+      "ok": true,
+      "source": "static/styles.css"
+    },
+    {
+      "name": "preview_css_cell_overflow_hidden",
+      "ok": true,
+      "source": "static/styles.css"
+    }
+  ],
+  "render_check": {
+    "ok": true,
+    "overflow_count": 0,
+    "overflow": []
+  }
+}

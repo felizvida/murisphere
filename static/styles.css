@@ -483,6 +483,8 @@ button:active,
   text-align: left;
   vertical-align: top;
   overflow-wrap: anywhere;
+  word-break: break-word;
+  overflow: hidden;
 }
 
 .card-table thead th {
@@ -715,10 +717,6 @@ button:active,
     grid-template-columns: 1fr;
   }
 
-  .card-panels {
-    grid-template-columns: 1fr 1fr;
-  }
-
   .kpis {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -777,11 +775,6 @@ button:active,
     border-radius: 6px;
     box-shadow: none;
     background: #fff;
-  }
-
-  .card-panels {
-    grid-template-columns: 1fr 1fr;
-    gap: 0.16in;
   }
 
   .card-table th,

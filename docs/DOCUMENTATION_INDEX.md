@@ -20,3 +20,4 @@
 - `docs/test_reports/UI_CLICKABILITY_REPORT.html` - visual UI clickability contract report
 - `docs/test_reports/UI_CLICKABILITY_RESULT.json` - machine-readable UI clickability audit result
 - `docs/test_reports/ALERT_COVERAGE_RESULT.json` - synthesized-data alert coverage verification result
+- `docs/test_reports/CAGE_CARD_LAYOUT_RESULT.json` - cage-card table alignment/overflow verification report

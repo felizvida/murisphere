@@ -7,6 +7,7 @@
 - QR/Barcode diagnostic: `qrcode_diagnostic.py`
 - UI clickability contract + visual report: `ui_clickability_audit.py`
 - Synthesized alert breadth verification: `alert_coverage_verifier.py`
+- Cage-card table alignment/overflow audit: `cage_card_layout_audit.py`
 - Syntax checks:
   - `python -m py_compile app.py seed_large_demo.py alert_coverage_verifier.py`
   - `node --check static/app.js`
@@ -23,12 +24,14 @@ python3 -m unittest discover -s tests -v
 python3 qrcode_diagnostic.py
 python3 ui_clickability_audit.py
 python3 alert_coverage_verifier.py --db murisphere.db --ensure-schema
+python3 cage_card_layout_audit.py
 ```
 
 Release artifacts:
 - `docs/test_reports/UI_CLICKABILITY_REPORT.html`
 - `docs/test_reports/UI_CLICKABILITY_RESULT.json`
 - `docs/test_reports/ALERT_COVERAGE_RESULT.json`
+- `docs/test_reports/CAGE_CARD_LAYOUT_RESULT.json`
 
 ## Manual Validation Checklist
 - Login/logout across roles.

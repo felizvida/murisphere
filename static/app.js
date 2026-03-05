@@ -760,7 +760,7 @@ async function printCardsDirect() {
           }
           .card-fact > span { color: #33525f; font-weight: 600; }
           .card-fact > strong { color: #163744; font-weight: 700; overflow-wrap: anywhere; }
-          .card-panels { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+          .card-panels { display: grid; grid-template-columns: 1fr; gap: 8px; }
           .card-panel {
             border: 1px solid #9dbbb0;
             border-radius: 8px;
@@ -783,6 +783,8 @@ async function printCardsDirect() {
             padding: 3px 4px;
             vertical-align: top;
             overflow-wrap: anywhere;
+            word-break: break-word;
+            overflow: hidden;
           }
           .card-table th:last-child, .card-table td:last-child { border-right: none; }
           .card-table thead th { background: #f3faf7; text-align: left; color: #163744; }
