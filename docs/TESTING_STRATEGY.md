@@ -4,6 +4,7 @@
 - Integration tests: `tests/test_app.py`
 - Data-scale seed test: `tests/test_seed_large_demo.py`
 - QR asset diagnostic: `qrcode_diagnostic.py`
+- UI clickability audit + visual report: `ui_clickability_audit.py`
 - Syntax checks:
   - `python -m py_compile app.py seed_large_demo.py`
   - `node --check static/app.js`

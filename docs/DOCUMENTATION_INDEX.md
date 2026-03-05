@@ -14,3 +14,5 @@
 - `docs/tutorial/user_training_tutorial.html` - step-by-step tutorial (HTML)
 - `docs/tutorial/user_training_tutorial.pdf` - step-by-step tutorial (PDF)
 - `docs/releases/v0.2.0.md` - release notes for server-side QR/barcode fix
+- `docs/test_reports/UI_CLICKABILITY_REPORT.html` - visual UI clickability contract report
+- `docs/test_reports/UI_CLICKABILITY_RESULT.json` - machine-readable UI clickability audit result

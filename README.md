@@ -38,6 +38,11 @@ QR diagnostics:
 python qrcode_diagnostic.py
 ```
 
+UI clickability audit (with visual HTML report):
+```bash
+python ui_clickability_audit.py
+```
+
 ## CI/CD
 - CI workflow: `.github/workflows/ci.yml`
   - Python matrix tests (3.11, 3.12)

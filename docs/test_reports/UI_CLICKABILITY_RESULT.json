@@ -1,0 +1,227 @@
+{
+  "generatedAt": "2026-03-05T20:17:31.657659+00:00",
+  "summary": {
+    "passed": 31,
+    "failed": 0,
+    "skipped": 5,
+    "score": 100.0
+  },
+  "results": [
+    {
+      "category": "form",
+      "item": "#loginForm",
+      "status": "pass",
+      "detail": "submit listener found"
+    },
+    {
+      "category": "form",
+      "item": "#projectForm",
+      "status": "pass",
+      "detail": "submit listener found"
+    },
+    {
+      "category": "form",
+      "item": "#breedingForm",
+      "status": "pass",
+      "detail": "submit listener found"
+    },
+    {
+      "category": "form",
+      "item": "#genoUploadForm",
+      "status": "pass",
+      "detail": "submit listener found"
+    },
+    {
+      "category": "form",
+      "item": "#excelImportForm",
+      "status": "pass",
+      "detail": "submit listener found"
+    },
+    {
+      "category": "button",
+      "item": "<button(no-id)>",
+      "status": "skip",
+      "detail": "no stable id; skipped explicit wiring check"
+    },
+    {
+      "category": "tab",
+      "item": "data-tab=scan",
+      "status": "pass",
+      "detail": "tab click delegation + section present"
+    },
+    {
+      "category": "tab",
+      "item": "data-tab=cages",
+      "status": "pass",
+      "detail": "tab click delegation + section present"
+    },
+    {
+      "category": "tab",
+      "item": "data-tab=projects",
+      "status": "pass",
+      "detail": "tab click delegation + section present"
+    },
+    {
+      "category": "tab",
+      "item": "data-tab=breeding",
+      "status": "pass",
+      "detail": "tab click delegation + section present"
+    },
+    {
+      "category": "tab",
+      "item": "data-tab=analytics",
+      "status": "pass",
+      "detail": "tab click delegation + section present"
+    },
+    {
+      "category": "tab",
+      "item": "data-tab=reports",
+      "status": "pass",
+      "detail": "tab click delegation + section present"
+    },
+    {
+      "category": "tab",
+      "item": "data-tab=compliance",
+      "status": "pass",
+      "detail": "tab click delegation + section present"
+    },
+    {
+      "category": "button",
+      "item": "#scanBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "#refreshCages",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "#searchBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "#printCardsBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "#quickPrintBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "#saveScanBaseBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "<button(no-id)>",
+      "status": "skip",
+      "detail": "no stable id; skipped explicit wiring check"
+    },
+    {
+      "category": "button",
+      "item": "#refreshProjectsBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "#loadQuotasBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "<button(no-id)>",
+      "status": "skip",
+      "detail": "no stable id; skipped explicit wiring check"
+    },
+    {
+      "category": "button",
+      "item": "<button(no-id)>",
+      "status": "skip",
+      "detail": "no stable id; skipped explicit wiring check"
+    },
+    {
+      "category": "button",
+      "item": "<button(no-id)>",
+      "status": "skip",
+      "detail": "no stable id; skipped explicit wiring check"
+    },
+    {
+      "category": "button",
+      "item": "#loadAlertsBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "#loadAuditBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "#loadRequestsBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "#loadSlaBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "link",
+      "item": "/api/reports/cages.csv",
+      "status": "pass",
+      "detail": "matched Flask route map"
+    },
+    {
+      "category": "link",
+      "item": "/api/reports/cages.xlsx",
+      "status": "pass",
+      "detail": "matched Flask route map"
+    },
+    {
+      "category": "link",
+      "item": "/api/reports/cages.pdf",
+      "status": "pass",
+      "detail": "matched Flask route map"
+    },
+    {
+      "category": "link",
+      "item": "/api/reports/breeder-productivity.csv",
+      "status": "pass",
+      "detail": "matched Flask route map"
+    },
+    {
+      "category": "link",
+      "item": "/api/reports/survival.csv",
+      "status": "pass",
+      "detail": "matched Flask route map"
+    },
+    {
+      "category": "link",
+      "item": "/api/reports/protocol-usage.csv",
+      "status": "pass",
+      "detail": "matched Flask route map"
+    },
+    {
+      "category": "link",
+      "item": "/api/billing/statements.csv",
+      "status": "pass",
+      "detail": "matched Flask route map"
+    }
+  ]
+}

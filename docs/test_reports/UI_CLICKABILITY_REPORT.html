@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>UI Clickability Audit</title>
+  <style>
+    :root {
+      --bg:#0f1b24;
+      --card:#152635;
+      --ink:#e7f4ff;
+      --muted:#9ab4c8;
+      --ok:#2bc48a;
+      --bad:#ef5f67;
+      --skip:#f2b84b;
+      --line:#274154;
+    }
+    body {
+      margin:0;
+      font-family: "Space Grotesk", "Segoe UI", Arial, sans-serif;
+      color:var(--ink);
+      background: radial-gradient(circle at 10% 0%, #1f3d56 0%, #0f1b24 48%), linear-gradient(165deg, #0f1b24, #112636);
+    }
+    .wrap { max-width: 1200px; margin: 0 auto; padding: 24px; }
+    .hero {
+      background: linear-gradient(145deg, rgba(43,196,138,.15), rgba(43,196,138,.03));
+      border:1px solid var(--line);
+      border-radius:16px;
+      padding:20px;
+      box-shadow: 0 20px 40px rgba(0,0,0,.25);
+    }
+    h1 { margin:0; font-size:2rem; letter-spacing:.2px; }
+    .meta { color:var(--muted); margin-top:8px; }
+    .grid { display:grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap:12px; margin-top:16px; }
+    .kpi { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; }
+    .kpi .v { font-size:1.6rem; font-weight:700; margin-top:4px; }
+    .table-wrap { margin-top:16px; background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden; }
+    table { width:100%; border-collapse: collapse; }
+    th, td { padding:10px 12px; border-bottom:1px solid var(--line); text-align:left; vertical-align:top; }
+    th { background: #132231; color:#c9e6ff; position:sticky; top:0; }
+    .badge { border-radius:999px; padding:3px 9px; font-size:.75rem; font-weight:700; display:inline-block; }
+    .ok { background: rgba(43,196,138,.16); color: var(--ok); border:1px solid rgba(43,196,138,.4); }
+    .bad { background: rgba(239,95,103,.16); color: var(--bad); border:1px solid rgba(239,95,103,.4); }
+    .skip { background: rgba(242,184,75,.16); color: var(--skip); border:1px solid rgba(242,184,75,.4); }
+    code { color:#b3e2ff; }
+    @media (max-width: 900px) { .grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1>UI Clickability Audit</h1>
+      <div class="meta">Generated: 2026-03-05T20:17:31.658375+00:00</div>
+      <div class="grid">
+        <div class="kpi"><div>Total Checks</div><div class="v">36</div></div>
+        <div class="kpi"><div>Passed</div><div class="v">31</div></div>
+        <div class="kpi"><div>Failed</div><div class="v">0</div></div>
+        <div class="kpi"><div>Score</div><div class="v">100.0%</div></div>
+      </div>
+    </section>
+
+    <section class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Status</th><th>Category</th><th>Item</th><th>Detail</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="badge ok">PASS</span></td><td><code>form</code></td><td><code>#loginForm</code></td><td>submit listener found</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>form</code></td><td><code>#projectForm</code></td><td>submit listener found</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>form</code></td><td><code>#breedingForm</code></td><td>submit listener found</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>form</code></td><td><code>#genoUploadForm</code></td><td>submit listener found</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>form</code></td><td><code>#excelImportForm</code></td><td>submit listener found</td></tr><tr><td><span class="badge skip">SKIP</span></td><td><code>button</code></td><td><code><button(no-id)></code></td><td>no stable id; skipped explicit wiring check</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>tab</code></td><td><code>data-tab=scan</code></td><td>tab click delegation + section present</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>tab</code></td><td><code>data-tab=cages</code></td><td>tab click delegation + section present</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>tab</code></td><td><code>data-tab=projects</code></td><td>tab click delegation + section present</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>tab</code></td><td><code>data-tab=breeding</code></td><td>tab click delegation + section present</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>tab</code></td><td><code>data-tab=analytics</code></td><td>tab click delegation + section present</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>tab</code></td><td><code>data-tab=reports</code></td><td>tab click delegation + section present</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>tab</code></td><td><code>data-tab=compliance</code></td><td>tab click delegation + section present</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>button</code></td><td><code>#scanBtn</code></td><td>clickable via direct or form submit listener</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>button</code></td><td><code>#refreshCages</code></td><td>clickable via direct or form submit listener</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>button</code></td><td><code>#searchBtn</code></td><td>clickable via direct or form submit listener</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>button</code></td><td><code>#printCardsBtn</code></td><td>clickable via direct or form submit listener</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>button</code></td><td><code>#quickPrintBtn</code></td><td>clickable via direct or form submit listener</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>button</code></td><td><code>#saveScanBaseBtn</code></td><td>clickable via direct or form submit listener</td></tr><tr><td><span class="badge skip">SKIP</span></td><td><code>button</code></td><td><code><button(no-id)></code></td><td>no stable id; skipped explicit wiring check</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>button</code></td><td><code>#refreshProjectsBtn</code></td><td>clickable via direct or form submit listener</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>button</code></td><td><code>#loadQuotasBtn</code></td><td>clickable via direct or form submit listener</td></tr><tr><td><span class="badge skip">SKIP</span></td><td><code>button</code></td><td><code><button(no-id)></code></td><td>no stable id; skipped explicit wiring check</td></tr><tr><td><span class="badge skip">SKIP</span></td><td><code>button</code></td><td><code><button(no-id)></code></td><td>no stable id; skipped explicit wiring check</td></tr><tr><td><span class="badge skip">SKIP</span></td><td><code>button</code></td><td><code><button(no-id)></code></td><td>no stable id; skipped explicit wiring check</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>button</code></td><td><code>#loadAlertsBtn</code></td><td>clickable via direct or form submit listener</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>button</code></td><td><code>#loadAuditBtn</code></td><td>clickable via direct or form submit listener</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>button</code></td><td><code>#loadRequestsBtn</code></td><td>clickable via direct or form submit listener</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>button</code></td><td><code>#loadSlaBtn</code></td><td>clickable via direct or form submit listener</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>link</code></td><td><code>/api/reports/cages.csv</code></td><td>matched Flask route map</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>link</code></td><td><code>/api/reports/cages.xlsx</code></td><td>matched Flask route map</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>link</code></td><td><code>/api/reports/cages.pdf</code></td><td>matched Flask route map</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>link</code></td><td><code>/api/reports/breeder-productivity.csv</code></td><td>matched Flask route map</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>link</code></td><td><code>/api/reports/survival.csv</code></td><td>matched Flask route map</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>link</code></td><td><code>/api/reports/protocol-usage.csv</code></td><td>matched Flask route map</td></tr><tr><td><span class="badge ok">PASS</span></td><td><code>link</code></td><td><code>/api/billing/statements.csv</code></td><td>matched Flask route map</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </div>
+</body>
+</html>
