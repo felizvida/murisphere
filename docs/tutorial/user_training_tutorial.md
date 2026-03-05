@@ -96,17 +96,37 @@ This tutorial is organized by **typical vivarium workflows** so teams can execut
 4. Mendelian/deviation monitoring.
 5. Reporting/export/integration jobs.
 
-# 6. Visual Walkthrough References
-- `assets/screenshot_login.svg`
-- `assets/cage_card_complete.svg`
-- `assets/screenshot_scan.svg`
-- `assets/screenshot_cages_alerts.svg`
-- `assets/screenshot_breeding_pairs.svg`
-- `assets/screenshot_samples_genotyping.svg`
-- `assets/screenshot_recommendations.svg`
-- `assets/screenshot_planner.svg`
-- `assets/screenshot_compliance.svg`
-- `assets/screenshot_pedigree.svg`
+# 6. Visual Walkthrough
+
+## 6.1 Login and Role-aware Access
+![Login screen with role-aware access controls](assets/screenshot_login.svg){ width=95% }
+
+## 6.2 Complete Cage Card (Print + Scan)
+![Complete cage card with owner, protocol, animal table, litter table, QR and barcode](assets/cage_card_complete.svg){ width=95% }
+
+## 6.3 Phone Scan and Quick Edit
+![Phone scan flow from printed QR to cage browser view](assets/screenshot_scan.svg){ width=95% }
+
+## 6.4 Cage Alerts and Room Density
+![Cage alert highlighting and room density visualization](assets/screenshot_cages_alerts.svg){ width=95% }
+
+## 6.5 Breeding Pair Productivity
+![Breeding pair management and productivity tracking](assets/screenshot_breeding_pairs.svg){ width=95% }
+
+## 6.6 Samples and Genotyping Workflow
+![Sample chain-of-custody and genotyping result workflow](assets/screenshot_samples_genotyping.svg){ width=95% }
+
+## 6.7 Recommendations and Outcomes
+![Recommendation lifecycle and decision outcomes](assets/screenshot_recommendations.svg){ width=95% }
+
+## 6.8 Planner Scenario Evaluation
+![Planner scenario risk and deficit evaluation](assets/screenshot_planner.svg){ width=95% }
+
+## 6.9 Compliance Dashboard
+![Compliance dashboard with alerts and open actions](assets/screenshot_compliance.svg){ width=95% }
+
+## 6.10 Pedigree Explorer
+![Multi-generation pedigree explorer](assets/screenshot_pedigree.svg){ width=95% }
 
 # 7. End-of-Shift / End-of-Day Checklists
 ## Technician
