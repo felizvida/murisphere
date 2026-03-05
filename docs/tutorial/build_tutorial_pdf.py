@@ -5,37 +5,25 @@ import re
 import subprocess
 import tempfile
 from pathlib import Path
+from shutil import which
 
 MD_PATH = Path("docs/tutorial/user_training_tutorial.md")
 PDF_PATH = Path("docs/tutorial/user_training_tutorial.pdf")
 
 
-def _svg_viewbox_size(svg_path: Path) -> tuple[int, int]:
-    raw = svg_path.read_text(encoding="utf-8", errors="ignore")
-    m = re.search(r'viewBox="[^"]*?\s(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)"', raw)
-    if not m:
-        return (1600, 1000)
-    w = max(640, min(2800, int(float(m.group(1)))))
-    h = max(420, min(2200, int(float(m.group(2)))))
-    return (w, h)
-
-
-def _convert_svg_to_png(svg_path: Path, png_path: Path, chrome_bin: str) -> None:
-    w, h = _svg_viewbox_size(svg_path)
+def _convert_svg_to_png(svg_path: Path, png_path: Path, rsvg_bin: str) -> None:
     cmd = [
-        chrome_bin,
-        "--headless",
-        "--disable-gpu",
-        "--no-sandbox",
-        "--hide-scrollbars",
-        f"--window-size={w},{h}",
-        f"--screenshot={png_path}",
-        f"file://{svg_path.resolve()}",
+        rsvg_bin,
+        "-f",
+        "png",
+        "-o",
+        str(png_path),
+        str(svg_path),
     ]
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def _prepare_markdown_with_png_assets(md_text: str, tmp_dir: Path, chrome_bin: str) -> tuple[Path, Path]:
+def _prepare_markdown_with_png_assets(md_text: str, tmp_dir: Path, rsvg_bin: str) -> tuple[Path, Path]:
     tmp_assets = tmp_dir / "assets"
     tmp_assets.mkdir(parents=True, exist_ok=True)
 
@@ -46,7 +34,7 @@ def _prepare_markdown_with_png_assets(md_text: str, tmp_dir: Path, chrome_bin: s
         png_rel = rel_ref[:-4] + ".png"
         png_dst = tmp_dir / png_rel
         png_dst.parent.mkdir(parents=True, exist_ok=True)
-        _convert_svg_to_png(svg_src, png_dst, chrome_bin)
+        _convert_svg_to_png(svg_src, png_dst, rsvg_bin)
         rewritten = rewritten.replace(rel_ref, png_rel)
 
     tmp_md = tmp_dir / "user_training_tutorial_pdf.md"
@@ -57,12 +45,16 @@ def _prepare_markdown_with_png_assets(md_text: str, tmp_dir: Path, chrome_bin: s
 def main() -> None:
     pandoc_bin = os.getenv("PANDOC_BIN", "pandoc")
     pdf_engine = os.getenv("MURISPHERE_PDF_ENGINE", "xelatex")
-    chrome_bin = os.getenv("CHROME_BIN", "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+    rsvg_bin = os.getenv("RSVG_CONVERT_BIN", "rsvg-convert")
+    if which(rsvg_bin) is None:
+        raise RuntimeError(
+            f"{rsvg_bin} not found. Install librsvg (rsvg-convert) before building the tutorial PDF."
+        )
     md_text = MD_PATH.read_text(encoding="utf-8")
 
     with tempfile.TemporaryDirectory(prefix="murisphere-pdf-build-") as td:
         tmp_dir = Path(td)
-        tmp_md, _tmp_assets = _prepare_markdown_with_png_assets(md_text, tmp_dir, chrome_bin)
+        tmp_md, _tmp_assets = _prepare_markdown_with_png_assets(md_text, tmp_dir, rsvg_bin)
         cmd = [
             pandoc_bin,
             str(tmp_md),
