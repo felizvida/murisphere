@@ -16,13 +16,16 @@ class AppIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self._old_db = appmod.DB_PATH
+        self._old_attachment_dir = appmod.ATTACHMENT_DIR
         appmod.DB_PATH = f"{self._tmp.name}/test_murisphere.db"
+        appmod.ATTACHMENT_DIR = Path(self._tmp.name) / "uploads"
         appmod.init_db()
         appmod.app.config.update(TESTING=True)
         self.client = appmod.app.test_client()
 
     def tearDown(self) -> None:
         appmod.DB_PATH = self._old_db
+        appmod.ATTACHMENT_DIR = self._old_attachment_dir
         self._tmp.cleanup()
 
     def login(self, email: str, password: str) -> str:
@@ -781,6 +784,21 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertIn("function mutationQueueKey()", src)
         self.assertIn("state.user?.id", src)
 
+    def test_visualization_panels_present_in_ui(self) -> None:
+        page = self.client.get("/")
+        self.assertEqual(page.status_code, 200)
+        body = page.data.decode("utf-8")
+        self.assertIn('id="pedigreeViz"', body)
+        self.assertIn('id="cageVisuals"', body)
+        self.assertIn('id="breedingVisuals"', body)
+        self.assertIn('id="analyticsVisuals"', body)
+        self.assertIn('id="complianceVisuals"', body)
+
+        js = Path("static/app.js").read_text(encoding="utf-8")
+        self.assertIn("renderPedigreeGraph", js)
+        self.assertIn("renderAnalyticsVisuals", js)
+        self.assertIn("renderCageVisuals", js)
+
     def test_technician_cannot_access_other_lab_cage(self) -> None:
         tech_token = self.login("tech@murisphere.local", "tech1234")
 
@@ -836,6 +854,247 @@ class AppIntegrationTests(unittest.TestCase):
             json={"notes": "attempted cross-lab edit"},
         )
         self.assertEqual(edit.status_code, 404)
+
+    def test_quarantine_and_mortality_workflows(self) -> None:
+        admin = self.login("admin@murisphere.local", "admin1234")
+        tech = self.login("tech@murisphere.local", "tech1234")
+
+        intake = self.client.post(
+            "/api/quarantine/intakes",
+            headers=self.auth_headers(tech),
+            json={
+                "labId": 1,
+                "cageId": 1,
+                "vendor": "JAX",
+                "strain": "C57BL/6J",
+                "sex": "F",
+                "quantity": 10,
+                "arrivalDate": date.today().isoformat(),
+                "quarantineEndOn": date.today().isoformat(),
+                "notes": "incoming shipment",
+            },
+        )
+        self.assertEqual(intake.status_code, 201)
+        intake_id = intake.get_json()["id"]
+
+        promote = self.client.post(
+            f"/api/quarantine/intakes/{intake_id}/status",
+            headers=self.auth_headers(admin),
+            json={"status": "in_quarantine"},
+        )
+        self.assertEqual(promote.status_code, 200)
+
+        qlist = self.client.get("/api/quarantine/intakes?status=in_quarantine", headers=self.auth_headers(admin))
+        self.assertEqual(qlist.status_code, 200)
+        self.assertTrue(any(i["id"] == intake_id for i in qlist.get_json()))
+
+        qalerts = self.client.get("/api/compliance/quarantine-alerts", headers=self.auth_headers(admin))
+        self.assertEqual(qalerts.status_code, 200)
+        self.assertTrue(any(i["id"] == intake_id for i in qalerts.get_json()))
+
+        mortality = self.client.post(
+            "/api/cages/1/mortality",
+            headers=self.auth_headers(tech),
+            json={"male": 1, "female": 0, "cause": "found dead", "necropsyRequired": True, "notes": "flag for pathology"},
+        )
+        self.assertEqual(mortality.status_code, 201)
+        mortality_id = mortality.get_json()["id"]
+
+        mlist = self.client.get("/api/mortality?necropsyStatus=pending", headers=self.auth_headers(admin))
+        self.assertEqual(mlist.status_code, 200)
+        self.assertTrue(any(m["id"] == mortality_id for m in mlist.get_json()))
+
+        complete_necropsy = self.client.post(
+            f"/api/mortality/{mortality_id}/necropsy",
+            headers=self.auth_headers(admin),
+            json={"status": "completed"},
+        )
+        self.assertEqual(complete_necropsy.status_code, 200)
+
+        mortality_csv = self.client.get("/api/reports/mortality.csv", headers=self.auth_headers(admin))
+        self.assertEqual(mortality_csv.status_code, 200)
+        self.assertIn("text/csv", mortality_csv.content_type)
+
+    def test_alert_feed_ack_and_dispatch_channels(self) -> None:
+        admin = self.login("admin@murisphere.local", "admin1234")
+
+        overdue_task = self.client.post(
+            "/api/tasks/assign",
+            headers=self.auth_headers(admin),
+            json={"taskType": "plug_check", "cageId": 1, "dueOn": "2020-01-01", "assignedTo": 2},
+        )
+        self.assertEqual(overdue_task.status_code, 201)
+
+        feed = self.client.get("/api/alerts/feed?status=active", headers=self.auth_headers(admin))
+        self.assertEqual(feed.status_code, 200)
+        alerts = feed.get_json()
+        self.assertTrue(alerts)
+        alert_id = alerts[0]["id"]
+
+        ack = self.client.post(f"/api/alerts/{alert_id}/ack", headers=self.auth_headers(admin))
+        self.assertEqual(ack.status_code, 200)
+
+        acked_feed = self.client.get("/api/alerts/feed?status=acknowledged", headers=self.auth_headers(admin))
+        self.assertEqual(acked_feed.status_code, 200)
+        self.assertTrue(any(a["id"] == alert_id for a in acked_feed.get_json()))
+
+        channel = self.client.post(
+            "/api/notifications/channels",
+            headers=self.auth_headers(admin),
+            json={"channelType": "in_app", "labId": 1, "minSeverity": "low"},
+        )
+        self.assertEqual(channel.status_code, 201)
+
+        mortality = self.client.post(
+            "/api/cages/1/mortality",
+            headers=self.auth_headers(admin),
+            json={"male": 1, "cause": "found dead", "necropsyRequired": True},
+        )
+        self.assertEqual(mortality.status_code, 201)
+
+        dispatch = self.client.post("/api/alerts/dispatch", headers=self.auth_headers(admin))
+        self.assertEqual(dispatch.status_code, 200)
+        self.assertGreaterEqual(dispatch.get_json()["simulated"], 1)
+
+    def test_new_feature_workflows_end_to_end(self) -> None:
+        admin = self.login("admin@murisphere.local", "admin1234")
+        tech = self.login("tech@murisphere.local", "tech1234")
+
+        with sqlite3.connect(appmod.DB_PATH) as conn:
+            now = datetime.now(UTC).isoformat()
+            conn.execute("UPDATE cages SET male_count = 0, female_count = 1 WHERE id = 1")
+            conn.execute(
+                """
+                INSERT INTO animals (animal_code, sex, dob, strain, genotype, status, cage_id, litter_id, sire_id, dam_id, created_at, updated_at)
+                VALUES (?, 'M', ?, 'C57BL/6J', 'WT/WT', 'Active', 1, NULL, NULL, NULL, ?, ?)
+                """,
+                ("PAIR-SIRE-001", date.today().isoformat(), now, now),
+            )
+            sire_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute(
+                """
+                INSERT INTO animals (animal_code, sex, dob, strain, genotype, status, cage_id, litter_id, sire_id, dam_id, created_at, updated_at)
+                VALUES (?, 'F', ?, 'C57BL/6J', 'WT/WT', 'Active', 1, NULL, NULL, NULL, ?, ?)
+                """,
+                ("PAIR-DAM-001", date.today().isoformat(), now, now),
+            )
+            dam_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.commit()
+
+        pair = self.client.post(
+            "/api/breeding/pairs",
+            headers=self.auth_headers(tech),
+            json={"sireId": sire_id, "damId": dam_id, "cageId": 1, "notes": "timed pairing"},
+        )
+        self.assertEqual(pair.status_code, 201)
+        pair_id = pair.get_json()["id"]
+
+        with sqlite3.connect(appmod.DB_PATH) as conn:
+            conn.execute(
+                "INSERT INTO litters (cage_id, birth_date, litter_size, survived_count, created_at) VALUES (1, ?, 6, 5, ?)",
+                (date.today().isoformat(), datetime.now(UTC).isoformat()),
+            )
+            conn.commit()
+
+        pair_prod = self.client.get(f"/api/breeding/pairs/{pair_id}/productivity", headers=self.auth_headers(tech))
+        self.assertEqual(pair_prod.status_code, 200)
+        self.assertGreaterEqual(pair_prod.get_json()["litterCount"], 1)
+
+        pause_pair = self.client.post(
+            f"/api/breeding/pairs/{pair_id}/status",
+            headers=self.auth_headers(tech),
+            json={"status": "paused", "notes": "temporary hold"},
+        )
+        self.assertEqual(pause_pair.status_code, 200)
+        pair_list = self.client.get("/api/breeding/pairs?status=paused", headers=self.auth_headers(tech))
+        self.assertEqual(pair_list.status_code, 200)
+        self.assertTrue(any(p["id"] == pair_id for p in pair_list.get_json()))
+
+        tag = self.client.post(
+            f"/api/animals/{sire_id}/tags",
+            headers=self.auth_headers(tech),
+            json={"tagType": "ear_tag", "tagValue": "E-001"},
+        )
+        self.assertEqual(tag.status_code, 201)
+        tags = self.client.get(f"/api/animals/{sire_id}/tags", headers=self.auth_headers(tech))
+        self.assertEqual(tags.status_code, 200)
+        self.assertTrue(any(t["tag_value"] == "E-001" for t in tags.get_json()))
+
+        sample = self.client.post(
+            "/api/samples",
+            headers=self.auth_headers(tech),
+            json={"animalId": sire_id, "sampleType": "tail", "sampleCode": "SMP-001", "provider": "Transnetyx"},
+        )
+        self.assertEqual(sample.status_code, 201)
+        sample_id = sample.get_json()["id"]
+        sample_status = self.client.post(
+            f"/api/samples/{sample_id}/status",
+            headers=self.auth_headers(tech),
+            json={"status": "shipped", "trackingNumber": "TRACK-001"},
+        )
+        self.assertEqual(sample_status.status_code, 200)
+        sample_events = self.client.get(f"/api/samples/{sample_id}/events", headers=self.auth_headers(tech))
+        self.assertEqual(sample_events.status_code, 200)
+        self.assertGreaterEqual(len(sample_events.get_json()), 2)
+
+        order = self.client.post(
+            "/api/genotyping/orders",
+            headers=self.auth_headers(tech),
+            json={"provider": "Transnetyx", "sampleIds": [sample_id], "markerPanel": "Cre Panel"},
+        )
+        self.assertEqual(order.status_code, 201)
+        order_id = order.get_json()["id"]
+        order_ref = order.get_json()["orderRef"]
+        submit = self.client.post(f"/api/genotyping/orders/{order_id}/submit", headers=self.auth_headers(tech))
+        self.assertEqual(submit.status_code, 200)
+        callback = self.client.post(
+            "/api/genotyping/orders/callback",
+            headers={"X-Provider-Token": "dev-callback-token"},
+            json={"orderRef": order_ref, "status": "received", "results": [{"sampleCode": "SMP-001", "result": "fl/+", "markerPanel": "Cre Panel"}]},
+        )
+        self.assertEqual(callback.status_code, 200)
+        self.assertEqual(callback.get_json()["updatedAnimals"], 1)
+        animals = self.client.get("/api/animals?q=PAIR-SIRE-001", headers=self.auth_headers(tech))
+        self.assertEqual(animals.status_code, 200)
+        self.assertEqual(animals.get_json()[0]["genotype"], "fl/+")
+
+        rec_gen = self.client.post("/api/recommendations/generate", headers=self.auth_headers(admin))
+        self.assertEqual(rec_gen.status_code, 200)
+        recs = self.client.get("/api/recommendations?status=open", headers=self.auth_headers(admin))
+        self.assertEqual(recs.status_code, 200)
+        self.assertTrue(recs.get_json())
+        rec_id = recs.get_json()[0]["id"]
+        rec_decision = self.client.post(
+            f"/api/recommendations/{rec_id}/decision",
+            headers=self.auth_headers(admin),
+            json={"decision": "adjusted", "adjustment": {"targetRoom": "Room A1"}, "note": "move next week"},
+        )
+        self.assertEqual(rec_decision.status_code, 200)
+        outcomes = self.client.get("/api/recommendations/outcomes", headers=self.auth_headers(admin))
+        self.assertEqual(outcomes.status_code, 200)
+        self.assertTrue(any(o["status"] == "adjusted" for o in outcomes.get_json()))
+
+        scenario = self.client.post(
+            "/api/planner/scenarios",
+            headers=self.auth_headers(admin),
+            json={"name": "Q2 demand", "labId": 1, "targetAnimals": 300, "maxNewCages": 20, "neededBy": "2026-09-01"},
+        )
+        self.assertEqual(scenario.status_code, 201)
+        scenario_id = scenario.get_json()["id"]
+        scenario_list = self.client.get("/api/planner/scenarios", headers=self.auth_headers(admin))
+        self.assertEqual(scenario_list.status_code, 200)
+        self.assertTrue(any(s["id"] == scenario_id for s in scenario_list.get_json()))
+        eval_res = self.client.post(f"/api/planner/scenarios/{scenario_id}/evaluate", headers=self.auth_headers(admin))
+        self.assertEqual(eval_res.status_code, 200)
+        self.assertIn("projectedDeficit", eval_res.get_json())
+        plans = self.client.get(f"/api/planner/scenarios/{scenario_id}/plans", headers=self.auth_headers(admin))
+        self.assertEqual(plans.status_code, 200)
+        self.assertTrue(plans.get_json())
+
+        stream = self.client.get("/api/alerts/stream?once=1", headers=self.auth_headers(admin))
+        self.assertEqual(stream.status_code, 200)
+        self.assertIn("text/event-stream", stream.content_type)
+        self.assertIn(b"event: alerts", stream.data)
 
 
 if __name__ == "__main__":

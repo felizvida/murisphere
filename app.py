@@ -8,16 +8,17 @@ import mimetypes
 import os
 import secrets
 import sqlite3
+import time
 from contextlib import closing
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from functools import wraps
 from pathlib import Path
 from typing import Any
 from urllib import error as urlerror
 from urllib import request as urlrequest
 
-from flask import Flask, Response, g, jsonify, render_template, request, send_file
+from flask import Flask, Response, g, jsonify, render_template, request, send_file, stream_with_context
 from openpyxl import Workbook
 from werkzeug.security import check_password_hash, generate_password_hash
 import qrcode
@@ -250,6 +251,41 @@ def ensure_vet_case_scope(case_id: int, user: AuthContext) -> sqlite3.Row | None
     return db().execute("SELECT * FROM vet_cases WHERE id = ? AND lab_id = ?", (case_id, user.lab_id)).fetchone()
 
 
+def ensure_animal_scope(animal_id: int, user: AuthContext) -> sqlite3.Row | None:
+    if is_admin(user):
+        return db().execute("SELECT * FROM animals WHERE id = ?", (animal_id,)).fetchone()
+    if user.lab_id is None:
+        return None
+    return db().execute(
+        """
+        SELECT a.*
+        FROM animals a
+        JOIN cages c ON c.id = a.cage_id
+        WHERE a.id = ? AND c.lab_id = ?
+        """,
+        (animal_id, user.lab_id),
+    ).fetchone()
+
+
+def ensure_recommendation_scope(recommendation_id: int, user: AuthContext) -> sqlite3.Row | None:
+    if is_admin(user):
+        return db().execute("SELECT * FROM workflow_recommendations WHERE id = ?", (recommendation_id,)).fetchone()
+    if user.lab_id is None:
+        return None
+    return db().execute(
+        "SELECT * FROM workflow_recommendations WHERE id = ? AND lab_id = ?",
+        (recommendation_id, user.lab_id),
+    ).fetchone()
+
+
+def ensure_planner_scenario_scope(scenario_id: int, user: AuthContext) -> sqlite3.Row | None:
+    if is_admin(user):
+        return db().execute("SELECT * FROM planner_scenarios WHERE id = ?", (scenario_id,)).fetchone()
+    if user.lab_id is None:
+        return None
+    return db().execute("SELECT * FROM planner_scenarios WHERE id = ? AND lab_id = ?", (scenario_id, user.lab_id)).fetchone()
+
+
 def cage_protocol_expired(cage_id: int) -> tuple[bool, str | None]:
     row = db().execute(
         """
@@ -274,6 +310,234 @@ def require_nonexpired_protocol(cage_id: int) -> Response | None:
         return jsonify({"error": msg, "code": "PROTOCOL_EXPIRED"}), 409
     return None
 
+
+SEVERITY_RANK = {"low": 1, "medium": 2, "high": 3}
+
+
+def severity_at_least(actual: str, threshold: str) -> bool:
+    return SEVERITY_RANK.get(actual, 0) >= SEVERITY_RANK.get(threshold, 0)
+
+
+def escalation_delay_minutes(severity: str, escalation_level: int) -> int:
+    base = {"high": 15, "medium": 60, "low": 240}.get(severity, 60)
+    return max(5, base * max(1, escalation_level))
+
+
+def derive_active_alerts(user: AuthContext) -> list[dict[str, Any]]:
+    today = date.today().isoformat()
+    now = now_iso()
+    alerts: list[dict[str, Any]] = []
+
+    scope_clause = "" if is_admin(user) else " AND c.lab_id = ?"
+    scope_params: tuple[Any, ...] = () if is_admin(user) else (user.lab_id,)
+
+    expired_rows = db().execute(
+        """
+        SELECT c.id AS cage_id, c.lab_id, c.cage_code, p.protocol_number, p.expires_on
+        FROM cages c
+        JOIN iacuc_protocols p ON p.id = c.protocol_id
+        WHERE p.expires_on < ?
+        """
+        + scope_clause,
+        (today, *scope_params),
+    ).fetchall()
+    for r in expired_rows:
+        alerts.append(
+            {
+                "alert_key": f"protocol_expired:{r['cage_id']}",
+                "lab_id": r["lab_id"],
+                "cage_id": r["cage_id"],
+                "severity": "high",
+                "category": "protocol",
+                "title": "Protocol Expired",
+                "message": f"Cage {r['cage_code']} is on expired protocol {r['protocol_number']} ({r['expires_on']}).",
+                "meta": {"protocolNumber": r["protocol_number"], "expiresOn": r["expires_on"]},
+                "seen_at": now,
+            }
+        )
+
+    task_rows = db().execute(
+        """
+        SELECT t.id, t.cage_id, c.lab_id, c.cage_code, t.task_type, t.due_on
+        FROM task_assignments t
+        JOIN cages c ON c.id = t.cage_id
+        WHERE t.status IN ('pending', 'in_progress') AND t.due_on < ?
+        """
+        + ("" if is_admin(user) else " AND c.lab_id = ? "),
+        (today,) if is_admin(user) else (today, user.lab_id),
+    ).fetchall()
+    for r in task_rows:
+        alerts.append(
+            {
+                "alert_key": f"task_overdue:{r['id']}",
+                "lab_id": r["lab_id"],
+                "cage_id": r["cage_id"],
+                "severity": "medium",
+                "category": "task",
+                "title": "Task Overdue",
+                "message": f"Cage {r['cage_code']} has overdue task {r['task_type']} (due {r['due_on']}).",
+                "meta": {"taskId": r["id"], "taskType": r["task_type"], "dueOn": r["due_on"]},
+                "seen_at": now,
+            }
+        )
+
+    dev_rows = db().execute(
+        """
+        SELECT d.id, d.cage_id, c.lab_id, c.cage_code, d.severity, d.summary
+        FROM protocol_deviations d
+        LEFT JOIN cages c ON c.id = d.cage_id
+        JOIN iacuc_protocols p ON p.id = d.protocol_id
+        WHERE d.status IN ('open', 'under_review')
+        """
+        + ("" if is_admin(user) else " AND p.lab_id = ? "),
+        () if is_admin(user) else (user.lab_id,),
+    ).fetchall()
+    for r in dev_rows:
+        sev = "high" if (r["severity"] or "").lower() in {"major", "critical", "high"} else "medium"
+        alerts.append(
+            {
+                "alert_key": f"deviation_open:{r['id']}",
+                "lab_id": r["lab_id"] if r["lab_id"] is not None else user.lab_id,
+                "cage_id": r["cage_id"],
+                "severity": sev,
+                "category": "deviation",
+                "title": "Protocol Deviation Open",
+                "message": f"Deviation #{r['id']} is open: {r['summary'] or 'No summary'}",
+                "meta": {"deviationId": r["id"]},
+                "seen_at": now,
+            }
+        )
+
+    necropsy_rows = db().execute(
+        """
+        SELECT m.id, m.cage_id, c.lab_id, c.cage_code
+        FROM mortality_records m
+        JOIN cages c ON c.id = m.cage_id
+        WHERE m.necropsy_status = 'pending'
+        """
+        + ("" if is_admin(user) else " AND c.lab_id = ? "),
+        () if is_admin(user) else (user.lab_id,),
+    ).fetchall()
+    for r in necropsy_rows:
+        alerts.append(
+            {
+                "alert_key": f"necropsy_pending:{r['id']}",
+                "lab_id": r["lab_id"],
+                "cage_id": r["cage_id"],
+                "severity": "high",
+                "category": "mortality",
+                "title": "Necropsy Pending",
+                "message": f"Cage {r['cage_code']} has mortality record #{r['id']} pending necropsy.",
+                "meta": {"mortalityId": r["id"]},
+                "seen_at": now,
+            }
+        )
+
+    vet_rows = db().execute(
+        """
+        SELECT v.id, v.cage_id, c.lab_id, c.cage_code, v.severity
+        FROM vet_cases v
+        JOIN cages c ON c.id = v.cage_id
+        WHERE v.case_status = 'open'
+        """
+        + ("" if is_admin(user) else " AND c.lab_id = ? "),
+        () if is_admin(user) else (user.lab_id,),
+    ).fetchall()
+    for r in vet_rows:
+        sev = "high" if (r["severity"] or "").lower() in {"high", "critical"} else "medium"
+        alerts.append(
+            {
+                "alert_key": f"vet_open:{r['id']}",
+                "lab_id": r["lab_id"],
+                "cage_id": r["cage_id"],
+                "severity": sev,
+                "category": "veterinary",
+                "title": "Open Vet Case",
+                "message": f"Cage {r['cage_code']} has open vet case #{r['id']}.",
+                "meta": {"caseId": r["id"], "severity": r["severity"]},
+                "seen_at": now,
+            }
+        )
+
+    return alerts
+
+
+def upsert_active_alerts(user: AuthContext) -> None:
+    run_at = now_iso()
+    active = derive_active_alerts(user)
+    seen_keys = {a["alert_key"] for a in active}
+
+    for a in active:
+        existing = db().execute("SELECT id, status, escalation_level FROM alert_notifications WHERE alert_key = ?", (a["alert_key"],)).fetchone()
+        if existing:
+            db().execute(
+                """
+                UPDATE alert_notifications
+                SET lab_id = ?, cage_id = ?, severity = ?, category = ?, title = ?, message = ?,
+                    status = CASE WHEN status = 'resolved' THEN 'active' ELSE status END,
+                    last_seen_at = ?, meta_json = ?
+                WHERE id = ?
+                """,
+                (
+                    a["lab_id"],
+                    a["cage_id"],
+                    a["severity"],
+                    a["category"],
+                    a["title"],
+                    a["message"],
+                    run_at,
+                    json.dumps(a["meta"], default=str),
+                    existing["id"],
+                ),
+            )
+        else:
+            db().execute(
+                """
+                INSERT INTO alert_notifications (
+                    alert_key, lab_id, cage_id, severity, category, title, message, status,
+                    first_seen_at, last_seen_at, next_notify_at, meta_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
+                """,
+                (
+                    a["alert_key"],
+                    a["lab_id"],
+                    a["cage_id"],
+                    a["severity"],
+                    a["category"],
+                    a["title"],
+                    a["message"],
+                    run_at,
+                    run_at,
+                    run_at,
+                    json.dumps(a["meta"], default=str),
+                ),
+            )
+
+    if seen_keys:
+        scope_sql = "" if is_admin(user) else " AND lab_id = ? "
+        params: list[Any] = [run_at]
+        if not is_admin(user):
+            params.append(user.lab_id)
+        placeholders = ", ".join(["?"] * len(seen_keys))
+        params.extend(list(seen_keys))
+        db().execute(
+            f"""
+            UPDATE alert_notifications
+            SET status = 'resolved'
+            WHERE status IN ('active', 'acknowledged')
+              AND last_seen_at < ?
+              {scope_sql}
+              AND alert_key NOT IN ({placeholders})
+            """,
+            params,
+        )
+    else:
+        db().execute(
+            "UPDATE alert_notifications SET status = 'resolved' WHERE status IN ('active', 'acknowledged')"
+            + ("" if is_admin(user) else " AND lab_id = ? "),
+            () if is_admin(user) else (user.lab_id,),
+        )
+    db().commit()
 
 def cage_payload(row: sqlite3.Row) -> dict[str, Any]:
     return {
@@ -2875,6 +3139,1697 @@ def e_sign() -> Response:
     )
     db().commit()
     return jsonify({"id": cur.lastrowid, "signatureHash": sig_hash})
+
+
+@app.get("/api/tasks")
+@require_auth()
+def list_tasks() -> Response:
+    status = request.args.get("status", "").strip()
+    clauses = []
+    params: list[Any] = []
+    if status:
+        clauses.append("t.status = ?")
+        params.append(status)
+    if not is_admin(g.user):
+        clauses.append("(c.lab_id = ? OR t.assigned_to = ?)")
+        params.extend([g.user.lab_id, g.user.user_id])
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    rows = db().execute(
+        f"""
+        SELECT t.id, t.task_type, t.due_on, t.assigned_to, t.required_qualification, t.status,
+               c.cage_code, u.full_name AS assignee_name
+        FROM task_assignments t
+        LEFT JOIN cages c ON c.id = t.cage_id
+        LEFT JOIN users u ON u.id = t.assigned_to
+        {where}
+        ORDER BY t.due_on ASC, t.id DESC
+        LIMIT 1000
+        """,
+        params,
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/tasks/<int:task_id>/status")
+@require_auth(("Technician", "PI", "Admin"))
+def update_task_status(task_id: int) -> Response:
+    payload = request.get_json(force=True)
+    status = str(payload.get("status", "")).strip()
+    if status not in {"pending", "in_progress", "done", "blocked"}:
+        return jsonify({"error": "Invalid status"}), 400
+    row = db().execute(
+        """
+        SELECT t.id, t.assigned_to, c.lab_id
+        FROM task_assignments t
+        LEFT JOIN cages c ON c.id = t.cage_id
+        WHERE t.id = ?
+        """,
+        (task_id,),
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    if not is_admin(g.user):
+        allowed = row["assigned_to"] == g.user.user_id or row["lab_id"] == g.user.lab_id
+        if not allowed:
+            return jsonify({"error": "Forbidden"}), 403
+    db().execute("UPDATE task_assignments SET status = ? WHERE id = ?", (status, task_id))
+    db().commit()
+    return jsonify({"ok": True})
+
+
+@app.get("/api/staff/qualification-alerts")
+@require_auth(("PI", "Admin"))
+def qualification_alerts() -> Response:
+    cutoff = (datetime.now(UTC).date() + timedelta(days=30)).isoformat()
+    rows = db().execute(
+        """
+        SELECT q.user_id, u.full_name, q.qualification_code, q.expires_on
+        FROM staff_qualifications q
+        JOIN users u ON u.id = q.user_id
+        WHERE q.expires_on IS NOT NULL AND q.expires_on <= ?
+        """
+        + ("" if is_admin(g.user) else " AND u.lab_id = ? ")
+        + """
+        ORDER BY q.expires_on ASC
+        """,
+        (cutoff,) if is_admin(g.user) else (cutoff, g.user.lab_id),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/health/rounds")
+@require_auth(("Technician", "PI", "Admin"))
+def start_health_round() -> Response:
+    payload = request.get_json(force=True)
+    cur = db().execute(
+        "INSERT INTO health_rounds (room_id, performed_by, started_at, status, notes) VALUES (?, ?, ?, 'active', ?)",
+        (payload.get("roomId"), g.user.user_id, now_iso(), payload.get("notes")),
+    )
+    db().commit()
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.post("/api/health/rounds/<int:round_id>/observe")
+@require_auth(("Technician", "PI", "Admin"))
+def add_health_observation(round_id: int) -> Response:
+    r = db().execute("SELECT * FROM health_rounds WHERE id = ?", (round_id,)).fetchone()
+    if not r:
+        return jsonify({"error": "Round not found"}), 404
+    if r["status"] != "active":
+        return jsonify({"error": "Round is not active"}), 409
+    payload = request.get_json(force=True)
+    cage_id = int(payload["cageId"])
+    cage = ensure_cage_scope(cage_id, g.user)
+    if not cage:
+        return jsonify({"error": "Not found"}), 404
+    cur = db().execute(
+        """
+        INSERT INTO health_observations (round_id, cage_id, finding, severity, action_taken, observed_at, observed_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            round_id,
+            cage_id,
+            str(payload.get("finding", "")).strip(),
+            payload.get("severity"),
+            payload.get("actionTaken"),
+            now_iso(),
+            g.user.user_id,
+        ),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "health_observation", cur.lastrowid, "create", None, payload)
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.post("/api/health/rounds/<int:round_id>/complete")
+@require_auth(("Technician", "PI", "Admin"))
+def complete_health_round(round_id: int) -> Response:
+    r = db().execute("SELECT * FROM health_rounds WHERE id = ?", (round_id,)).fetchone()
+    if not r:
+        return jsonify({"error": "Round not found"}), 404
+    db().execute("UPDATE health_rounds SET status = 'completed', completed_at = ? WHERE id = ?", (now_iso(), round_id))
+    db().commit()
+    return jsonify({"ok": True})
+
+
+@app.get("/api/health/rounds/<int:round_id>")
+@require_auth()
+def get_health_round(round_id: int) -> Response:
+    r = db().execute("SELECT * FROM health_rounds WHERE id = ?", (round_id,)).fetchone()
+    if not r:
+        return jsonify({"error": "Round not found"}), 404
+    obs = db().execute(
+        """
+        SELECT o.id, o.finding, o.severity, o.action_taken, o.observed_at, c.cage_code
+        FROM health_observations o
+        JOIN cages c ON c.id = o.cage_id
+        WHERE o.round_id = ?
+        ORDER BY o.id ASC
+        """,
+        (round_id,),
+    ).fetchall()
+    return jsonify({"round": dict(r), "observations": [dict(x) for x in obs]})
+
+
+@app.post("/api/compliance/deviations")
+@require_auth(("Technician", "PI", "Admin"))
+def report_deviation() -> Response:
+    payload = request.get_json(force=True)
+    protocol_id = int(payload["protocolId"])
+    protocol = db().execute("SELECT * FROM iacuc_protocols WHERE id = ?", (protocol_id,)).fetchone()
+    if not protocol:
+        return jsonify({"error": "Protocol not found"}), 404
+    if not is_admin(g.user) and int(protocol["lab_id"]) != int(g.user.lab_id or -1):
+        return jsonify({"error": "Forbidden"}), 403
+    cur = db().execute(
+        """
+        INSERT INTO protocol_deviations (protocol_id, cage_id, reported_by, reported_at, severity, summary, capa_plan, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'open')
+        """,
+        (
+            protocol_id,
+            payload.get("cageId"),
+            g.user.user_id,
+            now_iso(),
+            payload.get("severity", "medium"),
+            payload.get("summary", ""),
+            payload.get("capaPlan"),
+        ),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "protocol_deviation", cur.lastrowid, "create", None, payload)
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.get("/api/compliance/deviations")
+@require_auth(("Technician", "PI", "Admin"))
+def list_deviations() -> Response:
+    status = request.args.get("status", "").strip()
+    clauses = []
+    params: list[Any] = []
+    if status:
+        clauses.append("d.status = ?")
+        params.append(status)
+    if not is_admin(g.user):
+        clauses.append("p.lab_id = ?")
+        params.append(g.user.lab_id)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    rows = db().execute(
+        f"""
+        SELECT d.id, d.reported_at, d.severity, d.summary, d.status, d.resolved_at,
+               p.protocol_number, c.cage_code
+        FROM protocol_deviations d
+        JOIN iacuc_protocols p ON p.id = d.protocol_id
+        LEFT JOIN cages c ON c.id = d.cage_id
+        {where}
+        ORDER BY d.id DESC
+        LIMIT 500
+        """,
+        params,
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/compliance/deviations/<int:deviation_id>/status")
+@require_auth(("PI", "Admin"))
+def update_deviation_status(deviation_id: int) -> Response:
+    payload = request.get_json(force=True)
+    status = str(payload.get("status", "")).strip()
+    if status not in {"open", "under_review", "closed"}:
+        return jsonify({"error": "Invalid status"}), 400
+    row = db().execute(
+        """
+        SELECT d.*, p.lab_id
+        FROM protocol_deviations d
+        JOIN iacuc_protocols p ON p.id = d.protocol_id
+        WHERE d.id = ?
+        """,
+        (deviation_id,),
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    if not is_admin(g.user) and int(row["lab_id"]) != int(g.user.lab_id or -1):
+        return jsonify({"error": "Forbidden"}), 403
+    db().execute(
+        "UPDATE protocol_deviations SET status = ?, capa_plan = COALESCE(?, capa_plan), resolved_at = CASE WHEN ? = 'closed' THEN ? ELSE resolved_at END, resolved_by = CASE WHEN ? = 'closed' THEN ? ELSE resolved_by END WHERE id = ?",
+        (status, payload.get("capaPlan"), status, now_iso(), status, g.user.user_id, deviation_id),
+    )
+    db().commit()
+    return jsonify({"ok": True})
+
+
+@app.post("/api/cages/<int:cage_id>/euthanasia")
+@require_auth(("Technician", "PI", "Admin"))
+def record_euthanasia(cage_id: int) -> Response:
+    cage = ensure_cage_scope(cage_id, g.user)
+    if not cage:
+        return jsonify({"error": "Not found"}), 404
+    payload = request.get_json(force=True)
+    animal_id = payload.get("animalId")
+    if animal_id:
+        animal = db().execute("SELECT * FROM animals WHERE id = ? AND cage_id = ?", (animal_id, cage_id)).fetchone()
+        if not animal:
+            return jsonify({"error": "Animal not found in cage"}), 404
+        db().execute("UPDATE animals SET status = 'Euthanized', updated_at = ? WHERE id = ?", (now_iso(), animal_id))
+    else:
+        male = int(payload.get("male", 0))
+        female = int(payload.get("female", 0))
+        db().execute(
+            "UPDATE cages SET male_count = MAX(male_count - ?, 0), female_count = MAX(female_count - ?, 0), updated_at = ? WHERE id = ?",
+            (male, female, now_iso(), cage_id),
+        )
+    cur = db().execute(
+        """
+        INSERT INTO euthanasia_records (animal_id, cage_id, protocol_id, method, reason, disposition, performed_by, performed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            animal_id,
+            cage_id,
+            cage["protocol_id"],
+            payload.get("method", "CO2"),
+            payload.get("reason"),
+            payload.get("disposition"),
+            g.user.user_id,
+            now_iso(),
+        ),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "euthanasia", cur.lastrowid, "create", None, payload)
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.get("/api/reports/euthanasia.csv")
+@require_auth(("PI", "Admin"))
+def report_euthanasia() -> Response:
+    rows = db().execute(
+        """
+        SELECT e.id, e.performed_at, e.method, e.reason, e.disposition, c.cage_code, a.animal_code
+        FROM euthanasia_records e
+        LEFT JOIN cages c ON c.id = e.cage_id
+        LEFT JOIN animals a ON a.id = e.animal_id
+        """
+        + ("" if is_admin(g.user) else " WHERE c.lab_id = ? ")
+        + """
+        ORDER BY e.id DESC
+        LIMIT 2000
+        """,
+        () if is_admin(g.user) else (g.user.lab_id,),
+    ).fetchall()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["id", "performed_at", "cage_code", "animal_code", "method", "reason", "disposition"])
+    for r in rows:
+        writer.writerow([r["id"], r["performed_at"], r["cage_code"], r["animal_code"], r["method"], r["reason"], r["disposition"]])
+    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=euthanasia_report.csv"})
+
+
+@app.post("/api/cages/<int:cage_id>/wash")
+@require_auth(("Technician", "PI", "Admin"))
+def queue_cage_wash(cage_id: int) -> Response:
+    cage = ensure_cage_scope(cage_id, g.user)
+    if not cage:
+        return jsonify({"error": "Not found"}), 404
+    cur = db().execute(
+        "INSERT INTO cage_wash_events (cage_id, status, requested_by, requested_at) VALUES (?, 'queued', ?, ?)",
+        (cage_id, g.user.user_id, now_iso()),
+    )
+    db().commit()
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.post("/api/wash-events/<int:event_id>/status")
+@require_auth(("Technician", "PI", "Admin"))
+def update_wash_status(event_id: int) -> Response:
+    payload = request.get_json(force=True)
+    status = str(payload.get("status", "")).strip()
+    if status not in {"queued", "in_wash", "returned"}:
+        return jsonify({"error": "Invalid status"}), 400
+    row = db().execute(
+        """
+        SELECT w.id, c.lab_id
+        FROM cage_wash_events w
+        JOIN cages c ON c.id = w.cage_id
+        WHERE w.id = ?
+        """,
+        (event_id,),
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    if not is_admin(g.user) and int(row["lab_id"]) != int(g.user.lab_id or -1):
+        return jsonify({"error": "Forbidden"}), 403
+    db().execute(
+        "UPDATE cage_wash_events SET status = ?, completed_at = CASE WHEN ? = 'returned' THEN ? ELSE completed_at END WHERE id = ?",
+        (status, status, now_iso(), event_id),
+    )
+    db().commit()
+    return jsonify({"ok": True})
+
+
+@app.get("/api/wash-events")
+@require_auth()
+def list_wash_events() -> Response:
+    status = request.args.get("status", "").strip()
+    clauses = []
+    params: list[Any] = []
+    if status:
+        clauses.append("w.status = ?")
+        params.append(status)
+    if not is_admin(g.user):
+        clauses.append("c.lab_id = ?")
+        params.append(g.user.lab_id)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    rows = db().execute(
+        f"""
+        SELECT w.id, w.status, w.requested_at, w.completed_at, c.cage_code
+        FROM cage_wash_events w
+        JOIN cages c ON c.id = w.cage_id
+        {where}
+        ORDER BY w.id DESC
+        LIMIT 1000
+        """,
+        params,
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/quarantine/intakes")
+@require_auth(("Technician", "PI", "Admin"))
+def create_quarantine_intake() -> Response:
+    payload = request.get_json(force=True)
+    quantity = int(payload.get("quantity", 0))
+    if quantity <= 0:
+        return jsonify({"error": "quantity must be > 0"}), 400
+    lab_id = int(payload.get("labId") or g.user.lab_id or 0)
+    if lab_id <= 0:
+        return jsonify({"error": "labId is required"}), 400
+    if not is_admin(g.user) and int(g.user.lab_id or -1) != lab_id:
+        return jsonify({"error": "Forbidden"}), 403
+    project_id = payload.get("projectId")
+    if project_id:
+        project = ensure_project_scope(int(project_id), g.user)
+        if not project:
+            return jsonify({"error": "Project not found"}), 404
+    cage_id = payload.get("cageId")
+    if cage_id:
+        cage = ensure_cage_scope(int(cage_id), g.user)
+        if not cage:
+            return jsonify({"error": "Cage not found"}), 404
+    now = now_iso()
+    cur = db().execute(
+        """
+        INSERT INTO quarantine_intakes (
+            lab_id, project_id, cage_id, vendor, strain, sex, quantity, arrival_date,
+            quarantine_end_on, status, notes, created_by, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'planned', ?, ?, ?, ?)
+        """,
+        (
+            lab_id,
+            project_id,
+            cage_id,
+            payload.get("vendor"),
+            payload.get("strain"),
+            payload.get("sex"),
+            quantity,
+            str(payload.get("arrivalDate") or date.today().isoformat()),
+            payload.get("quarantineEndOn"),
+            payload.get("notes"),
+            g.user.user_id,
+            now,
+            now,
+        ),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "quarantine_intake", cur.lastrowid, "create", None, payload)
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.get("/api/quarantine/intakes")
+@require_auth()
+def list_quarantine_intakes() -> Response:
+    status = request.args.get("status", "").strip()
+    clauses = []
+    params: list[Any] = []
+    if status:
+        clauses.append("q.status = ?")
+        params.append(status)
+    if not is_admin(g.user):
+        clauses.append("q.lab_id = ?")
+        params.append(g.user.lab_id)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    rows = db().execute(
+        f"""
+        SELECT q.id, q.status, q.arrival_date, q.quarantine_end_on, q.quantity, q.vendor, q.strain, q.sex,
+               q.notes, l.name AS lab_name, p.project_code, c.cage_code
+        FROM quarantine_intakes q
+        JOIN labs l ON l.id = q.lab_id
+        LEFT JOIN projects p ON p.id = q.project_id
+        LEFT JOIN cages c ON c.id = q.cage_id
+        {where}
+        ORDER BY q.id DESC
+        LIMIT 1000
+        """,
+        params,
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/quarantine/intakes/<int:intake_id>/status")
+@require_auth(("PI", "Admin"))
+def update_quarantine_status(intake_id: int) -> Response:
+    payload = request.get_json(force=True)
+    status = str(payload.get("status", "")).strip()
+    if status not in {"planned", "arrived", "in_quarantine", "cleared", "blocked"}:
+        return jsonify({"error": "Invalid status"}), 400
+    row = db().execute("SELECT * FROM quarantine_intakes WHERE id = ?", (intake_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    if not is_admin(g.user) and int(row["lab_id"]) != int(g.user.lab_id or -1):
+        return jsonify({"error": "Forbidden"}), 403
+    now = now_iso()
+    db().execute(
+        """
+        UPDATE quarantine_intakes
+        SET status = ?, quarantine_end_on = COALESCE(?, quarantine_end_on), notes = COALESCE(?, notes),
+            reviewed_by = ?, updated_at = ?
+        WHERE id = ?
+        """,
+        (status, payload.get("quarantineEndOn"), payload.get("notes"), g.user.user_id, now, intake_id),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "quarantine_intake", intake_id, "status_update", {"status": row["status"]}, {"status": status})
+    return jsonify({"ok": True})
+
+
+@app.get("/api/compliance/quarantine-alerts")
+@require_auth(("PI", "Admin"))
+def quarantine_alerts() -> Response:
+    today = date.today().isoformat()
+    rows = db().execute(
+        """
+        SELECT q.id, q.status, q.arrival_date, q.quarantine_end_on, q.quantity, l.name AS lab_name, c.cage_code
+        FROM quarantine_intakes q
+        JOIN labs l ON l.id = q.lab_id
+        LEFT JOIN cages c ON c.id = q.cage_id
+        WHERE q.status IN ('arrived', 'in_quarantine')
+          AND (q.quarantine_end_on IS NULL OR q.quarantine_end_on <= ?)
+        """
+        + ("" if is_admin(g.user) else " AND q.lab_id = ? ")
+        + """
+        ORDER BY q.quarantine_end_on ASC, q.arrival_date ASC
+        LIMIT 500
+        """,
+        (today,) if is_admin(g.user) else (today, g.user.lab_id),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/cages/<int:cage_id>/mortality")
+@require_auth(("Technician", "PI", "Admin"))
+def record_mortality(cage_id: int) -> Response:
+    cage = ensure_cage_scope(cage_id, g.user)
+    if not cage:
+        return jsonify({"error": "Not found"}), 404
+    payload = request.get_json(force=True)
+    animal_id = payload.get("animalId")
+    male = int(payload.get("male", 0))
+    female = int(payload.get("female", 0))
+    necropsy_required = bool(payload.get("necropsyRequired", False))
+    if not animal_id and male <= 0 and female <= 0:
+        return jsonify({"error": "Provide animalId or male/female counts"}), 400
+    if animal_id:
+        animal = db().execute("SELECT * FROM animals WHERE id = ? AND cage_id = ?", (animal_id, cage_id)).fetchone()
+        if not animal:
+            return jsonify({"error": "Animal not found in cage"}), 404
+        db().execute("UPDATE animals SET status = 'Dead', updated_at = ? WHERE id = ?", (now_iso(), animal_id))
+    else:
+        db().execute(
+            "UPDATE cages SET male_count = MAX(male_count - ?, 0), female_count = MAX(female_count - ?, 0), updated_at = ? WHERE id = ?",
+            (male, female, now_iso(), cage_id),
+        )
+    cur = db().execute(
+        """
+        INSERT INTO mortality_records (
+            animal_id, cage_id, protocol_id, count_male, count_female, cause, found_at,
+            reported_by, necropsy_required, necropsy_status, notes
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            animal_id,
+            cage_id,
+            cage["protocol_id"],
+            0 if animal_id else male,
+            0 if animal_id else female,
+            payload.get("cause"),
+            now_iso(),
+            g.user.user_id,
+            1 if necropsy_required else 0,
+            "pending" if necropsy_required else "not_required",
+            payload.get("notes"),
+        ),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "mortality", cur.lastrowid, "create", None, payload)
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.get("/api/mortality")
+@require_auth()
+def list_mortality() -> Response:
+    necropsy_status = request.args.get("necropsyStatus", "").strip()
+    clauses = []
+    params: list[Any] = []
+    if necropsy_status:
+        clauses.append("m.necropsy_status = ?")
+        params.append(necropsy_status)
+    if not is_admin(g.user):
+        clauses.append("c.lab_id = ?")
+        params.append(g.user.lab_id)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    rows = db().execute(
+        f"""
+        SELECT m.id, m.found_at, m.cause, m.count_male, m.count_female, m.necropsy_required, m.necropsy_status,
+               c.cage_code, a.animal_code
+        FROM mortality_records m
+        JOIN cages c ON c.id = m.cage_id
+        LEFT JOIN animals a ON a.id = m.animal_id
+        {where}
+        ORDER BY m.id DESC
+        LIMIT 2000
+        """,
+        params,
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/mortality/<int:record_id>/necropsy")
+@require_auth(("PI", "Admin"))
+def update_mortality_necropsy(record_id: int) -> Response:
+    payload = request.get_json(force=True)
+    status = str(payload.get("status", "")).strip()
+    if status not in {"pending", "completed"}:
+        return jsonify({"error": "Invalid status"}), 400
+    row = db().execute(
+        """
+        SELECT m.id, c.lab_id
+        FROM mortality_records m
+        JOIN cages c ON c.id = m.cage_id
+        WHERE m.id = ?
+        """,
+        (record_id,),
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    if not is_admin(g.user) and int(row["lab_id"]) != int(g.user.lab_id or -1):
+        return jsonify({"error": "Forbidden"}), 403
+    db().execute("UPDATE mortality_records SET necropsy_status = ? WHERE id = ?", (status, record_id))
+    db().commit()
+    return jsonify({"ok": True})
+
+
+@app.get("/api/reports/mortality.csv")
+@require_auth(("PI", "Admin"))
+def report_mortality() -> Response:
+    rows = db().execute(
+        """
+        SELECT m.id, m.found_at, m.cause, m.count_male, m.count_female, m.necropsy_status, c.cage_code, a.animal_code
+        FROM mortality_records m
+        JOIN cages c ON c.id = m.cage_id
+        LEFT JOIN animals a ON a.id = m.animal_id
+        """
+        + ("" if is_admin(g.user) else " WHERE c.lab_id = ? ")
+        + """
+        ORDER BY m.id DESC
+        LIMIT 2000
+        """,
+        () if is_admin(g.user) else (g.user.lab_id,),
+    ).fetchall()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        ["id", "found_at", "cage_code", "animal_code", "cause", "count_male", "count_female", "necropsy_status"]
+    )
+    for r in rows:
+        writer.writerow(
+            [
+                r["id"],
+                r["found_at"],
+                r["cage_code"],
+                r["animal_code"],
+                r["cause"],
+                r["count_male"],
+                r["count_female"],
+                r["necropsy_status"],
+            ]
+        )
+    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=mortality_report.csv"})
+
+
+@app.get("/api/alerts/feed")
+@require_auth()
+def alerts_feed() -> Response:
+    status = request.args.get("status", "active").strip()
+    severity = request.args.get("severity", "").strip()
+    upsert_active_alerts(g.user)
+
+    clauses = []
+    params: list[Any] = []
+    if status:
+        if status not in {"active", "acknowledged", "resolved"}:
+            return jsonify({"error": "Invalid status"}), 400
+        clauses.append("a.status = ?")
+        params.append(status)
+    if severity:
+        if severity not in {"low", "medium", "high"}:
+            return jsonify({"error": "Invalid severity"}), 400
+        clauses.append("a.severity = ?")
+        params.append(severity)
+    if not is_admin(g.user):
+        clauses.append("a.lab_id = ?")
+        params.append(g.user.lab_id)
+    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+
+    rows = db().execute(
+        f"""
+        SELECT a.id, a.alert_key, a.cage_id, a.severity, a.category, a.title, a.message, a.status,
+               a.first_seen_at, a.last_seen_at, a.escalation_level, a.next_notify_at, c.cage_code
+        FROM alert_notifications a
+        LEFT JOIN cages c ON c.id = a.cage_id
+        {where_sql}
+        ORDER BY
+          CASE a.severity WHEN 'high' THEN 3 WHEN 'medium' THEN 2 ELSE 1 END DESC,
+          a.last_seen_at DESC
+        LIMIT 500
+        """,
+        params,
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/alerts/<int:alert_id>/ack")
+@require_auth(("Technician", "PI", "Admin"))
+def acknowledge_alert(alert_id: int) -> Response:
+    row = db().execute("SELECT id, lab_id, status FROM alert_notifications WHERE id = ?", (alert_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    if not is_admin(g.user) and int(row["lab_id"] or -1) != int(g.user.lab_id or -1):
+        return jsonify({"error": "Forbidden"}), 403
+    if row["status"] == "resolved":
+        return jsonify({"error": "Alert already resolved"}), 409
+    db().execute(
+        "UPDATE alert_notifications SET status = 'acknowledged', acked_by = ?, acked_at = ? WHERE id = ?",
+        (g.user.user_id, now_iso(), alert_id),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "alert_notification", alert_id, "acknowledge", None, {"status": "acknowledged"})
+    return jsonify({"ok": True})
+
+
+@app.get("/api/notifications/channels")
+@require_auth(("PI", "Admin"))
+def list_notification_channels() -> Response:
+    rows = db().execute(
+        """
+        SELECT id, user_id, lab_id, channel_type, target, min_severity, is_active, created_at
+        FROM notification_channels
+        """
+        + ("" if is_admin(g.user) else " WHERE lab_id = ? ")
+        + " ORDER BY id DESC",
+        () if is_admin(g.user) else (g.user.lab_id,),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/notifications/channels")
+@require_auth(("PI", "Admin"))
+def create_notification_channel() -> Response:
+    payload = request.get_json(force=True)
+    channel_type = str(payload.get("channelType", "")).strip()
+    if channel_type not in {"in_app", "webhook", "email"}:
+        return jsonify({"error": "Invalid channelType"}), 400
+    min_severity = str(payload.get("minSeverity", "medium")).strip()
+    if min_severity not in {"low", "medium", "high"}:
+        return jsonify({"error": "Invalid minSeverity"}), 400
+    lab_id = int(payload.get("labId") or g.user.lab_id or 0)
+    if not is_admin(g.user) and int(g.user.lab_id or -1) != lab_id:
+        return jsonify({"error": "Forbidden"}), 403
+    target = (payload.get("target") or "").strip()
+    if channel_type in {"webhook", "email"} and not target:
+        return jsonify({"error": "target is required for webhook/email channels"}), 400
+    cur = db().execute(
+        """
+        INSERT INTO notification_channels (user_id, lab_id, channel_type, target, min_severity, is_active, created_at)
+        VALUES (?, ?, ?, ?, ?, 1, ?)
+        """,
+        (payload.get("userId"), lab_id, channel_type, target or None, min_severity, now_iso()),
+    )
+    db().commit()
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.post("/api/alerts/dispatch")
+@require_auth(("PI", "Admin"))
+def dispatch_alert_notifications() -> Response:
+    upsert_active_alerts(g.user)
+    now = now_iso()
+    due_rows = db().execute(
+        """
+        SELECT *
+        FROM alert_notifications
+        WHERE status = 'active'
+          AND (next_notify_at IS NULL OR next_notify_at <= ?)
+        """
+        + ("" if is_admin(g.user) else " AND lab_id = ? ")
+        + """
+        ORDER BY
+          CASE severity WHEN 'high' THEN 3 WHEN 'medium' THEN 2 ELSE 1 END DESC,
+          id ASC
+        LIMIT 200
+        """,
+        (now,) if is_admin(g.user) else (now, g.user.lab_id),
+    ).fetchall()
+    if not due_rows:
+        return jsonify({"dispatched": 0, "failed": 0, "simulated": 0, "alerts": 0})
+
+    channels = db().execute(
+        """
+        SELECT id, lab_id, channel_type, target, min_severity
+        FROM notification_channels
+        WHERE is_active = 1
+        """
+        + ("" if is_admin(g.user) else " AND lab_id = ? "),
+        () if is_admin(g.user) else (g.user.lab_id,),
+    ).fetchall()
+    sent = 0
+    failed = 0
+    simulated = 0
+
+    for alert in due_rows:
+        for channel in channels:
+            if channel["lab_id"] is not None and alert["lab_id"] != channel["lab_id"]:
+                continue
+            if not severity_at_least(alert["severity"], channel["min_severity"]):
+                continue
+
+            status = "simulated"
+            summary = "in-app queue"
+            if channel["channel_type"] == "webhook":
+                body = json.dumps(
+                    {
+                        "id": alert["id"],
+                        "severity": alert["severity"],
+                        "category": alert["category"],
+                        "title": alert["title"],
+                        "message": alert["message"],
+                        "cageId": alert["cage_id"],
+                    }
+                ).encode("utf-8")
+                req = urlrequest.Request(str(channel["target"]), data=body, method="POST")
+                req.add_header("Content-Type", "application/json")
+                try:
+                    with urlrequest.urlopen(req, timeout=5) as resp:
+                        code = getattr(resp, "status", 200)
+                    status = "sent" if 200 <= int(code) < 300 else "failed"
+                    summary = f"webhook status={code}"
+                except (urlerror.URLError, TimeoutError) as exc:
+                    status = "failed"
+                    summary = str(exc)
+            elif channel["channel_type"] == "email":
+                status = "simulated"
+                summary = f"email queued to {channel['target']}"
+
+            db().execute(
+                """
+                INSERT INTO notification_dispatch_log (alert_id, channel_id, dispatched_at, status, response_summary)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (alert["id"], channel["id"], now_iso(), status, summary),
+            )
+            if status == "sent":
+                sent += 1
+            elif status == "failed":
+                failed += 1
+            else:
+                simulated += 1
+
+        level = int(alert["escalation_level"] or 0) + 1
+        delay_min = escalation_delay_minutes(str(alert["severity"]), level)
+        next_notify_at = (datetime.now(UTC) + timedelta(minutes=delay_min)).isoformat()
+        db().execute(
+            "UPDATE alert_notifications SET escalation_level = ?, last_notified_at = ?, next_notify_at = ? WHERE id = ?",
+            (level, now_iso(), next_notify_at, alert["id"]),
+        )
+    db().commit()
+    return jsonify({"dispatched": sent, "failed": failed, "simulated": simulated, "alerts": len(due_rows)})
+
+
+@app.get("/api/alerts/stream")
+@require_auth()
+def alerts_stream() -> Response:
+    interval_s = max(1, min(int(request.args.get("interval", "10")), 60))
+    once = request.args.get("once", "0") == "1"
+    user = g.user
+
+    @stream_with_context
+    def event_stream():
+        yield "retry: 10000\n\n"
+        while True:
+            upsert_active_alerts(user)
+            rows = db().execute(
+                """
+                SELECT a.id, a.alert_key, a.cage_id, a.severity, a.category, a.title, a.message, a.status, c.cage_code
+                FROM alert_notifications a
+                LEFT JOIN cages c ON c.id = a.cage_id
+                WHERE a.status = 'active'
+                """
+                + ("" if is_admin(user) else " AND a.lab_id = ? ")
+                + """
+                ORDER BY CASE a.severity WHEN 'high' THEN 3 WHEN 'medium' THEN 2 ELSE 1 END DESC, a.last_seen_at DESC
+                LIMIT 250
+                """,
+                () if is_admin(user) else (user.lab_id,),
+            ).fetchall()
+            payload = json.dumps([dict(r) for r in rows], default=str)
+            yield f"event: alerts\ndata: {payload}\n\n"
+            if once:
+                break
+            time.sleep(interval_s)
+
+    return Response(
+        event_stream(),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/api/breeding/pairs")
+@require_auth(("Technician", "PI", "Admin"))
+def create_breeding_pair() -> Response:
+    payload = request.get_json(force=True)
+    sire_id = int(payload.get("sireId", 0))
+    dam_id = int(payload.get("damId", 0))
+    cage_id = int(payload.get("cageId", 0))
+    if sire_id <= 0 or dam_id <= 0 or cage_id <= 0:
+        return jsonify({"error": "sireId, damId, and cageId are required"}), 400
+    if sire_id == dam_id:
+        return jsonify({"error": "sireId and damId cannot be the same"}), 400
+    cage = ensure_cage_scope(cage_id, g.user)
+    if not cage:
+        return jsonify({"error": "Cage not found"}), 404
+    sire = ensure_animal_scope(sire_id, g.user)
+    dam = ensure_animal_scope(dam_id, g.user)
+    if not sire or not dam:
+        return jsonify({"error": "Animal not found"}), 404
+    if int(sire["cage_id"] or -1) != cage_id or int(dam["cage_id"] or -1) != cage_id:
+        return jsonify({"error": "Both animals must be in the selected cage"}), 409
+    cur = db().execute(
+        """
+        INSERT INTO breeding_pairs (sire_id, dam_id, cage_id, lab_id, status, started_on, notes, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
+        """,
+        (
+            sire_id,
+            dam_id,
+            cage_id,
+            cage["lab_id"],
+            str(payload.get("startedOn") or date.today().isoformat()),
+            payload.get("notes"),
+            g.user.user_id,
+            now_iso(),
+            now_iso(),
+        ),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "breeding_pair", cur.lastrowid, "create", None, payload)
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.get("/api/breeding/pairs")
+@require_auth()
+def list_breeding_pairs() -> Response:
+    status = request.args.get("status", "").strip()
+    clauses = []
+    params: list[Any] = []
+    if status:
+        clauses.append("bp.status = ?")
+        params.append(status)
+    if not is_admin(g.user):
+        clauses.append("bp.lab_id = ?")
+        params.append(g.user.lab_id)
+    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    rows = db().execute(
+        f"""
+        SELECT bp.id, bp.status, bp.started_on, bp.ended_on, bp.notes,
+               c.cage_code, sire.animal_code AS sire_code, dam.animal_code AS dam_code
+        FROM breeding_pairs bp
+        JOIN cages c ON c.id = bp.cage_id
+        JOIN animals sire ON sire.id = bp.sire_id
+        JOIN animals dam ON dam.id = bp.dam_id
+        {where_sql}
+        ORDER BY bp.id DESC
+        LIMIT 500
+        """,
+        params,
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/breeding/pairs/<int:pair_id>/status")
+@require_auth(("Technician", "PI", "Admin"))
+def update_breeding_pair_status(pair_id: int) -> Response:
+    payload = request.get_json(force=True)
+    status = str(payload.get("status", "")).strip()
+    if status not in {"active", "paused", "retired"}:
+        return jsonify({"error": "Invalid status"}), 400
+    row = db().execute(
+        "SELECT * FROM breeding_pairs WHERE id = ?" + ("" if is_admin(g.user) else " AND lab_id = ?"),
+        (pair_id,) if is_admin(g.user) else (pair_id, g.user.lab_id),
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    ended_on = payload.get("endedOn") if status == "retired" else None
+    db().execute(
+        "UPDATE breeding_pairs SET status = ?, ended_on = COALESCE(?, ended_on), notes = COALESCE(?, notes), updated_at = ? WHERE id = ?",
+        (status, ended_on, payload.get("notes"), now_iso(), pair_id),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "breeding_pair", pair_id, "status_update", {"status": row["status"]}, {"status": status})
+    return jsonify({"ok": True})
+
+
+@app.get("/api/breeding/pairs/<int:pair_id>/productivity")
+@require_auth()
+def breeding_pair_productivity(pair_id: int) -> Response:
+    pair = db().execute(
+        "SELECT * FROM breeding_pairs WHERE id = ?" + ("" if is_admin(g.user) else " AND lab_id = ?"),
+        (pair_id,) if is_admin(g.user) else (pair_id, g.user.lab_id),
+    ).fetchone()
+    if not pair:
+        return jsonify({"error": "Not found"}), 404
+    start = pair["started_on"]
+    end = pair["ended_on"] or date.today().isoformat()
+    stats = db().execute(
+        """
+        SELECT COUNT(*) AS litter_count, COALESCE(AVG(survived_count), 0) AS avg_survived, COALESCE(SUM(survived_count), 0) AS total_survived
+        FROM litters
+        WHERE cage_id = ? AND birth_date BETWEEN ? AND ?
+        """,
+        (pair["cage_id"], start, end),
+    ).fetchone()
+    return jsonify(
+        {
+            "pairId": pair_id,
+            "status": pair["status"],
+            "window": {"start": start, "end": end},
+            "litterCount": int(stats["litter_count"] or 0),
+            "avgSurvived": round(float(stats["avg_survived"] or 0), 2),
+            "totalSurvived": int(stats["total_survived"] or 0),
+        }
+    )
+
+
+@app.post("/api/animals/<int:animal_id>/tags")
+@require_auth(("Technician", "PI", "Admin"))
+def create_animal_tag(animal_id: int) -> Response:
+    animal = ensure_animal_scope(animal_id, g.user)
+    if not animal:
+        return jsonify({"error": "Not found"}), 404
+    payload = request.get_json(force=True)
+    tag_type = str(payload.get("tagType", "")).strip()
+    tag_value = str(payload.get("tagValue", "")).strip()
+    if tag_type not in {"ear_tag", "microchip", "tube", "well", "custom"}:
+        return jsonify({"error": "Invalid tagType"}), 400
+    if not tag_value:
+        return jsonify({"error": "tagValue is required"}), 400
+    try:
+        cur = db().execute(
+            """
+            INSERT INTO animal_tags (animal_id, tag_type, tag_value, is_active, applied_on, applied_by)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                animal_id,
+                tag_type,
+                tag_value,
+                1 if bool(payload.get("active", True)) else 0,
+                str(payload.get("appliedOn") or date.today().isoformat()),
+                g.user.user_id,
+            ),
+        )
+        db().commit()
+    except sqlite3.IntegrityError:
+        return jsonify({"error": "Tag already in use"}), 409
+    audit_log(g.user.user_id, "animal_tag", cur.lastrowid, "create", None, payload)
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.get("/api/animals/<int:animal_id>/tags")
+@require_auth()
+def list_animal_tags(animal_id: int) -> Response:
+    animal = ensure_animal_scope(animal_id, g.user)
+    if not animal:
+        return jsonify({"error": "Not found"}), 404
+    rows = db().execute(
+        "SELECT id, tag_type, tag_value, is_active, applied_on, applied_by FROM animal_tags WHERE animal_id = ? ORDER BY id DESC",
+        (animal_id,),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/samples")
+@require_auth(("Technician", "PI", "Admin"))
+def create_sample_record() -> Response:
+    payload = request.get_json(force=True)
+    animal_id = int(payload.get("animalId", 0))
+    if animal_id <= 0:
+        return jsonify({"error": "animalId is required"}), 400
+    animal = ensure_animal_scope(animal_id, g.user)
+    if not animal:
+        return jsonify({"error": "Animal not found"}), 404
+    sample_type = str(payload.get("sampleType", "")).strip()
+    if not sample_type:
+        return jsonify({"error": "sampleType is required"}), 400
+    sample_code = str(payload.get("sampleCode") or f"SMP-{secrets.token_hex(5)}").strip()
+    status = str(payload.get("status", "collected")).strip()
+    if status not in {"collected", "shipped", "received", "resulted", "rejected"}:
+        return jsonify({"error": "Invalid status"}), 400
+    try:
+        cur = db().execute(
+            """
+            INSERT INTO sample_records (animal_id, cage_id, sample_type, sample_code, provider, status, tracking_number, collected_on, collected_by, notes)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                animal_id,
+                animal["cage_id"],
+                sample_type,
+                sample_code,
+                payload.get("provider"),
+                status,
+                payload.get("trackingNumber"),
+                str(payload.get("collectedOn") or date.today().isoformat()),
+                g.user.user_id,
+                payload.get("notes"),
+            ),
+        )
+        sample_id = cur.lastrowid
+        db().execute(
+            """
+            INSERT INTO sample_events (sample_id, event_type, event_time, actor_user_id, details_json)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (sample_id, status, now_iso(), g.user.user_id, json.dumps(payload.get("eventDetails", {}))),
+        )
+        db().commit()
+    except sqlite3.IntegrityError:
+        return jsonify({"error": "sampleCode already exists"}), 409
+    audit_log(g.user.user_id, "sample_record", sample_id, "create", None, payload)
+    return jsonify({"id": sample_id, "sampleCode": sample_code}), 201
+
+
+@app.get("/api/samples")
+@require_auth()
+def list_sample_records() -> Response:
+    status = request.args.get("status", "").strip()
+    provider = request.args.get("provider", "").strip()
+    clauses = []
+    params: list[Any] = []
+    if status:
+        clauses.append("s.status = ?")
+        params.append(status)
+    if provider:
+        clauses.append("COALESCE(s.provider, '') = ?")
+        params.append(provider)
+    if not is_admin(g.user):
+        clauses.append("c.lab_id = ?")
+        params.append(g.user.lab_id)
+    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    rows = db().execute(
+        f"""
+        SELECT s.id, s.sample_code, s.sample_type, s.provider, s.status, s.collected_on, s.tracking_number,
+               a.animal_code, c.cage_code
+        FROM sample_records s
+        JOIN animals a ON a.id = s.animal_id
+        LEFT JOIN cages c ON c.id = s.cage_id
+        {where_sql}
+        ORDER BY s.id DESC
+        LIMIT 1000
+        """,
+        params,
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/samples/<int:sample_id>/status")
+@require_auth(("Technician", "PI", "Admin"))
+def update_sample_status(sample_id: int) -> Response:
+    payload = request.get_json(force=True)
+    status = str(payload.get("status", "")).strip()
+    if status not in {"collected", "shipped", "received", "resulted", "rejected"}:
+        return jsonify({"error": "Invalid status"}), 400
+    row = db().execute(
+        """
+        SELECT s.id, s.status, c.lab_id
+        FROM sample_records s
+        LEFT JOIN cages c ON c.id = s.cage_id
+        WHERE s.id = ?
+        """,
+        (sample_id,),
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    if not is_admin(g.user) and int(row["lab_id"] or -1) != int(g.user.lab_id or -1):
+        return jsonify({"error": "Forbidden"}), 403
+    db().execute(
+        "UPDATE sample_records SET status = ?, tracking_number = COALESCE(?, tracking_number), notes = COALESCE(?, notes) WHERE id = ?",
+        (status, payload.get("trackingNumber"), payload.get("notes"), sample_id),
+    )
+    db().execute(
+        "INSERT INTO sample_events (sample_id, event_type, event_time, actor_user_id, details_json) VALUES (?, ?, ?, ?, ?)",
+        (sample_id, status, now_iso(), g.user.user_id, json.dumps(payload.get("eventDetails", {}))),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "sample_record", sample_id, "status_update", {"status": row["status"]}, {"status": status})
+    return jsonify({"ok": True})
+
+
+@app.get("/api/samples/<int:sample_id>/events")
+@require_auth()
+def sample_event_history(sample_id: int) -> Response:
+    sample = db().execute(
+        """
+        SELECT s.id, c.lab_id
+        FROM sample_records s
+        LEFT JOIN cages c ON c.id = s.cage_id
+        WHERE s.id = ?
+        """,
+        (sample_id,),
+    ).fetchone()
+    if not sample:
+        return jsonify({"error": "Not found"}), 404
+    if not is_admin(g.user) and int(sample["lab_id"] or -1) != int(g.user.lab_id or -1):
+        return jsonify({"error": "Forbidden"}), 403
+    rows = db().execute(
+        "SELECT id, event_type, event_time, actor_user_id, details_json FROM sample_events WHERE sample_id = ? ORDER BY id ASC",
+        (sample_id,),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/genotyping/orders")
+@require_auth(("Technician", "PI", "Admin"))
+def create_genotyping_order() -> Response:
+    payload = request.get_json(force=True)
+    provider = str(payload.get("provider", "")).strip()
+    if not provider:
+        return jsonify({"error": "provider is required"}), 400
+    project_id = payload.get("projectId")
+    if project_id:
+        project = ensure_project_scope(int(project_id), g.user)
+        if not project:
+            return jsonify({"error": "Project not found"}), 404
+        lab_id = int(project["lab_id"])
+    else:
+        lab_id = int(payload.get("labId") or g.user.lab_id or 0)
+    if lab_id <= 0:
+        return jsonify({"error": "labId is required"}), 400
+    if not is_admin(g.user) and int(g.user.lab_id or -1) != lab_id:
+        return jsonify({"error": "Forbidden"}), 403
+
+    order_ref = str(payload.get("orderRef") or f"GENO-{datetime.now(UTC).strftime('%Y%m%d')}-{secrets.token_hex(3)}").strip()
+    sample_ids = [int(x) for x in payload.get("sampleIds", [])]
+    marker_panel = payload.get("markerPanel")
+    now = now_iso()
+    try:
+        cur = db().execute(
+            """
+            INSERT INTO genotyping_orders (lab_id, project_id, provider, order_ref, status, requested_by, created_at, updated_at, payload_json)
+            VALUES (?, ?, ?, ?, 'draft', ?, ?, ?, ?)
+            """,
+            (lab_id, project_id, provider, order_ref, g.user.user_id, now, now, json.dumps(payload, default=str)),
+        )
+    except sqlite3.IntegrityError:
+        return jsonify({"error": "orderRef already exists"}), 409
+    order_id = cur.lastrowid
+    inserted_items = 0
+    for sid in sample_ids:
+        sample = db().execute(
+            """
+            SELECT s.id, s.animal_id, c.lab_id
+            FROM sample_records s
+            LEFT JOIN cages c ON c.id = s.cage_id
+            WHERE s.id = ?
+            """,
+            (sid,),
+        ).fetchone()
+        if not sample:
+            continue
+        if not is_admin(g.user) and int(sample["lab_id"] or -1) != int(g.user.lab_id or -1):
+            continue
+        db().execute(
+            """
+            INSERT INTO genotyping_order_items (order_id, sample_id, animal_id, marker_panel)
+            VALUES (?, ?, ?, ?)
+            """,
+            (order_id, sid, sample["animal_id"], marker_panel),
+        )
+        inserted_items += 1
+    db().commit()
+    audit_log(g.user.user_id, "genotyping_order", order_id, "create", None, {"sampleIds": sample_ids, "items": inserted_items})
+    return jsonify({"id": order_id, "orderRef": order_ref, "items": inserted_items}), 201
+
+
+@app.get("/api/genotyping/orders")
+@require_auth()
+def list_genotyping_orders() -> Response:
+    status = request.args.get("status", "").strip()
+    clauses = []
+    params: list[Any] = []
+    if status:
+        clauses.append("o.status = ?")
+        params.append(status)
+    if not is_admin(g.user):
+        clauses.append("o.lab_id = ?")
+        params.append(g.user.lab_id)
+    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    rows = db().execute(
+        f"""
+        SELECT o.id, o.provider, o.order_ref, o.status, o.created_at, o.updated_at,
+               COUNT(i.id) AS item_count,
+               SUM(CASE WHEN i.result IS NOT NULL THEN 1 ELSE 0 END) AS resulted_count
+        FROM genotyping_orders o
+        LEFT JOIN genotyping_order_items i ON i.order_id = o.id
+        {where_sql}
+        GROUP BY o.id
+        ORDER BY o.id DESC
+        LIMIT 500
+        """,
+        params,
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/genotyping/orders/<int:order_id>/submit")
+@require_auth(("Technician", "PI", "Admin"))
+def submit_genotyping_order(order_id: int) -> Response:
+    row = db().execute(
+        "SELECT * FROM genotyping_orders WHERE id = ?" + ("" if is_admin(g.user) else " AND lab_id = ?"),
+        (order_id,) if is_admin(g.user) else (order_id, g.user.lab_id),
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    if row["status"] not in {"draft", "failed"}:
+        return jsonify({"error": "Order not submittable in current state"}), 409
+    db().execute("UPDATE genotyping_orders SET status = 'submitted', updated_at = ? WHERE id = ?", (now_iso(), order_id))
+    db().commit()
+    audit_log(g.user.user_id, "genotyping_order", order_id, "submit", {"status": row["status"]}, {"status": "submitted"})
+    return jsonify({"ok": True})
+
+
+@app.post("/api/genotyping/orders/callback")
+def genotyping_order_callback() -> Response:
+    expected = os.getenv("MURISPHERE_PROVIDER_CALLBACK_TOKEN", "dev-callback-token")
+    token = request.headers.get("X-Provider-Token", "").strip()
+    if expected and token != expected:
+        return jsonify({"error": "Forbidden"}), 403
+    payload = request.get_json(force=True)
+    order_ref = str(payload.get("orderRef", "")).strip()
+    if not order_ref:
+        return jsonify({"error": "orderRef is required"}), 400
+    order = db().execute("SELECT * FROM genotyping_orders WHERE order_ref = ?", (order_ref,)).fetchone()
+    if not order:
+        return jsonify({"error": "Order not found"}), 404
+    status = str(payload.get("status", "received")).strip()
+    if status not in {"submitted", "received", "closed", "failed"}:
+        return jsonify({"error": "Invalid status"}), 400
+    updated = 0
+    for item in payload.get("results", []):
+        result = item.get("result")
+        if not result:
+            continue
+        animal_id = None
+        sample_code = item.get("sampleCode")
+        if sample_code:
+            row = db().execute(
+                """
+                SELECT i.id, i.animal_id
+                FROM genotyping_order_items i
+                JOIN sample_records s ON s.id = i.sample_id
+                WHERE i.order_id = ? AND s.sample_code = ?
+                """,
+                (order["id"], str(sample_code)),
+            ).fetchone()
+            if row:
+                animal_id = row["animal_id"]
+                db().execute(
+                    "UPDATE genotyping_order_items SET result = ?, result_at = ?, marker_panel = COALESCE(?, marker_panel) WHERE id = ?",
+                    (result, now_iso(), item.get("markerPanel"), row["id"]),
+                )
+        if animal_id is None and item.get("animalCode"):
+            arow = db().execute("SELECT id FROM animals WHERE animal_code = ?", (str(item.get("animalCode")),)).fetchone()
+            if not arow:
+                continue
+            animal_id = arow["id"]
+            db().execute(
+                """
+                UPDATE genotyping_order_items
+                SET result = ?, result_at = ?, marker_panel = COALESCE(?, marker_panel)
+                WHERE order_id = ? AND animal_id = ?
+                """,
+                (result, now_iso(), item.get("markerPanel"), order["id"], animal_id),
+            )
+        if animal_id is None:
+            continue
+        db().execute(
+            "INSERT INTO genotype_results (animal_id, result, source, created_at) VALUES (?, ?, ?, ?)",
+            (animal_id, result, f"callback:{order_ref}", now_iso()),
+        )
+        db().execute("UPDATE animals SET genotype = ?, updated_at = ? WHERE id = ?", (result, now_iso(), animal_id))
+        updated += 1
+    db().execute("UPDATE genotyping_orders SET status = ?, updated_at = ? WHERE id = ?", (status, now_iso(), order["id"]))
+    db().commit()
+    audit_log(None, "genotyping_order", order["id"], "callback", None, {"status": status, "updatedAnimals": updated})
+    return jsonify({"ok": True, "updatedAnimals": updated})
+
+
+@app.post("/api/recommendations/generate")
+@require_auth(("PI", "Admin"))
+def generate_recommendations() -> Response:
+    generated = 0
+    now = now_iso()
+    low_density = db().execute(
+        """
+        SELECT c.id, c.lab_id, c.strain, c.genotype_summary, (c.male_count + c.female_count) AS n
+        FROM cages c
+        WHERE (c.male_count + c.female_count) <= 2
+        """
+        + ("" if is_admin(g.user) else " AND c.lab_id = ? ")
+        + """
+        ORDER BY n ASC, c.id ASC
+        LIMIT 200
+        """,
+        () if is_admin(g.user) else (g.user.lab_id,),
+    ).fetchall()
+    for c in low_density:
+        exists = db().execute(
+            "SELECT id FROM workflow_recommendations WHERE rec_type = 'consolidate_cage' AND cage_id = ? AND status IN ('open', 'accepted', 'adjusted')",
+            (c["id"],),
+        ).fetchone()
+        if exists:
+            continue
+        db().execute(
+            """
+            INSERT INTO workflow_recommendations (rec_type, lab_id, cage_id, status, rationale, payload_json, created_by, created_at, updated_at)
+            VALUES ('consolidate_cage', ?, ?, 'open', ?, ?, ?, ?, ?)
+            """,
+            (
+                c["lab_id"],
+                c["id"],
+                "Low-density cage; consider consolidation.",
+                json.dumps({"totalAnimals": c["n"], "strain": c["strain"], "genotypeSummary": c["genotype_summary"]}),
+                g.user.user_id,
+                now,
+                now,
+            ),
+        )
+        generated += 1
+    db().commit()
+    return jsonify({"generated": generated})
+
+
+@app.get("/api/recommendations")
+@require_auth()
+def list_recommendations() -> Response:
+    status = request.args.get("status", "").strip()
+    rec_type = request.args.get("type", "").strip()
+    clauses = []
+    params: list[Any] = []
+    if status:
+        clauses.append("r.status = ?")
+        params.append(status)
+    if rec_type:
+        clauses.append("r.rec_type = ?")
+        params.append(rec_type)
+    if not is_admin(g.user):
+        clauses.append("r.lab_id = ?")
+        params.append(g.user.lab_id)
+    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    rows = db().execute(
+        f"""
+        SELECT r.id, r.rec_type, r.status, r.rationale, r.created_at, r.acted_at, c.cage_code
+        FROM workflow_recommendations r
+        LEFT JOIN cages c ON c.id = r.cage_id
+        {where_sql}
+        ORDER BY r.id DESC
+        LIMIT 500
+        """,
+        params,
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/recommendations/<int:recommendation_id>/decision")
+@require_auth(("PI", "Admin"))
+def decide_recommendation(recommendation_id: int) -> Response:
+    payload = request.get_json(force=True)
+    decision = str(payload.get("decision", "")).strip()
+    if decision not in {"accepted", "adjusted", "ignored", "completed"}:
+        return jsonify({"error": "Invalid decision"}), 400
+    row = ensure_recommendation_scope(recommendation_id, g.user)
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    merged_payload = {}
+    if row["payload_json"]:
+        try:
+            merged_payload = json.loads(row["payload_json"])
+        except json.JSONDecodeError:
+            merged_payload = {}
+    if decision == "adjusted":
+        merged_payload["adjustment"] = payload.get("adjustment", {})
+    if payload.get("note"):
+        merged_payload["decisionNote"] = payload.get("note")
+    db().execute(
+        "UPDATE workflow_recommendations SET status = ?, payload_json = ?, acted_by = ?, acted_at = ?, updated_at = ? WHERE id = ?",
+        (decision, json.dumps(merged_payload), g.user.user_id, now_iso(), now_iso(), recommendation_id),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "recommendation", recommendation_id, "decision", {"status": row["status"]}, {"status": decision})
+    return jsonify({"ok": True})
+
+
+@app.get("/api/recommendations/outcomes")
+@require_auth()
+def recommendation_outcomes() -> Response:
+    rows = db().execute(
+        """
+        SELECT rec_type, status, COUNT(*) AS n
+        FROM workflow_recommendations
+        """
+        + ("" if is_admin(g.user) else " WHERE lab_id = ? ")
+        + """
+        GROUP BY rec_type, status
+        ORDER BY rec_type, status
+        """,
+        () if is_admin(g.user) else (g.user.lab_id,),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/planner/scenarios")
+@require_auth(("PI", "Admin"))
+def create_planner_scenario() -> Response:
+    payload = request.get_json(force=True)
+    name = str(payload.get("name", "")).strip()
+    if not name:
+        return jsonify({"error": "name is required"}), 400
+    target_animals = int(payload.get("targetAnimals", 0))
+    if target_animals <= 0:
+        return jsonify({"error": "targetAnimals must be > 0"}), 400
+    lab_id = int(payload.get("labId") or g.user.lab_id or 0)
+    if lab_id <= 0:
+        return jsonify({"error": "labId is required"}), 400
+    if not is_admin(g.user) and int(g.user.lab_id or -1) != lab_id:
+        return jsonify({"error": "Forbidden"}), 403
+    cur = db().execute(
+        """
+        INSERT INTO planner_scenarios (lab_id, name, needed_by, target_animals, max_new_cages, assumptions_json, status, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?)
+        """,
+        (
+            lab_id,
+            name,
+            payload.get("neededBy"),
+            target_animals,
+            payload.get("maxNewCages"),
+            json.dumps(payload.get("assumptions", {})),
+            g.user.user_id,
+            now_iso(),
+            now_iso(),
+        ),
+    )
+    db().commit()
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.get("/api/planner/scenarios")
+@require_auth()
+def list_planner_scenarios() -> Response:
+    rows = db().execute(
+        """
+        SELECT id, lab_id, name, needed_by, target_animals, max_new_cages, status, created_at, updated_at
+        FROM planner_scenarios
+        """
+        + ("" if is_admin(g.user) else " WHERE lab_id = ? ")
+        + """
+        ORDER BY id DESC
+        LIMIT 200
+        """,
+        () if is_admin(g.user) else (g.user.lab_id,),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/planner/scenarios/<int:scenario_id>/projects")
+@require_auth(("PI", "Admin"))
+def add_planner_scenario_projects(scenario_id: int) -> Response:
+    scenario = ensure_planner_scenario_scope(scenario_id, g.user)
+    if not scenario:
+        return jsonify({"error": "Not found"}), 404
+    payload = request.get_json(force=True)
+    projects = payload.get("projects", [])
+    inserted = 0
+    for p in projects:
+        project_id = int(p.get("projectId", 0))
+        if project_id <= 0:
+            continue
+        project = ensure_project_scope(project_id, g.user)
+        if not project:
+            continue
+        try:
+            db().execute(
+                """
+                INSERT INTO planner_scenario_projects (scenario_id, project_id, animals_needed, priority)
+                VALUES (?, ?, ?, ?)
+                """,
+                (scenario_id, project_id, int(p.get("animalsNeeded", 0)), int(p.get("priority", 3))),
+            )
+            inserted += 1
+        except sqlite3.IntegrityError:
+            db().execute(
+                "UPDATE planner_scenario_projects SET animals_needed = ?, priority = ? WHERE scenario_id = ? AND project_id = ?",
+                (int(p.get("animalsNeeded", 0)), int(p.get("priority", 3)), scenario_id, project_id),
+            )
+    db().execute("UPDATE planner_scenarios SET updated_at = ? WHERE id = ?", (now_iso(), scenario_id))
+    db().commit()
+    return jsonify({"upserted": inserted})
+
+
+@app.post("/api/planner/scenarios/<int:scenario_id>/evaluate")
+@require_auth(("PI", "Admin"))
+def evaluate_planner_scenario(scenario_id: int) -> Response:
+    scenario = ensure_planner_scenario_scope(scenario_id, g.user)
+    if not scenario:
+        return jsonify({"error": "Not found"}), 404
+    proj_rows = db().execute(
+        "SELECT project_id, animals_needed, priority FROM planner_scenario_projects WHERE scenario_id = ? ORDER BY priority ASC, project_id ASC",
+        (scenario_id,),
+    ).fetchall()
+    if proj_rows:
+        target = sum(int(r["animals_needed"] or 0) for r in proj_rows)
+        current = 0
+        for r in proj_rows:
+            got = db().execute(
+                """
+                SELECT COUNT(*) AS n
+                FROM animals a
+                JOIN cages c ON c.id = a.cage_id
+                JOIN project_cages pc ON pc.cage_id = c.id
+                WHERE a.status = 'Active' AND pc.project_id = ?
+                """,
+                (r["project_id"],),
+            ).fetchone()
+            current += int(got["n"] or 0)
+    else:
+        target = int(scenario["target_animals"] or 0)
+        got = db().execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM animals a
+            JOIN cages c ON c.id = a.cage_id
+            WHERE a.status = 'Active' AND c.lab_id = ?
+            """,
+            (scenario["lab_id"],),
+        ).fetchone()
+        current = int(got["n"] or 0)
+    deficit = max(target - current, 0)
+    estimated_litters = (deficit + 3) // 4
+    estimated_cages = (deficit + 4) // 5
+    max_new_cages = int(scenario["max_new_cages"] or 0)
+    if max_new_cages > 0 and estimated_cages > int(max_new_cages * 1.25):
+        risk = "high"
+    elif max_new_cages > 0 and estimated_cages > max_new_cages:
+        risk = "medium"
+    else:
+        risk = "low"
+    recommendation = {
+        "targetAnimals": target,
+        "currentActiveAnimals": current,
+        "projectedDeficit": deficit,
+        "estimatedLitters": estimated_litters,
+        "estimatedCages": estimated_cages,
+        "riskLevel": risk,
+    }
+    cur = db().execute(
+        """
+        INSERT INTO planner_plans (scenario_id, estimated_litters, estimated_cages, projected_deficit, risk_level, recommendation_json, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (scenario_id, estimated_litters, estimated_cages, deficit, risk, json.dumps(recommendation), now_iso()),
+    )
+    if deficit > 0:
+        exists = db().execute(
+            "SELECT id FROM workflow_recommendations WHERE rec_type = 'planner_supply_gap' AND lab_id = ? AND status IN ('open', 'accepted', 'adjusted')",
+            (scenario["lab_id"],),
+        ).fetchone()
+        if not exists:
+            db().execute(
+                """
+                INSERT INTO workflow_recommendations (rec_type, lab_id, project_id, status, rationale, payload_json, created_by, created_at, updated_at)
+                VALUES ('planner_supply_gap', ?, NULL, 'open', ?, ?, ?, ?, ?)
+                """,
+                (
+                    scenario["lab_id"],
+                    "Planner found projected supply gap against target demand.",
+                    json.dumps(recommendation),
+                    g.user.user_id,
+                    now_iso(),
+                    now_iso(),
+                ),
+            )
+    db().execute("UPDATE planner_scenarios SET updated_at = ? WHERE id = ?", (now_iso(), scenario_id))
+    db().commit()
+    return jsonify({"planId": cur.lastrowid, **recommendation})
+
+
+@app.get("/api/planner/scenarios/<int:scenario_id>/plans")
+@require_auth()
+def list_planner_scenario_plans(scenario_id: int) -> Response:
+    scenario = ensure_planner_scenario_scope(scenario_id, g.user)
+    if not scenario:
+        return jsonify({"error": "Not found"}), 404
+    rows = db().execute(
+        """
+        SELECT id, estimated_litters, estimated_cages, projected_deficit, risk_level, recommendation_json, created_at
+        FROM planner_plans
+        WHERE scenario_id = ?
+        ORDER BY id DESC
+        LIMIT 100
+        """,
+        (scenario_id,),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
 
 @app.get("/api/audit")
 @require_auth(("Admin",))

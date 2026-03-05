@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 960">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e9f5ef"/>
+      <stop offset="100%" stop-color="#dcebe4"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="960" fill="url(#bg)"/>
+  <rect x="52" y="52" width="1496" height="856" rx="20" fill="#fff" stroke="#c7ddd3"/>
+  <rect x="52" y="52" width="1496" height="84" rx="20" fill="#0f7a58"/>
+  <text x="96" y="104" font-family="Arial" font-size="36" font-weight="700" fill="#fff">Sample Tracking + Genotyping Orders</text>
+
+  <rect x="88" y="164" width="640" height="328" rx="14" fill="#f7fcf9" stroke="#d0e4da"/>
+  <text x="114" y="204" font-family="Arial" font-size="24" font-weight="700" fill="#2a4e59">Sample Lifecycle (Animal PAIR-SIRE-001)</text>
+  <rect x="116" y="236" width="152" height="40" rx="20" fill="#e4f2ea"/><text x="152" y="263" font-family="Arial" font-size="20" fill="#1a5d45" font-weight="700">COLLECTED</text>
+  <text x="290" y="262" font-family="Arial" font-size="20" fill="#4a626d">2026-03-05 09:12</text>
+  <rect x="116" y="292" width="132" height="40" rx="20" fill="#ffe9c9"/><text x="154" y="319" font-family="Arial" font-size="20" fill="#8a5a1e" font-weight="700">SHIPPED</text>
+  <text x="290" y="318" font-family="Arial" font-size="20" fill="#4a626d">Tracking: TNX-334512</text>
+  <rect x="116" y="348" width="150" height="40" rx="20" fill="#dce8ff"/><text x="154" y="375" font-family="Arial" font-size="20" fill="#2d5ea8" font-weight="700">RECEIVED</text>
+  <text x="290" y="374" font-family="Arial" font-size="20" fill="#4a626d">Provider: Transnetyx</text>
+  <rect x="116" y="404" width="140" height="40" rx="20" fill="#d8f0e2"/><text x="154" y="431" font-family="Arial" font-size="20" fill="#176046" font-weight="700">RESULTED</text>
+  <text x="290" y="430" font-family="Arial" font-size="20" fill="#4a626d">Result: fl/+ (Cre Panel)</text>
+
+  <rect x="752" y="164" width="760" height="328" rx="14" fill="#f7fcf9" stroke="#d0e4da"/>
+  <text x="778" y="204" font-family="Arial" font-size="24" font-weight="700" fill="#2a4e59">Genotyping Order (Sample)</text>
+  <text x="778" y="244" font-family="Arial" font-size="20" fill="#4a626d">OrderRef: GENO-20260305-7fa2b1</text>
+  <text x="778" y="274" font-family="Arial" font-size="20" fill="#4a626d">Provider: Transnetyx | Status: submitted</text>
+  <rect x="778" y="304" width="694" height="148" rx="10" fill="#fff" stroke="#d7e8df"/>
+  <text x="804" y="338" font-family="Arial" font-size="19" fill="#2f4f5a" font-weight="700">Item</text>
+  <text x="930" y="338" font-family="Arial" font-size="19" fill="#2f4f5a" font-weight="700">SampleCode</text>
+  <text x="1130" y="338" font-family="Arial" font-size="19" fill="#2f4f5a" font-weight="700">Animal</text>
+  <text x="1288" y="338" font-family="Arial" font-size="19" fill="#2f4f5a" font-weight="700">Result</text>
+  <text x="804" y="378" font-family="Arial" font-size="19" fill="#3f5d68">1</text>
+  <text x="930" y="378" font-family="Arial" font-size="19" fill="#3f5d68">SMP-001</text>
+  <text x="1130" y="378" font-family="Arial" font-size="19" fill="#3f5d68">PAIR-SIRE-001</text>
+  <text x="1288" y="378" font-family="Arial" font-size="19" fill="#1d5f46">fl/+</text>
+  <text x="804" y="418" font-family="Arial" font-size="19" fill="#3f5d68">2</text>
+  <text x="930" y="418" font-family="Arial" font-size="19" fill="#3f5d68">SMP-002</text>
+  <text x="1130" y="418" font-family="Arial" font-size="19" fill="#3f5d68">PAIR-DAM-001</text>
+  <text x="1288" y="418" font-family="Arial" font-size="19" fill="#1d5f46">+/+</text>
+
+  <rect x="88" y="518" width="1424" height="340" rx="14" fill="#fff" stroke="#d0e4da"/>
+  <text x="114" y="558" font-family="Arial" font-size="24" font-weight="700" fill="#2a4e59">Callback Ingestion Result (Sample)</text>
+  <text x="114" y="602" font-family="Arial" font-size="22" fill="#3f5d68">Provider callback authenticated via <tspan font-weight="700">X-Provider-Token</tspan>.</text>
+  <text x="114" y="638" font-family="Arial" font-size="22" fill="#3f5d68">2 animals updated and genotype history appended.</text>
+  <rect x="114" y="668" width="280" height="54" rx="10" fill="#dff1e8"/>
+  <text x="140" y="704" font-family="Arial" font-size="24" font-weight="700" fill="#155f45">updatedAnimals: 2</text>
+  <rect x="420" y="668" width="220" height="54" rx="10" fill="#d8e8ff"/>
+  <text x="460" y="704" font-family="Arial" font-size="24" font-weight="700" fill="#2a5eae">status: received</text>
+
+  <text x="88" y="928" font-family="Arial" font-size="20" fill="#415c68">Sample-data screenshot: chain-of-custody and provider callback result flow.</text>
+</svg>

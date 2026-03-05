@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 960">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e9f5ef"/>
+      <stop offset="100%" stop-color="#dcebe4"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="960" fill="url(#bg)"/>
+  <rect x="52" y="52" width="1496" height="856" rx="20" fill="#fff" stroke="#c7ddd3"/>
+  <rect x="52" y="52" width="1496" height="84" rx="20" fill="#0f7a58"/>
+  <text x="96" y="104" font-family="Arial" font-size="36" font-weight="700" fill="#fff">Recommendation Lifecycle</text>
+
+  <rect x="92" y="164" width="1420" height="106" rx="12" fill="#eef7f3" stroke="#cfe2d8"/>
+  <text x="120" y="206" font-family="Arial" font-size="24" font-weight="700" fill="#2a4e59">Generated Recommendations (Sample)</text>
+  <text x="120" y="240" font-family="Arial" font-size="20" fill="#45606b">Open: 14  |  Accepted: 9  |  Adjusted: 3  |  Ignored: 2  |  Completed: 7</text>
+
+  <rect x="92" y="292" width="1420" height="170" rx="12" fill="#fff8ef" stroke="#ecd8ba"/>
+  <text x="120" y="332" font-family="Arial" font-size="24" font-weight="700" fill="#2a4e59">Rec #381 - consolidate_cage</text>
+  <text x="120" y="366" font-family="Arial" font-size="20" fill="#45606b">Cage F1-L03-C0112 has low density (1 animal) and compatible strain/genotype group nearby.</text>
+  <text x="120" y="398" font-family="Arial" font-size="20" fill="#45606b">Suggested target: F1-L03-C0120 | Estimated cage reduction: 1</text>
+  <rect x="120" y="418" width="160" height="36" rx="18" fill="#dff1e8"/><text x="158" y="442" font-family="Arial" font-size="18" fill="#146047" font-weight="700">ACCEPT</text>
+  <rect x="292" y="418" width="170" height="36" rx="18" fill="#fff0d9"/><text x="334" y="442" font-family="Arial" font-size="18" fill="#8a5b1d" font-weight="700">ADJUST</text>
+  <rect x="474" y="418" width="164" height="36" rx="18" fill="#f9d8d3"/><text x="522" y="442" font-family="Arial" font-size="18" fill="#8b2f24" font-weight="700">IGNORE</text>
+  <rect x="650" y="418" width="194" height="36" rx="18" fill="#dce8ff"/><text x="694" y="442" font-family="Arial" font-size="18" fill="#2c5ea8" font-weight="700">COMPLETE</text>
+
+  <rect x="92" y="486" width="710" height="370" rx="12" fill="#f7fcf9" stroke="#d0e4da"/>
+  <text x="118" y="526" font-family="Arial" font-size="24" font-weight="700" fill="#2a4e59">Decision Outcome Trend (Sample)</text>
+  <rect x="152" y="786" width="72" height="58" fill="#18a172"/>
+  <rect x="272" y="732" width="72" height="112" fill="#18a172"/>
+  <rect x="392" y="764" width="72" height="80" fill="#eb9c44"/>
+  <rect x="512" y="804" width="72" height="40" fill="#ca513d"/>
+  <rect x="632" y="704" width="72" height="140" fill="#4c8ff7"/>
+  <text x="146" y="870" font-family="Arial" font-size="18" fill="#48606b">Mon</text>
+  <text x="266" y="870" font-family="Arial" font-size="18" fill="#48606b">Tue</text>
+  <text x="386" y="870" font-family="Arial" font-size="18" fill="#48606b">Wed</text>
+  <text x="506" y="870" font-family="Arial" font-size="18" fill="#48606b">Thu</text>
+  <text x="626" y="870" font-family="Arial" font-size="18" fill="#48606b">Fri</text>
+
+  <rect x="826" y="486" width="686" height="370" rx="12" fill="#f7fcf9" stroke="#d0e4da"/>
+  <text x="852" y="526" font-family="Arial" font-size="24" font-weight="700" fill="#2a4e59">Action Notes (Sample)</text>
+  <text x="852" y="568" font-family="Arial" font-size="20" fill="#45606b">Adjusted: "Delay consolidation until post-wean on 2026-03-28"</text>
+  <text x="852" y="602" font-family="Arial" font-size="20" fill="#45606b">Accepted by: Admin User at 2026-03-05 14:09</text>
+  <text x="852" y="636" font-family="Arial" font-size="20" fill="#45606b">Expected outcome: reduce 12 cages this month.</text>
+
+  <text x="88" y="928" font-family="Arial" font-size="20" fill="#415c68">Sample-data screenshot: decisionable recommendations with measurable outcomes.</text>
+</svg>

@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-03-05T20:17:31.657659+00:00",
+  "generatedAt": "2026-03-05T21:50:40.945967+00:00",
   "summary": {
-    "passed": 31,
+    "passed": 34,
     "failed": 0,
     "skipped": 5,
     "score": 100.0
@@ -93,6 +93,12 @@
     },
     {
       "category": "button",
+      "item": "#loadPedigreeBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
       "item": "#refreshCages",
       "status": "pass",
       "detail": "clickable via direct or form submit listener"
@@ -160,6 +166,18 @@
     {
       "category": "button",
       "item": "#loadAlertsBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "#loadAlertFeedBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "#dispatchAlertsBtn",
       "status": "pass",
       "detail": "clickable via direct or form submit listener"
     },

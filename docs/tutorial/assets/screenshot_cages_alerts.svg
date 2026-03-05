@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 960">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e9f5ef"/>
+      <stop offset="100%" stop-color="#dcebe4"/>
+    </linearGradient>
+    <linearGradient id="head" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#0f7a58"/>
+      <stop offset="100%" stop-color="#16966d"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="960" fill="url(#bg)"/>
+  <rect x="52" y="52" width="1496" height="856" rx="20" fill="#fff" stroke="#c7ddd3"/>
+  <rect x="52" y="52" width="1496" height="84" rx="20" fill="url(#head)"/>
+  <text x="96" y="104" font-family="Arial" font-size="36" font-weight="700" fill="#fff">Cage Management - Alert Visualization</text>
+  <rect x="90" y="160" width="1420" height="64" rx="12" fill="#fff3f1" stroke="#e9b7ae"/>
+  <text x="116" y="201" font-family="Arial" font-size="24" fill="#8c3b30">Active alerts: 36 (high 9, medium 18). Highlighted cages require immediate review.</text>
+
+  <rect x="90" y="246" width="1420" height="50" rx="10" fill="#eef6f2" stroke="#cfe2d8"/>
+  <text x="110" y="278" font-family="Arial" font-size="20" font-weight="700" fill="#2a4b56">ID</text>
+  <text x="180" y="278" font-family="Arial" font-size="20" font-weight="700" fill="#2a4b56">Cage</text>
+  <text x="320" y="278" font-family="Arial" font-size="20" font-weight="700" fill="#2a4b56">Alert</text>
+  <text x="510" y="278" font-family="Arial" font-size="20" font-weight="700" fill="#2a4b56">Status</text>
+  <text x="730" y="278" font-family="Arial" font-size="20" font-weight="700" fill="#2a4b56">M/F</text>
+  <text x="860" y="278" font-family="Arial" font-size="20" font-weight="700" fill="#2a4b56">Room/Rack</text>
+
+  <rect x="90" y="304" width="1420" height="66" rx="10" fill="#fdeceb" stroke="#ebbab3"/>
+  <text x="110" y="345" font-family="Arial" font-size="22" fill="#324f5a">181</text>
+  <text x="180" y="345" font-family="Arial" font-size="22" fill="#324f5a">F1-L03-C0112</text>
+  <rect x="322" y="318" width="130" height="38" rx="18" fill="#f8c9c2"/>
+  <text x="356" y="344" font-family="Arial" font-size="20" font-weight="700" fill="#8b2f24">HIGH 3</text>
+  <text x="510" y="345" font-family="Arial" font-size="22" fill="#324f5a">Breeding</text>
+  <text x="730" y="345" font-family="Arial" font-size="22" fill="#324f5a">1 / 0</text>
+  <text x="860" y="345" font-family="Arial" font-size="22" fill="#324f5a">F1-Room-02 / R02-08</text>
+
+  <rect x="90" y="378" width="1420" height="66" rx="10" fill="#fff6e8" stroke="#ecd7b5"/>
+  <text x="110" y="419" font-family="Arial" font-size="22" fill="#324f5a">264</text>
+  <text x="180" y="419" font-family="Arial" font-size="22" fill="#324f5a">F1-L03-C0244</text>
+  <rect x="322" y="392" width="152" height="38" rx="18" fill="#f8dfbb"/>
+  <text x="352" y="418" font-family="Arial" font-size="20" font-weight="700" fill="#8a5718">MEDIUM 2</text>
+  <text x="510" y="419" font-family="Arial" font-size="22" fill="#324f5a">Timed Mating</text>
+  <text x="730" y="419" font-family="Arial" font-size="22" fill="#324f5a">0 / 2</text>
+  <text x="860" y="419" font-family="Arial" font-size="22" fill="#324f5a">F1-Room-03 / R03-02</text>
+
+  <rect x="90" y="452" width="1420" height="66" rx="10" fill="#eff8f3" stroke="#d2e6dc"/>
+  <text x="110" y="493" font-family="Arial" font-size="22" fill="#324f5a">309</text>
+  <text x="180" y="493" font-family="Arial" font-size="22" fill="#324f5a">F1-L03-C0298</text>
+  <rect x="322" y="466" width="116" height="38" rx="18" fill="#d8efe3"/>
+  <text x="352" y="492" font-family="Arial" font-size="20" font-weight="700" fill="#145c43">LOW 1</text>
+  <text x="510" y="493" font-family="Arial" font-size="22" fill="#324f5a">Holding</text>
+  <text x="730" y="493" font-family="Arial" font-size="22" fill="#324f5a">2 / 2</text>
+  <text x="860" y="493" font-family="Arial" font-size="22" fill="#324f5a">F1-Room-03 / R03-09</text>
+
+  <rect x="90" y="554" width="690" height="320" rx="16" fill="#f7fcf9" stroke="#d3e6dd"/>
+  <text x="116" y="594" font-family="Arial" font-size="24" font-weight="700" fill="#2b4d58">Room Density (Sample)</text>
+  <rect x="132" y="808" width="64" height="32" fill="#20a476"/>
+  <rect x="228" y="752" width="64" height="88" fill="#20a476"/>
+  <rect x="324" y="692" width="64" height="148" fill="#20a476"/>
+  <rect x="420" y="734" width="64" height="106" fill="#20a476"/>
+  <rect x="516" y="662" width="64" height="178" fill="#20a476"/>
+  <text x="132" y="860" font-family="Arial" font-size="18" fill="#49616b">R1</text>
+  <text x="228" y="860" font-family="Arial" font-size="18" fill="#49616b">R2</text>
+  <text x="324" y="860" font-family="Arial" font-size="18" fill="#49616b">R3</text>
+  <text x="420" y="860" font-family="Arial" font-size="18" fill="#49616b">R4</text>
+  <text x="516" y="860" font-family="Arial" font-size="18" fill="#49616b">R5</text>
+
+  <rect x="820" y="554" width="690" height="320" rx="16" fill="#f7fcf9" stroke="#d3e6dd"/>
+  <text x="846" y="594" font-family="Arial" font-size="24" font-weight="700" fill="#2b4d58">Status Mix (Sample)</text>
+  <circle cx="1050" cy="730" r="110" fill="none" stroke="#16966d" stroke-width="42" stroke-dasharray="360 320" transform="rotate(-80 1050 730)"/>
+  <circle cx="1050" cy="730" r="110" fill="none" stroke="#4c8ff7" stroke-width="42" stroke-dasharray="240 440" transform="rotate(40 1050 730)"/>
+  <circle cx="1050" cy="730" r="110" fill="none" stroke="#eb9c44" stroke-width="42" stroke-dasharray="140 540" transform="rotate(140 1050 730)"/>
+  <circle cx="1050" cy="730" r="72" fill="#fff"/>
+  <text x="1012" y="738" font-family="Arial" font-size="32" font-weight="700" fill="#2f4f5a">612</text>
+  <text x="1178" y="684" font-family="Arial" font-size="20" fill="#1f5b47">Breeding 312</text>
+  <text x="1178" y="714" font-family="Arial" font-size="20" fill="#2e5ca8">Holding 198</text>
+  <text x="1178" y="744" font-family="Arial" font-size="20" fill="#8a5f21">Timed Mating 102</text>
+
+  <text x="88" y="930" font-family="Arial" font-size="20" fill="#415c68">Sample-data screenshot: alert-highlighted cages and at-a-glance room/status visuals.</text>
+</svg>

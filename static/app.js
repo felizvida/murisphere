@@ -3,10 +3,13 @@ const state = {
   user: null,
   cages: [],
   cards: [],
+  alerts: [],
+  alertsByCage: {},
 };
 const PENDING_SCAN_KEY = "murisphere_pending_scan";
 const SCAN_BASE_KEY = "murisphere_scan_base_url";
 const MUTATION_QUEUE_KEY = "murisphere_mutation_queue";
+const SEVERITY_RANK = { high: 3, medium: 2, low: 1 };
 
 const el = (id) => document.getElementById(id);
 
@@ -22,7 +25,7 @@ function headers(isJson = true) {
 function setAuth(token, user) {
   state.token = token;
   state.user = user;
-  if (token) {
+  if (user) {
     el("sessionChip").classList.remove("hidden");
     el("sessionChip").textContent = `${user.fullName} (${user.role})`;
     el("loginPanel").classList.add("hidden");
@@ -99,18 +102,33 @@ async function flushMutationQueue() {
   return sent;
 }
 
-function tableFromCages(rows) {
+function severityClass(level) {
+  if (level === "high" || level === "medium" || level === "low") return level;
+  return "low";
+}
+
+function alertBadge(alerts) {
+  if (!alerts || !alerts.length) return "";
+  const top = alerts[0];
+  return `<span class="alert-pill ${esc(severityClass(top.severity))}">${esc(top.severity.toUpperCase())} ${esc(alerts.length)} alert${alerts.length > 1 ? "s" : ""}</span>`;
+}
+
+function tableFromCages(rows, alertsByCage = {}) {
   return `
     <table class="table">
-      <thead><tr><th>ID</th><th>Cage</th><th>Strain</th><th>Genotype</th><th>Status</th><th>M/F</th><th>Location</th></tr></thead>
+      <thead><tr><th>ID</th><th>Cage</th><th>Alert</th><th>Strain</th><th>Genotype</th><th>Status</th><th>M/F</th><th>Location</th></tr></thead>
       <tbody>
         ${rows
           .map(
-            (c) => `
-          <tr>
-            <td>${esc(c.id)}</td><td>${esc(c.cageCode)}</td><td>${esc(c.strain)}</td><td>${esc(c.genotypeSummary)}</td><td>${esc(c.breedingStatus)}</td>
+            (c) => {
+              const alerts = alertsByCage[c.id] || [];
+              const rowClass = alerts.length ? `alert-${severityClass(alerts[0].severity)}` : "";
+              return `
+          <tr class="${rowClass}">
+            <td>${esc(c.id)}</td><td>${esc(c.cageCode)}</td><td>${alertBadge(alerts)}</td><td>${esc(c.strain)}</td><td>${esc(c.genotypeSummary)}</td><td>${esc(c.breedingStatus)}</td>
             <td>${esc(c.maleCount)}/${esc(c.femaleCount)}</td><td>${esc(c.room)} / ${esc(c.rack)}</td>
-          </tr>`
+          </tr>`;
+            }
           )
           .join("")}
       </tbody>
@@ -163,6 +181,309 @@ function esc(text) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
+}
+
+function toNum(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function chartCard(title, subtitle, inner, legend = "") {
+  return `
+    <article class="viz-card">
+      <h4>${esc(title)}</h4>
+      <div class="viz-sub">${esc(subtitle || "")}</div>
+      ${inner}
+      ${legend ? `<div class="viz-legend">${legend}</div>` : ""}
+    </article>
+  `;
+}
+
+function drawBars(rows, opts = {}) {
+  const width = opts.width || 340;
+  const height = opts.height || 170;
+  const pad = 28;
+  if (!rows.length) return `<svg class="viz-svg" viewBox="0 0 ${width} ${height}" aria-label="empty"></svg>`;
+  const maxVal = Math.max(...rows.map((r) => toNum(r.value)), 1);
+  const barW = Math.max(14, (width - pad * 2) / rows.length - 8);
+  const step = (width - pad * 2) / rows.length;
+  const bars = rows
+    .map((r, i) => {
+      const val = toNum(r.value);
+      const h = Math.max(2, ((height - pad * 2) * val) / maxVal);
+      const x = pad + i * step + (step - barW) / 2;
+      const y = height - pad - h;
+      const label = String(r.label || "").slice(0, 6);
+      const color = r.color || "#18a172";
+      return `<g>
+        <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" rx="6" fill="${color}">
+          <title>${esc(r.label)}: ${val}</title>
+        </rect>
+        <text x="${(x + barW / 2).toFixed(1)}" y="${height - 10}" text-anchor="middle" font-size="9" fill="#3f5963">${esc(label)}</text>
+      </g>`;
+    })
+    .join("");
+  return `<svg class="viz-svg" viewBox="0 0 ${width} ${height}" role="img">${bars}</svg>`;
+}
+
+function drawDonut(parts, opts = {}) {
+  const size = opts.size || 160;
+  const stroke = opts.stroke || 18;
+  const r = (size - stroke) / 2;
+  const c = size / 2;
+  const total = Math.max(1, parts.reduce((acc, p) => acc + toNum(p.value), 0));
+  let start = -Math.PI / 2;
+  const segs = parts
+    .map((p) => {
+      const frac = toNum(p.value) / total;
+      const end = start + frac * Math.PI * 2;
+      const x1 = c + r * Math.cos(start);
+      const y1 = c + r * Math.sin(start);
+      const x2 = c + r * Math.cos(end);
+      const y2 = c + r * Math.sin(end);
+      const large = end - start > Math.PI ? 1 : 0;
+      const d = `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
+      start = end;
+      return `<path d="${d}" stroke="${p.color}" stroke-width="${stroke}" fill="none" stroke-linecap="round"><title>${esc(
+        p.label
+      )}: ${toNum(p.value)}</title></path>`;
+    })
+    .join("");
+  return `<svg class="viz-svg" viewBox="0 0 ${size} ${size}">
+    ${segs}
+    <circle cx="${c}" cy="${c}" r="${r - stroke * 0.8}" fill="#fff"></circle>
+    <text x="${c}" y="${c - 3}" text-anchor="middle" font-size="13" font-weight="700" fill="#1c3a42">${total}</text>
+    <text x="${c}" y="${c + 13}" text-anchor="middle" font-size="9" fill="#5a6b73">total</text>
+  </svg>`;
+}
+
+function drawSparkline(values, color = "#18a172") {
+  const v = values.map(toNum);
+  const width = 320;
+  const height = 48;
+  if (!v.length) return `<svg class="sparkline" viewBox="0 0 ${width} ${height}"></svg>`;
+  const min = Math.min(...v);
+  const max = Math.max(...v);
+  const span = Math.max(1, max - min);
+  const pts = v
+    .map((n, i) => {
+      const x = (i / Math.max(1, v.length - 1)) * (width - 8) + 4;
+      const y = height - 4 - ((n - min) / span) * (height - 12);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  return `<svg class="sparkline" viewBox="0 0 ${width} ${height}">
+    <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"></polyline>
+  </svg>`;
+}
+
+function renderCageVisuals() {
+  const cages = state.cages || [];
+  if (!cages.length) {
+    el("cageVisuals").innerHTML = chartCard("Cage Visuals", "No data", `<p class="hint">Load cages to render visualizations.</p>`);
+    return;
+  }
+  const byRoom = {};
+  const byStatus = {};
+  const topAlerts = [];
+  for (const c of cages) {
+    byRoom[c.room] = (byRoom[c.room] || 0) + 1;
+    byStatus[c.breedingStatus] = (byStatus[c.breedingStatus] || 0) + 1;
+    const alerts = state.alertsByCage[c.id] || [];
+    if (alerts.length) topAlerts.push({ label: c.cageCode, value: alerts.length, color: alerts[0].severity === "high" ? "#ca513d" : "#eb9c44" });
+  }
+  const roomRows = Object.entries(byRoom)
+    .map(([label, value]) => ({ label, value, color: "#2f9f78" }))
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 12);
+  const statusParts = Object.entries(byStatus).map(([label, value], i) => ({
+    label,
+    value,
+    color: ["#18a172", "#3ba0d8", "#eb9c44", "#ca513d", "#64748b"][i % 5],
+  }));
+  const alertRows = topAlerts.sort((a, b) => b.value - a.value).slice(0, 10);
+
+  const roomLegend = roomRows.map((r) => `<span class="legend-item">${esc(r.label)} ${esc(r.value)}</span>`).join("");
+  const statusLegend = statusParts.map((r) => `<span class="legend-item">${esc(r.label)} ${esc(r.value)}</span>`).join("");
+  const alertLegend = alertRows.length
+    ? alertRows.map((r) => `<span class="legend-item">${esc(r.label)} ${esc(r.value)}</span>`).join("")
+    : `<span class="legend-item">No alerted cages</span>`;
+
+  el("cageVisuals").innerHTML = [
+    chartCard("Room Density", "Cages per room", drawBars(roomRows), roomLegend),
+    chartCard("Breeding Status Mix", "Distribution of cage statuses", drawDonut(statusParts), statusLegend),
+    chartCard("Alerted Cages", "Cages requiring attention", drawBars(alertRows, { height: 150 }), alertLegend),
+  ].join("");
+}
+
+function renderAnalyticsVisuals(summary, nonProd, reminders, space, consolidation) {
+  const roomRows = (space.rooms || []).map((r) => ({
+    label: r.roomName || `Room ${r.roomId}`,
+    value: toNum(r.projectedUtilizationPct || 0),
+    color: toNum(r.projectedUtilizationPct || 0) > 100 ? "#ca513d" : "#18a172",
+  }));
+  const reminderSeries = reminders
+    .slice(0, 21)
+    .map((r) => new Date(r.event_date || r.due_on || Date.now()).getTime())
+    .sort((a, b) => a - b);
+  const bins = {};
+  for (const ts of reminderSeries) {
+    const k = new Date(ts).toISOString().slice(0, 10);
+    bins[k] = (bins[k] || 0) + 1;
+  }
+  const reminderBars = Object.entries(bins).slice(0, 10).map(([label, value]) => ({ label: label.slice(5), value, color: "#3b82f6" }));
+  const nonProdBars = nonProd.slice(0, 10).map((x) => ({ label: x.cage_code, value: 1, color: "#eb9c44" }));
+  const sexParts = [
+    { label: "Male", value: toNum(summary.sexRatio?.M || 0), color: "#3ba0d8" },
+    { label: "Female", value: toNum(summary.sexRatio?.F || 0), color: "#e6739f" },
+  ];
+  const overCap = roomRows.filter((r) => r.value > 100).length;
+  const utilLegend = roomRows.slice(0, 10).map((r) => `<span class="legend-item">${esc(r.label)} ${toNum(r.value).toFixed(0)}%</span>`).join("");
+  const reminderLegend = reminderBars.map((r) => `<span class="legend-item">${esc(r.label)} ${esc(r.value)}</span>`).join("");
+  const npLegend = `<span class="legend-item">${nonProd.length} non-productive cages</span><span class="legend-item">${consolidation.length} consolidation opportunities</span><span class="legend-item">${overCap} projected over-cap rooms</span>`;
+  const sexLegend = sexParts.map((p) => `<span class="legend-item">${esc(p.label)} ${esc(p.value)}</span>`).join("");
+
+  el("analyticsVisuals").innerHTML = [
+    chartCard("Projected Capacity", "30-day room utilization", drawBars(roomRows.slice(0, 12)), utilLegend),
+    chartCard("Task Pressure Curve", "Upcoming reminders by day", `${drawBars(reminderBars, { height: 130 })}${drawSparkline(reminderBars.map((r) => r.value), "#3b82f6")}`, reminderLegend),
+    chartCard("Breeding Throughput Risk", "Non-productive and consolidation pressure", drawBars(nonProdBars, { height: 120 }), npLegend),
+    chartCard("Population Sex Balance", "Current sex ratio snapshot", drawDonut(sexParts), sexLegend),
+  ].join("");
+}
+
+function renderBreedingVisuals(events, productivity = []) {
+  const eventMap = {};
+  for (const e of events.slice(0, 40)) {
+    const d = (e.event_date || "").slice(5);
+    eventMap[d] = (eventMap[d] || 0) + 1;
+  }
+  const eventBars = Object.entries(eventMap).map(([label, value]) => ({ label, value, color: "#18a172" }));
+  const prodBars = productivity.slice(0, 12).map((p) => ({ label: p.cage_code, value: toNum(p.litter_count), color: "#6c8cf4" }));
+  const survSeries = productivity.slice(0, 20).map((p) => toNum(p.avg_survived));
+  const legendA = eventBars.map((e) => `<span class="legend-item">${esc(e.label)} ${esc(e.value)}</span>`).join("");
+  const legendB = `<span class="legend-item">Top cages by litter count</span><span class="legend-item">avg survived trend</span>`;
+  el("breedingVisuals").innerHTML = [
+    chartCard("Event Timeline Density", "Upcoming breeding events", drawBars(eventBars.slice(0, 12), { height: 130 }), legendA),
+    chartCard("Breeder Productivity", "Litter count and survivor trend", `${drawBars(prodBars, { height: 130 })}${drawSparkline(survSeries, "#6c8cf4")}`, legendB),
+  ].join("");
+}
+
+function renderComplianceVisuals(alerts, protocolAlerts = []) {
+  const bySeverity = { high: 0, medium: 0, low: 0 };
+  const byCategory = {};
+  for (const a of alerts) {
+    bySeverity[a.severity] = (bySeverity[a.severity] || 0) + 1;
+    byCategory[a.category] = (byCategory[a.category] || 0) + 1;
+  }
+  const sevBars = Object.entries(bySeverity).map(([label, value]) => ({
+    label,
+    value,
+    color: label === "high" ? "#ca513d" : label === "medium" ? "#eb9c44" : "#18a172",
+  }));
+  const catParts = Object.entries(byCategory).map(([label, value], i) => ({
+    label,
+    value,
+    color: ["#4f8ef7", "#18a172", "#eb9c44", "#ca513d", "#7c6cf2"][i % 5],
+  }));
+  const protocolBars = protocolAlerts.slice(0, 10).map((p) => ({
+    label: p.protocol_number,
+    value: Math.max(1, Math.round(toNum((new Date(p.expires_on).getTime() - Date.now()) / 86400000))),
+    color: "#ca513d",
+  }));
+  const legendS = sevBars.map((s) => `<span class="legend-item">${esc(s.label)} ${esc(s.value)}</span>`).join("");
+  const legendC = catParts.length
+    ? catParts.map((c) => `<span class="legend-item">${esc(c.label)} ${esc(c.value)}</span>`).join("")
+    : `<span class="legend-item">No active categories</span>`;
+  const legendP = protocolAlerts.length
+    ? `<span class="legend-item">${protocolAlerts.length} protocols near expiration</span>`
+    : `<span class="legend-item">No protocol expiry alerts</span>`;
+  el("complianceVisuals").innerHTML = [
+    chartCard("Alert Severity Stack", "Current active alert pressure", drawBars(sevBars, { height: 120 }), legendS),
+    chartCard("Alert Category Mix", "Where irregularities concentrate", drawDonut(catParts.length ? catParts : [{ label: "none", value: 1, color: "#d0dde0" }]), legendC),
+    chartCard("Protocol Expiration Watch", "Protocol urgency by days remaining", drawBars(protocolBars, { height: 120 }), legendP),
+  ].join("");
+}
+
+function renderPedigreeGraph(data) {
+  const host = el("pedigreeViz");
+  if (!data || !data.nodes?.length) {
+    host.innerHTML = `<p class="hint">No pedigree data for selected animal.</p>`;
+    return;
+  }
+  const nodesById = {};
+  for (const n of data.nodes) nodesById[n.id] = n;
+  const depth = { [data.rootId]: 0 };
+  const queue = [data.rootId];
+  while (queue.length) {
+    const id = queue.shift();
+    const node = nodesById[id];
+    if (!node) continue;
+    const d = depth[id] || 0;
+    for (const pid of [node.sire_id, node.dam_id]) {
+      if (!pid || !(pid in nodesById)) continue;
+      if (!(pid in depth) || depth[pid] > d + 1) {
+        depth[pid] = d + 1;
+        queue.push(pid);
+      }
+    }
+  }
+  const columns = {};
+  for (const n of data.nodes) {
+    const d = depth[n.id] ?? data.generations;
+    if (!columns[d]) columns[d] = [];
+    columns[d].push(n);
+  }
+  const depthKeys = Object.keys(columns)
+    .map(Number)
+    .sort((a, b) => a - b);
+  const colWidth = 170;
+  const rowHeight = 70;
+  const width = Math.max(520, (Math.max(...depthKeys, 0) + 1) * colWidth + 40);
+  const maxRows = Math.max(...depthKeys.map((k) => columns[k].length), 1);
+  const height = Math.max(320, maxRows * rowHeight + 50);
+  const pos = {};
+  for (const d of depthKeys) {
+    columns[d].forEach((n, i) => {
+      pos[n.id] = { x: 20 + d * colWidth, y: 20 + i * rowHeight };
+    });
+  }
+  const edges = data.edges
+    .map((e) => {
+      const a = pos[e.from];
+      const b = pos[e.to];
+      if (!a || !b) return "";
+      const sx = a.x + 130;
+      const sy = a.y + 20;
+      const tx = b.x;
+      const ty = b.y + 20;
+      const mx = (sx + tx) / 2;
+      return `<path class="pedigree-edge" d="M ${sx} ${sy} C ${mx} ${sy}, ${mx} ${ty}, ${tx} ${ty}"></path>`;
+    })
+    .join("");
+  const nodes = data.nodes
+    .map((n) => {
+      const p = pos[n.id];
+      if (!p) return "";
+      const sex = (n.sex || "U").toLowerCase() === "m" ? "male" : (n.sex || "U").toLowerCase() === "f" ? "female" : "unknown";
+      return `<g class="pedigree-node ${sex}" transform="translate(${p.x},${p.y})">
+        <rect width="130" height="42"></rect>
+        <text x="8" y="16">${esc(n.animal_code || `ID-${n.id}`)}</text>
+        <text x="8" y="31" fill="#50626b">${esc((n.genotype || "N/A").slice(0, 18))}</text>
+        <title>ID ${n.id} | ${n.sex || "U"} | ${n.strain || ""}</title>
+      </g>`;
+    })
+    .join("");
+  host.innerHTML = `
+    <div class="viz-sub">Pinch/scroll to zoom. Drag to pan.</div>
+    <div class="pedigree-stage" id="pedigreeStage">
+      <svg class="viz-svg" viewBox="0 0 ${width} ${height}">
+        <g id="pedigreeLayer">${edges}${nodes}</g>
+      </svg>
+    </div>
+  `;
+  const stage = el("pedigreeStage");
+  stage.scrollLeft = Math.max(0, width / 2 - stage.clientWidth / 2);
+  stage.scrollTop = Math.max(0, height / 2 - stage.clientHeight / 2);
 }
 
 function normalizedScanBase() {
@@ -298,7 +619,52 @@ async function printCardsDirect() {
 async function loadCages(q = "") {
   const list = await api(`/api/cages?q=${encodeURIComponent(q)}`, { headers: headers(false) });
   state.cages = list;
-  el("cageTable").innerHTML = tableFromCages(list);
+  el("cageTable").innerHTML = tableFromCages(list, state.alertsByCage);
+  renderCageVisuals();
+}
+
+function rebuildAlertsByCage(alerts) {
+  const byCage = {};
+  for (const a of alerts) {
+    if (!a.cage_id) continue;
+    if (!byCage[a.cage_id]) byCage[a.cage_id] = [];
+    byCage[a.cage_id].push(a);
+  }
+  for (const cageId of Object.keys(byCage)) {
+    byCage[cageId].sort((x, y) => (SEVERITY_RANK[y.severity] || 0) - (SEVERITY_RANK[x.severity] || 0));
+  }
+  state.alertsByCage = byCage;
+}
+
+async function loadActiveAlertFeed() {
+  if (!state.token) return;
+  const alerts = await api("/api/alerts/feed?status=active", { headers: headers(false) });
+  state.alerts = alerts;
+  rebuildAlertsByCage(alerts);
+  const high = alerts.filter((a) => a.severity === "high").length;
+  const medium = alerts.filter((a) => a.severity === "medium").length;
+  const banner = el("alertBanner");
+  if (alerts.length) {
+    banner.classList.remove("hidden");
+    banner.textContent = `Active alerts: ${alerts.length} (high ${high}, medium ${medium}). Cages are highlighted below.`;
+  } else {
+    banner.classList.add("hidden");
+    banner.textContent = "";
+  }
+  if (state.cages.length) {
+    el("cageTable").innerHTML = tableFromCages(state.cages, state.alertsByCage);
+  }
+  renderCageVisuals();
+  renderComplianceVisuals(state.alerts, []);
+}
+
+function alertCardMarkup(alert) {
+  return `<div class="cage-card">
+    <strong>${esc(alert.title)}</strong> <span class="alert-pill ${esc(severityClass(alert.severity))}">${esc(alert.severity.toUpperCase())}</span><br/>
+    Cage: ${esc(alert.cage_code || "N/A")} | ${esc(alert.category)}<br/>
+    ${esc(alert.message)}<br/>
+    <button data-ack-alert="${esc(alert.id)}">Acknowledge</button>
+  </div>`;
 }
 
 async function runScan() {
@@ -312,7 +678,8 @@ async function runScan() {
         <strong>${esc(c.cageCode)}</strong> (${esc(data.lookupMs)}ms)<br/>
         ${esc(c.strain)} | ${esc(c.genotypeSummary)} | ${esc(c.breedingStatus)}<br/>
         Counts: M ${esc(c.maleCount)} / F ${esc(c.femaleCount)}<br/>
-        ${esc(c.room)} / ${esc(c.rack)}
+        ${esc(c.room)} / ${esc(c.rack)}<br/>
+        ${(state.alertsByCage[c.id] || []).map((a) => `<span class="alert-pill ${esc(severityClass(a.severity))}">${esc(a.title)}</span>`).join(" ")}
       </div>
       <form id="quickUpdate" class="grid-form">
         <label>Male Count<input id="uMale" type="number" value="${esc(c.maleCount)}" /></label>
@@ -387,13 +754,18 @@ async function loadAnalytics() {
     <div class="kpi"><div>Projected Over-Cap Rooms (30d)</div><div class="value">${projectedOverCap}</div></div>
     <div class="kpi"><div>Consolidation Opportunities</div><div class="value">${consolidation.length}</div></div>
   `;
+  renderAnalyticsVisuals(a, nonProd, reminders, space, consolidation);
 }
 
 async function loadCalendar() {
-  const events = await api("/api/calendar", { headers: headers(false) });
+  const [events, productivity] = await Promise.all([
+    api("/api/calendar", { headers: headers(false) }),
+    api("/api/breeding/productivity?minLitters=0", { headers: headers(false) }),
+  ]);
   el("calendarList").innerHTML = events
     .map((e) => `<div class="cage-card">${esc(e.event_date)} | Cage ${esc(e.cage_code)} | ${esc(e.event_type)}</div>`)
     .join("");
+  renderBreedingVisuals(events, productivity);
 }
 
 async function loadProjects() {
@@ -406,12 +778,31 @@ async function loadQuotas() {
   el("quotaList").innerHTML = rows.length ? tableFromQuotas(rows) : `<p class="hint">No quota data.</p>`;
 }
 
+async function loadPedigreeViz() {
+  const animalId = Number(el("pedigreeAnimalId").value || 0);
+  const generations = Number(el("pedigreeGenerations").value || 3);
+  if (!animalId) {
+    el("pedigreeViz").innerHTML = `<p class="hint">Enter an animal ID to visualize pedigree.</p>`;
+    return;
+  }
+  try {
+    const data = await api(`/api/animals/${animalId}/pedigree?generations=${generations}`, { headers: headers(false) });
+    renderPedigreeGraph(data);
+  } catch (err) {
+    el("pedigreeViz").innerHTML = `<p class="hint">${esc(err.message)}</p>`;
+  }
+}
+
 async function init() {
   document.querySelectorAll(".tabs button").forEach((btn) => {
     btn.addEventListener("click", () => {
       activateTab(btn.dataset.tab);
       if (btn.dataset.tab === "analytics") loadAnalytics().catch(console.error);
       if (btn.dataset.tab === "breeding") loadCalendar().catch(console.error);
+      if (btn.dataset.tab === "scan") loadPedigreeViz().catch(() => undefined);
+      if (btn.dataset.tab === "compliance") {
+        loadActiveAlertFeed().catch(() => undefined);
+      }
       if (btn.dataset.tab === "projects") {
         loadProjects().catch(console.error);
         loadQuotas().catch(console.error);
@@ -429,6 +820,7 @@ async function init() {
       });
       setAuth(data.token, data.user);
       await loadCages();
+      await loadActiveAlertFeed();
       await loadProjects();
       await openPendingScanIfAny();
     } catch (err) {
@@ -437,6 +829,7 @@ async function init() {
   });
 
   el("scanBtn").addEventListener("click", runScan);
+  el("loadPedigreeBtn").addEventListener("click", loadPedigreeViz);
   el("refreshCages").addEventListener("click", () => loadCages());
   el("searchBtn").addEventListener("click", () => loadCages(el("searchCages").value));
   el("scanBaseUrl").value = normalizedScanBase();
@@ -525,6 +918,27 @@ async function init() {
     el("alerts").innerHTML = alerts
       .map((a) => `<div class="cage-card">${esc(a.protocol_number)} | ${esc(a.title)} | Expires ${esc(a.expires_on)}</div>`)
       .join("");
+    renderComplianceVisuals(state.alerts, alerts);
+  });
+
+  el("loadAlertFeedBtn").addEventListener("click", async () => {
+    const alerts = await api("/api/alerts/feed?status=active", { headers: headers(false) });
+    el("activeAlerts").innerHTML = alerts.length ? alerts.map(alertCardMarkup).join("") : `<p class="hint">No active alerts.</p>`;
+    el("activeAlerts")
+      .querySelectorAll("button[data-ack-alert]")
+      .forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          const id = btn.getAttribute("data-ack-alert");
+          await api(`/api/alerts/${id}/ack`, { method: "POST", headers: headers() });
+          await loadActiveAlertFeed();
+          btn.closest(".cage-card")?.remove();
+        });
+      });
+  });
+
+  el("dispatchAlertsBtn").addEventListener("click", async () => {
+    const result = await api("/api/alerts/dispatch", { method: "POST", headers: headers() });
+    alert(`Dispatch complete. sent=${result.dispatched}, failed=${result.failed}, simulated=${result.simulated}`);
   });
 
   el("loadAuditBtn").addEventListener("click", async () => {
@@ -555,6 +969,9 @@ async function init() {
     const me = await api("/api/auth/me", { headers: headers(false) });
     setAuth("", me);
     await loadCages();
+    await loadActiveAlertFeed();
+    await loadAnalytics();
+    await loadCalendar();
     await loadProjects();
     await flushMutationQueue();
     await openPendingScanIfAny();
@@ -565,6 +982,9 @@ async function init() {
   window.addEventListener("online", () => {
     flushMutationQueue().catch(() => undefined);
   });
+  setInterval(() => {
+    loadActiveAlertFeed().catch(() => undefined);
+  }, 30000);
 }
 
 init().catch((e) => console.error(e));

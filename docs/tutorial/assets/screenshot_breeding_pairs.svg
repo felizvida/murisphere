@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 960">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e9f5ef"/>
+      <stop offset="100%" stop-color="#dcebe4"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="960" fill="url(#bg)"/>
+  <rect x="56" y="56" width="1488" height="848" rx="20" fill="#fff" stroke="#c7ddd3"/>
+  <rect x="56" y="56" width="1488" height="84" rx="20" fill="#0f7a58"/>
+  <text x="102" y="108" font-family="Arial" font-size="36" font-weight="700" fill="#fff">Breeding Pair Workflow</text>
+
+  <rect x="92" y="166" width="620" height="320" rx="14" fill="#f7fcf9" stroke="#d0e4da"/>
+  <text x="116" y="206" font-family="Arial" font-size="24" font-weight="700" fill="#2a4e59">Create Pair (Sample Data)</text>
+  <text x="116" y="246" font-family="Arial" font-size="20" fill="#48606b">Cage: F1-L03-C0244</text>
+  <text x="116" y="280" font-family="Arial" font-size="20" fill="#48606b">Sire: PAIR-SIRE-001 (M, fl/+)</text>
+  <text x="116" y="314" font-family="Arial" font-size="20" fill="#48606b">Dam: PAIR-DAM-001 (F, +/+)</text>
+  <text x="116" y="348" font-family="Arial" font-size="20" fill="#48606b">Started: 2026-03-05</text>
+  <rect x="116" y="372" width="170" height="44" rx="22" fill="#dff0e7"/>
+  <text x="164" y="401" font-family="Arial" font-size="22" font-weight="700" fill="#145c43">ACTIVE</text>
+  <rect x="306" y="372" width="180" height="44" rx="22" fill="#fff0d9"/>
+  <text x="364" y="401" font-family="Arial" font-size="22" font-weight="700" fill="#8b5a1b">PAUSE</text>
+  <rect x="504" y="372" width="180" height="44" rx="22" fill="#f8d9d3"/>
+  <text x="558" y="401" font-family="Arial" font-size="22" font-weight="700" fill="#8a2f24">RETIRE</text>
+
+  <rect x="736" y="166" width="772" height="320" rx="14" fill="#f7fcf9" stroke="#d0e4da"/>
+  <text x="760" y="206" font-family="Arial" font-size="24" font-weight="700" fill="#2a4e59">Pair Productivity (Sample)</text>
+  <rect x="780" y="246" width="120" height="180" rx="10" fill="#5c88ff"/>
+  <rect x="930" y="276" width="120" height="150" rx="10" fill="#5c88ff"/>
+  <rect x="1080" y="232" width="120" height="194" rx="10" fill="#5c88ff"/>
+  <rect x="1230" y="302" width="120" height="124" rx="10" fill="#5c88ff"/>
+  <text x="792" y="448" font-family="Arial" font-size="18" fill="#4a626d">Pair-12</text>
+  <text x="940" y="448" font-family="Arial" font-size="18" fill="#4a626d">Pair-19</text>
+  <text x="1090" y="448" font-family="Arial" font-size="18" fill="#4a626d">Pair-24</text>
+  <text x="1242" y="448" font-family="Arial" font-size="18" fill="#4a626d">Pair-28</text>
+  <text x="760" y="470" font-family="Arial" font-size="20" fill="#395761">Litters: 4 | Avg Survived: 5.2 | Total Survived: 21</text>
+
+  <rect x="92" y="516" width="1416" height="340" rx="14" fill="#ffffff" stroke="#d0e4da"/>
+  <text x="116" y="556" font-family="Arial" font-size="24" font-weight="700" fill="#2a4e59">Breeding Events Timeline (Sample)</text>
+  <line x1="140" y1="770" x2="1460" y2="770" stroke="#a7bfc6" stroke-width="3"/>
+  <circle cx="220" cy="770" r="12" fill="#0f7a58"/>
+  <text x="186" y="736" font-family="Arial" font-size="18" fill="#40606a">03/05 Setup</text>
+  <circle cx="430" cy="770" r="12" fill="#4c8ff7"/>
+  <text x="378" y="736" font-family="Arial" font-size="18" fill="#40606a">03/08 Plug Check</text>
+  <circle cx="700" cy="770" r="12" fill="#eb9c44"/>
+  <text x="658" y="736" font-family="Arial" font-size="18" fill="#40606a">03/28 Weaning</text>
+  <circle cx="980" cy="770" r="12" fill="#ca513d"/>
+  <text x="934" y="736" font-family="Arial" font-size="18" fill="#40606a">04/01 Retire</text>
+  <circle cx="1230" cy="770" r="12" fill="#0f7a58"/>
+  <text x="1188" y="736" font-family="Arial" font-size="18" fill="#40606a">04/03 New Pair</text>
+
+  <text x="92" y="928" font-family="Arial" font-size="20" fill="#415c68">Sample-data screenshot: pair creation, status transitions, and productivity trend.</text>
+</svg>

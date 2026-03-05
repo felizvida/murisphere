@@ -3,27 +3,66 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Murisphere Mobile Scan Tutorial</title>
+    <title>Murisphere Workflow Tutorial</title>
     <style>
       :root {
-        --bg: #ecf5f1;
+        --bg: #eef6f2;
         --ink: #102831;
-        --muted: #4b616b;
-        --line: #c8ddd3;
+        --muted: #4a616b;
+        --line: #caded4;
         --brand: #0f7a58;
-        --brand2: #15966d;
+        --brand2: #16966d;
         --card: #ffffff;
+        --warn: #eb9c44;
+        --high: #ca513d;
       }
+      html,
       body {
         margin: 0;
-        font-family: "Segoe UI", Arial, sans-serif;
-        color: var(--ink);
-        background: radial-gradient(circle at 85% -10%, rgba(21, 150, 109, 0.18), rgba(21, 150, 109, 0) 45%), linear-gradient(160deg, #f4f9f7, #e5f0eb);
+        padding: 0;
       }
-      .wrap { max-width: 1080px; margin: 0 auto; padding: 24px; }
-      h1 { margin: 0; font-size: 2.1rem; letter-spacing: -0.02em; }
-      h2 { margin: 0 0 10px; }
-      .sub { margin-top: 8px; color: var(--muted); }
+      body {
+        font-family: "Segoe UI", "Space Grotesk", Arial, sans-serif;
+        color: var(--ink);
+        background: radial-gradient(circle at 85% -8%, rgba(22, 150, 109, 0.22), rgba(22, 150, 109, 0) 44%),
+          linear-gradient(155deg, #f4faf7, #e6f1ec);
+      }
+      .wrap {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 24px;
+      }
+      .kicker {
+        display: inline-block;
+        border-radius: 999px;
+        background: #e9f7f1;
+        color: #0f5d44;
+        border: 1px solid #bfe2d3;
+        padding: 6px 12px;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      h1 {
+        margin: 10px 0 8px;
+        font-size: 2.1rem;
+        letter-spacing: -0.02em;
+      }
+      h2 {
+        margin: 0 0 8px;
+        font-size: 1.35rem;
+        letter-spacing: -0.01em;
+      }
+      h3 {
+        margin: 0 0 8px;
+        font-size: 1.06rem;
+      }
+      .sub {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.45;
+      }
       .card {
         background: var(--card);
         border: 1px solid var(--line);
@@ -32,19 +71,39 @@
         margin-top: 14px;
         box-shadow: 0 10px 28px rgba(14, 40, 53, 0.08);
       }
-      .kicker {
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+      .pill {
         display: inline-block;
         border-radius: 999px;
-        background: #e7f5ef;
-        color: #0f5d44;
-        border: 1px solid #bfe2d3;
-        padding: 6px 12px;
+        background: #eef7f3;
+        border: 1px solid #c8e2d6;
         font-size: 12px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
+        color: #1f555f;
+        padding: 4px 10px;
+        margin-right: 6px;
       }
-      .steps li { margin-bottom: 8px; line-height: 1.45; }
+      .workflow {
+        border: 1px solid #d6e7df;
+        border-radius: 12px;
+        padding: 12px;
+        background: linear-gradient(180deg, #ffffff, #f6fbf8);
+      }
+      .workflow p {
+        margin: 6px 0 0;
+        color: var(--muted);
+      }
+      .steps {
+        margin: 0;
+        padding-left: 18px;
+      }
+      .steps li {
+        margin-bottom: 8px;
+        line-height: 1.48;
+      }
       .shot {
         margin-top: 10px;
         border: 1px solid #ccdfd6;
@@ -60,92 +119,286 @@
       }
       .caption {
         margin-top: 8px;
-        font-size: 0.95rem;
         color: var(--muted);
       }
-      code { background: #eef5f3; border-radius: 5px; padding: 2px 6px; }
-      @page { size: letter; margin: 0.45in; }
+      .toc a {
+        text-decoration: none;
+        color: #15576a;
+      }
+      .state-high {
+        color: var(--high);
+        font-weight: 700;
+      }
+      .state-warn {
+        color: #9a5b12;
+        font-weight: 700;
+      }
+      code {
+        background: #edf5f2;
+        border-radius: 6px;
+        padding: 2px 6px;
+      }
+      @media (min-width: 860px) {
+        .grid.two {
+          grid-template-columns: 1fr 1fr;
+        }
+      }
+      @page {
+        size: letter;
+        margin: 0.42in;
+      }
       @media print {
-        body { background: #fff; }
-        .card { box-shadow: none; break-inside: avoid; }
+        body {
+          background: #fff;
+        }
+        .card,
+        .workflow {
+          box-shadow: none;
+          break-inside: avoid;
+        }
       }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <span class="kicker">Murisphere Training</span>
-      <h1>Mobile Scan Tutorial (Printed Cage Card)</h1>
-      <p class="sub">Professional phone-first workflow with vectorized screenshots for crisp print and PDF output.</p>
+      <span class="kicker">Murisphere SOP Tutorial</span>
+      <h1>Workflow Training Guide: Technician + Facility Manager</h1>
+      <p class="sub">This tutorial is organized by real routine workflows in a research vivarium. Follow sections in order for onboarding, or jump by role and task.</p>
 
-      <section class="card">
-        <h2>Goal</h2>
-        <p>Use a phone camera to scan a printed cage card and open the correct Murisphere cage record safely and quickly.</p>
-      </section>
-
-      <section class="card">
-        <h2>Screenshot 1 - Secure Login</h2>
-        <div class="shot">
-          <img src="assets/screenshot_login.svg" alt="Vectorized screenshot of Murisphere login screen" />
-        </div>
-        <p class="caption">Sign in with technician credentials before running room updates.</p>
-      </section>
-
-      <section class="card">
-        <h2>Screenshot 2 - Generate and Print Cage Cards</h2>
-        <div class="shot">
-          <img src="assets/screenshot_cards.svg" alt="Vectorized screenshot of card generation and print screen" />
-        </div>
-        <p class="caption">Confirm each card shows a visible QR block and print at 100% scale.</p>
-      </section>
-
-      <section class="card">
-        <h2>Screenshot 3 - Scan/Edit Workflow</h2>
-        <div class="shot">
-          <img src="assets/screenshot_scan.svg" alt="Vectorized screenshot of scan lookup and quick edit workflow" />
-        </div>
-        <p class="caption">Phone camera opens the scan URL, then technician validates cage ID before saving edits.</p>
-      </section>
-
-      <section class="card">
-        <h2>Step-by-Step: Phone Scan of Printed Card</h2>
+      <section class="card toc" id="toc">
+        <h2>Table of Contents</h2>
         <ol class="steps">
-          <li>In <code>Cages</code>, set <code>Scan Base URL</code> to a phone-reachable host (LAN IP or production domain).</li>
-          <li>Click <strong>Generate + Print</strong> and verify the printed card contains a solid QR square.</li>
-          <li>Open the phone camera and point it at the printed QR code.</li>
-          <li>Tap the detected link banner to open cage info in browser.</li>
-          <li>Tap <strong>Open Murisphere (login for edits)</strong>, verify cage ID, then save updates.</li>
-          <li>If Wi-Fi drops, save actions are queued and auto-retried on reconnect. Confirm retry sync before ending rounds.</li>
+          <li><a href="#quick-start">Quick Start and Prerequisites</a></li>
+          <li><a href="#tech-daily">Mouse Technician Daily Workflows</a></li>
+          <li><a href="#manager-daily">Facility Manager Daily Workflows</a></li>
+          <li><a href="#compliance">Regulatory and Compliance Workflows</a></li>
+          <li><a href="#research">Research Support Workflows</a></li>
+          <li><a href="#checklists">End-of-Shift / End-of-Day Checklists</a></li>
+          <li><a href="#troubleshooting">Troubleshooting and Escalation</a></li>
         </ol>
       </section>
 
-      <section class="card">
-        <h2>Critical Safety Checks</h2>
+      <section class="card" id="quick-start">
+        <h2>1) Quick Start and Prerequisites</h2>
+        <p class="sub">Core principle: <strong>cage-level speed and accuracy first</strong>. Use phone scan workflows in the room, then manager workflows for oversight and planning.</p>
+        <p>
+          <span class="pill">Technician</span>
+          <span class="pill">PI/Manager</span>
+          <span class="pill">Admin</span>
+        </p>
+        <ol class="steps">
+          <li>Sign in from phone or tablet.</li>
+          <li>Set <code>Scan Base URL</code> to a phone-reachable host (LAN IP or domain).</li>
+          <li>Print cage cards at 100% scale.</li>
+          <li>Verify one sample scan before starting room rounds.</li>
+        </ol>
+      </section>
+
+      <section class="card" id="tech-daily">
+        <h2>2) Mouse Technician Daily Workflows</h2>
+        <div class="grid two">
+          <article class="workflow">
+            <h3>2.1 Start-of-Shift Room Entry</h3>
+            <ol class="steps">
+              <li>Open active alerts; identify <span class="state-high">high-severity</span> cages first.</li>
+              <li>Review due/overdue tasks for assigned rooms.</li>
+              <li>Confirm protocol blocks are cleared before edits.</li>
+            </ol>
+          </article>
+          <article class="workflow">
+            <h3>2.2 Phone Scan of Printed Card (Required)</h3>
+            <ol class="steps">
+              <li>Open phone camera and scan printed QR (not the 1D barcode strip).</li>
+              <li>Tap link banner to open cage page in browser.</li>
+              <li>Verify cage ID and location before edits.</li>
+              <li>Save count/status/note updates.</li>
+            </ol>
+            <p>Never edit unless scanned cage ID matches printed card.</p>
+          </article>
+          <article class="workflow">
+            <h3>2.3 Cage Census and Reconciliation</h3>
+            <ol class="steps">
+              <li>Start census session for room.</li>
+              <li>Scan each cage and confirm observed M/F counts.</li>
+              <li>Complete session and record mismatch notes.</li>
+            </ol>
+          </article>
+          <article class="workflow">
+            <h3>2.4 Breeding Operations</h3>
+            <ol class="steps">
+              <li>Create/manage breeding pairs (sire + dam + cage).</li>
+              <li>Record timed mating / plug check / weaning events.</li>
+              <li>Review pair productivity and retire non-productive pairs.</li>
+            </ol>
+          </article>
+          <article class="workflow">
+            <h3>2.5 Health, Vet, Mortality, and Euthanasia</h3>
+            <ol class="steps">
+              <li>Run health rounds and log findings.</li>
+              <li>Open vet case and treatment plan as needed.</li>
+              <li>Record mortality and flag necropsy if required.</li>
+              <li>Record euthanasia events with method/reason/disposition.</li>
+            </ol>
+          </article>
+          <article class="workflow">
+            <h3>2.6 Tagging and Sample Handling</h3>
+            <ol class="steps">
+              <li>Apply animal tags (ear tag/chip/tube/well).</li>
+              <li>Create sample record and sample code.</li>
+              <li>Advance status: collected → shipped → received → resulted.</li>
+              <li>Confirm chain-of-custody events are logged.</li>
+            </ol>
+          </article>
+        </div>
+      </section>
+
+      <section class="card" id="manager-daily">
+        <h2>3) Facility Manager Daily Workflows</h2>
+        <div class="grid two">
+          <article class="workflow">
+            <h3>3.1 Morning Command Review</h3>
+            <ol class="steps">
+              <li>Review alert feed and category distribution.</li>
+              <li>Acknowledge or escalate unresolved alerts.</li>
+              <li>Dispatch notifications for urgent items.</li>
+            </ol>
+          </article>
+          <article class="workflow">
+            <h3>3.2 Capacity and Room Operations</h3>
+            <ol class="steps">
+              <li>Check room/rack capacity and quota utilization.</li>
+              <li>Review cage-space projection and consolidation suggestions.</li>
+              <li>Prioritize cage wash and room transfer actions.</li>
+            </ol>
+          </article>
+          <article class="workflow">
+            <h3>3.3 Recommendation Decisions</h3>
+            <ol class="steps">
+              <li>Generate recommendations (e.g., consolidation, supply gap).</li>
+              <li>Decision each item: accept, adjust, ignore, complete.</li>
+              <li>Track decision outcomes for continuous improvement.</li>
+            </ol>
+          </article>
+          <article class="workflow">
+            <h3>3.4 Planner Scenario Management</h3>
+            <ol class="steps">
+              <li>Create scenario (target animals, needed-by date, cage constraints).</li>
+              <li>Attach projects and required animal counts.</li>
+              <li>Evaluate deficit/risk and review generated plan snapshots.</li>
+            </ol>
+          </article>
+        </div>
+      </section>
+
+      <section class="card" id="compliance">
+        <h2>4) Regulatory and Compliance Workflows</h2>
         <ul class="steps">
-          <li><strong>ID first</strong>: never edit unless scanned cage ID matches printed card.</li>
-          <li><strong>Protocol hard stop</strong>: if protocol is expired, editing is blocked until protocol assignment is corrected.</li>
-          <li><strong>Queue awareness</strong>: if you see a queued-save message, reconnect and verify data synced before leaving the room.</li>
+          <li>Protocol expiration monitoring and hard-stop edit enforcement.</li>
+          <li>Deviation logging with CAPA and closure status.</li>
+          <li>Quarantine intake, release, and overdue monitoring.</li>
+          <li>Qualification-expiry monitoring for assigned procedures.</li>
+          <li>E-signature capture and attachment evidence for inspections.</li>
+          <li>Audit trail review for who/what/when changes.</li>
+        </ul>
+      </section>
+
+      <section class="card" id="research">
+        <h2>5) Research Support Workflows</h2>
+        <ul class="steps">
+          <li>Pedigree exploration for multi-generation lineage decisions.</li>
+          <li>Genotyping order submission and callback result ingestion.</li>
+          <li>Mendelian ratio and genotype-deviation alert review.</li>
+          <li>Project-specific demand planning and supply-gap detection.</li>
+          <li>Cross-system exports (CSV/Excel/PDF/API jobs).</li>
         </ul>
       </section>
 
       <section class="card">
-        <h2>Troubleshooting</h2>
-        <ul class="steps">
-          <li><strong>No scan prompt</strong>: improve lighting and flatten the printed card.</li>
-          <li><strong>Wrong page opens</strong>: correct <code>Scan Base URL</code> (never use localhost for printed cards).</li>
-          <li><strong>Broken/blank QR</strong>: verify server endpoint <code>/api/assets/qrcode.png?v=test</code> loads.</li>
-          <li><strong>Save blocked by protocol</strong>: check protocol expiry in Compliance tab and reassign valid protocol.</li>
-          <li><strong>Queued save message</strong>: verify network, wait for auto-retry, then reload cage to confirm persisted values.</li>
-          <li><strong>Slow open</strong>: retest on stronger room Wi-Fi.</li>
-        </ul>
+        <h2>6) Visual Walkthrough</h2>
+        <p class="sub">All screenshots below use representative sample data to illustrate expected enterprise workflows.</p>
+        <div class="grid two">
+          <div>
+            <h3>Login and Session</h3>
+            <div class="shot"><img src="assets/screenshot_login.svg" alt="Vectorized screenshot of login screen" /></div>
+            <p class="caption">Role-aware login gates technician vs PI/admin actions.</p>
+          </div>
+          <div>
+            <h3>Generate + Print Cards</h3>
+            <div class="shot"><img src="assets/screenshot_cards.svg" alt="Vectorized screenshot of cage card printing" /></div>
+            <p class="caption">Always verify QR is visible and sharp on printed stock.</p>
+          </div>
+          <div>
+            <h3>Phone Scan and Quick Edit</h3>
+            <div class="shot"><img src="assets/screenshot_scan.svg" alt="Vectorized screenshot of scan edit workflow" /></div>
+            <p class="caption">Browser opens cage record directly after phone camera scan.</p>
+          </div>
+          <div>
+            <h3>Cage Alerts and Density View (Sample)</h3>
+            <div class="shot"><img src="assets/screenshot_cages_alerts.svg" alt="Screenshot with sample cage alerts and room density charts" /></div>
+            <p class="caption">Alert-colored cages and density visuals prioritize technician route order.</p>
+          </div>
+          <div>
+            <h3>Breeding Pair Management (Sample)</h3>
+            <div class="shot"><img src="assets/screenshot_breeding_pairs.svg" alt="Screenshot with sample breeding pair creation and productivity" /></div>
+            <p class="caption">Pair lifecycle actions and productivity trend for breeding decisions.</p>
+          </div>
+          <div>
+            <h3>Samples and Genotyping Orders (Sample)</h3>
+            <div class="shot"><img src="assets/screenshot_samples_genotyping.svg" alt="Screenshot with sample chain-of-custody and genotyping results" /></div>
+            <p class="caption">Chain-of-custody plus provider callback result ingestion.</p>
+          </div>
+          <div>
+            <h3>Recommendation Decisions (Sample)</h3>
+            <div class="shot"><img src="assets/screenshot_recommendations.svg" alt="Screenshot with sample recommendation decisions and outcomes" /></div>
+            <p class="caption">Accept/adjust/ignore/complete workflow with measurable outcomes.</p>
+          </div>
+          <div>
+            <h3>Planner Scenario Evaluation (Sample)</h3>
+            <div class="shot"><img src="assets/screenshot_planner.svg" alt="Screenshot with sample planner scenario and risk output" /></div>
+            <p class="caption">Demand vs supply gap, projected deficit, and risk level by scenario.</p>
+          </div>
+          <div>
+            <h3>Compliance Dashboard (Sample)</h3>
+            <div class="shot"><img src="assets/screenshot_compliance.svg" alt="Screenshot with sample compliance dashboard and open actions" /></div>
+            <p class="caption">Regulatory risk summary with owner, due date, and evidence traceability.</p>
+          </div>
+          <div>
+            <h3>Pedigree Explorer (Sample)</h3>
+            <div class="shot"><img src="assets/screenshot_pedigree.svg" alt="Screenshot with sample multi-generation pedigree graph" /></div>
+            <p class="caption">Multi-generation lineage view for breeder planning and genotype interpretation.</p>
+          </div>
+        </div>
       </section>
 
-      <section class="card">
-        <h2>Trainer Sign-Off</h2>
+      <section class="card" id="checklists">
+        <h2>7) End-of-Shift / End-of-Day Checklists</h2>
+        <h3>Technician End-of-Shift</h3>
         <ol class="steps">
-          <li>Technician demonstrates full scan -> verify -> edit -> save flow on two cages.</li>
-          <li>Technician demonstrates handling of one queued-save scenario (network drop simulation).</li>
-          <li>Technician identifies and escalates a protocol-expired block correctly.</li>
+          <li>Ensure queued offline writes are fully synced.</li>
+          <li>Confirm all health findings and treatments are documented.</li>
+          <li>Verify mortality/necropsy and euthanasia entries are complete.</li>
+          <li>Close open census/round sessions.</li>
         </ol>
+        <h3>Manager End-of-Day</h3>
+        <ol class="steps">
+          <li>Clear or assign owners for all <span class="state-high">high-severity</span> alerts.</li>
+          <li>Review unresolved deviations and quarantine blocks.</li>
+          <li>Approve/adjust recommendations and planner risk items.</li>
+          <li>Export daily summary for audit and project stakeholders.</li>
+        </ol>
+      </section>
+
+      <section class="card" id="troubleshooting">
+        <h2>8) Troubleshooting and Escalation</h2>
+        <ul class="steps">
+          <li><strong>No camera scan prompt:</strong> improve lighting and flatten printed card.</li>
+          <li><strong>Camera reads barcode value only:</strong> scan the QR square, not the CODE128 bar pattern.</li>
+          <li><strong>Wrong page opens:</strong> correct <code>Scan Base URL</code>; never use localhost for printed cards.</li>
+          <li><strong>QR blank or broken:</strong> verify endpoint <code>/api/assets/qrcode.png?v=test</code>.</li>
+          <li><strong>Protocol hard-stop:</strong> reassign valid protocol before edits.</li>
+          <li><strong>Sample or callback mismatch:</strong> validate sample code uniqueness and provider callback token.</li>
+          <li><strong>Planner risk high:</strong> open recommendation workflow and assign corrective action owner.</li>
+        </ul>
       </section>
     </div>
   </body>

@@ -444,6 +444,317 @@ CREATE TABLE IF NOT EXISTS e_signatures (
     FOREIGN KEY(signer_user_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS health_rounds (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    room_id INTEGER,
+    performed_by INTEGER NOT NULL,
+    started_at TEXT NOT NULL,
+    completed_at TEXT,
+    status TEXT NOT NULL CHECK (status IN ('active', 'completed')),
+    notes TEXT,
+    FOREIGN KEY(room_id) REFERENCES rooms(id),
+    FOREIGN KEY(performed_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS health_observations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    round_id INTEGER NOT NULL,
+    cage_id INTEGER NOT NULL,
+    finding TEXT NOT NULL,
+    severity TEXT,
+    action_taken TEXT,
+    observed_at TEXT NOT NULL,
+    observed_by INTEGER NOT NULL,
+    FOREIGN KEY(round_id) REFERENCES health_rounds(id),
+    FOREIGN KEY(cage_id) REFERENCES cages(id),
+    FOREIGN KEY(observed_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS protocol_deviations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    protocol_id INTEGER NOT NULL,
+    cage_id INTEGER,
+    reported_by INTEGER NOT NULL,
+    reported_at TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    capa_plan TEXT,
+    status TEXT NOT NULL CHECK (status IN ('open', 'under_review', 'closed')),
+    resolved_at TEXT,
+    resolved_by INTEGER,
+    FOREIGN KEY(protocol_id) REFERENCES iacuc_protocols(id),
+    FOREIGN KEY(cage_id) REFERENCES cages(id),
+    FOREIGN KEY(reported_by) REFERENCES users(id),
+    FOREIGN KEY(resolved_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS euthanasia_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    animal_id INTEGER,
+    cage_id INTEGER,
+    protocol_id INTEGER,
+    method TEXT NOT NULL,
+    reason TEXT,
+    disposition TEXT,
+    performed_by INTEGER NOT NULL,
+    performed_at TEXT NOT NULL,
+    FOREIGN KEY(animal_id) REFERENCES animals(id),
+    FOREIGN KEY(cage_id) REFERENCES cages(id),
+    FOREIGN KEY(protocol_id) REFERENCES iacuc_protocols(id),
+    FOREIGN KEY(performed_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS cage_wash_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cage_id INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('queued', 'in_wash', 'returned')),
+    requested_by INTEGER NOT NULL,
+    requested_at TEXT NOT NULL,
+    completed_at TEXT,
+    FOREIGN KEY(cage_id) REFERENCES cages(id),
+    FOREIGN KEY(requested_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS quarantine_intakes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    project_id INTEGER,
+    cage_id INTEGER,
+    vendor TEXT,
+    strain TEXT,
+    sex TEXT,
+    quantity INTEGER NOT NULL,
+    arrival_date TEXT NOT NULL,
+    quarantine_end_on TEXT,
+    status TEXT NOT NULL CHECK (status IN ('planned', 'arrived', 'in_quarantine', 'cleared', 'blocked')),
+    notes TEXT,
+    created_by INTEGER NOT NULL,
+    reviewed_by INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(lab_id) REFERENCES labs(id),
+    FOREIGN KEY(project_id) REFERENCES projects(id),
+    FOREIGN KEY(cage_id) REFERENCES cages(id),
+    FOREIGN KEY(created_by) REFERENCES users(id),
+    FOREIGN KEY(reviewed_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS mortality_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    animal_id INTEGER,
+    cage_id INTEGER NOT NULL,
+    protocol_id INTEGER,
+    count_male INTEGER NOT NULL DEFAULT 0,
+    count_female INTEGER NOT NULL DEFAULT 0,
+    cause TEXT,
+    found_at TEXT NOT NULL,
+    reported_by INTEGER NOT NULL,
+    necropsy_required INTEGER NOT NULL DEFAULT 0,
+    necropsy_status TEXT NOT NULL CHECK (necropsy_status IN ('not_required', 'pending', 'completed')),
+    notes TEXT,
+    FOREIGN KEY(animal_id) REFERENCES animals(id),
+    FOREIGN KEY(cage_id) REFERENCES cages(id),
+    FOREIGN KEY(protocol_id) REFERENCES iacuc_protocols(id),
+    FOREIGN KEY(reported_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS alert_notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    alert_key TEXT NOT NULL UNIQUE,
+    lab_id INTEGER,
+    cage_id INTEGER,
+    severity TEXT NOT NULL CHECK (severity IN ('low', 'medium', 'high')),
+    category TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('active', 'acknowledged', 'resolved')),
+    first_seen_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL,
+    acked_by INTEGER,
+    acked_at TEXT,
+    escalation_level INTEGER NOT NULL DEFAULT 0,
+    last_notified_at TEXT,
+    next_notify_at TEXT,
+    meta_json TEXT,
+    FOREIGN KEY(lab_id) REFERENCES labs(id),
+    FOREIGN KEY(cage_id) REFERENCES cages(id),
+    FOREIGN KEY(acked_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS notification_channels (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    lab_id INTEGER,
+    channel_type TEXT NOT NULL CHECK (channel_type IN ('in_app', 'webhook', 'email')),
+    target TEXT,
+    min_severity TEXT NOT NULL CHECK (min_severity IN ('low', 'medium', 'high')),
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(user_id) REFERENCES users(id),
+    FOREIGN KEY(lab_id) REFERENCES labs(id)
+);
+
+CREATE TABLE IF NOT EXISTS notification_dispatch_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    alert_id INTEGER NOT NULL,
+    channel_id INTEGER NOT NULL,
+    dispatched_at TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('sent', 'failed', 'simulated')),
+    response_summary TEXT,
+    FOREIGN KEY(alert_id) REFERENCES alert_notifications(id),
+    FOREIGN KEY(channel_id) REFERENCES notification_channels(id)
+);
+
+CREATE TABLE IF NOT EXISTS breeding_pairs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sire_id INTEGER NOT NULL,
+    dam_id INTEGER NOT NULL,
+    cage_id INTEGER NOT NULL,
+    lab_id INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('active', 'paused', 'retired')),
+    started_on TEXT NOT NULL,
+    ended_on TEXT,
+    notes TEXT,
+    created_by INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(sire_id) REFERENCES animals(id),
+    FOREIGN KEY(dam_id) REFERENCES animals(id),
+    FOREIGN KEY(cage_id) REFERENCES cages(id),
+    FOREIGN KEY(lab_id) REFERENCES labs(id),
+    FOREIGN KEY(created_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS animal_tags (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    animal_id INTEGER NOT NULL,
+    tag_type TEXT NOT NULL CHECK (tag_type IN ('ear_tag', 'microchip', 'tube', 'well', 'custom')),
+    tag_value TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    applied_on TEXT NOT NULL,
+    applied_by INTEGER,
+    UNIQUE(tag_type, tag_value),
+    FOREIGN KEY(animal_id) REFERENCES animals(id),
+    FOREIGN KEY(applied_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS sample_records (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    animal_id INTEGER NOT NULL,
+    cage_id INTEGER,
+    sample_type TEXT NOT NULL,
+    sample_code TEXT NOT NULL UNIQUE,
+    provider TEXT,
+    status TEXT NOT NULL CHECK (status IN ('collected', 'shipped', 'received', 'resulted', 'rejected')),
+    tracking_number TEXT,
+    collected_on TEXT NOT NULL,
+    collected_by INTEGER,
+    notes TEXT,
+    FOREIGN KEY(animal_id) REFERENCES animals(id),
+    FOREIGN KEY(cage_id) REFERENCES cages(id),
+    FOREIGN KEY(collected_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS sample_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sample_id INTEGER NOT NULL,
+    event_type TEXT NOT NULL,
+    event_time TEXT NOT NULL,
+    actor_user_id INTEGER,
+    details_json TEXT,
+    FOREIGN KEY(sample_id) REFERENCES sample_records(id),
+    FOREIGN KEY(actor_user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS genotyping_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    project_id INTEGER,
+    provider TEXT NOT NULL,
+    order_ref TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL CHECK (status IN ('draft', 'submitted', 'received', 'closed', 'failed')),
+    requested_by INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    payload_json TEXT,
+    FOREIGN KEY(lab_id) REFERENCES labs(id),
+    FOREIGN KEY(project_id) REFERENCES projects(id),
+    FOREIGN KEY(requested_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS genotyping_order_items (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    order_id INTEGER NOT NULL,
+    sample_id INTEGER,
+    animal_id INTEGER NOT NULL,
+    marker_panel TEXT,
+    result TEXT,
+    result_at TEXT,
+    FOREIGN KEY(order_id) REFERENCES genotyping_orders(id),
+    FOREIGN KEY(sample_id) REFERENCES sample_records(id),
+    FOREIGN KEY(animal_id) REFERENCES animals(id)
+);
+
+CREATE TABLE IF NOT EXISTS workflow_recommendations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rec_type TEXT NOT NULL,
+    lab_id INTEGER NOT NULL,
+    project_id INTEGER,
+    cage_id INTEGER,
+    status TEXT NOT NULL CHECK (status IN ('open', 'accepted', 'adjusted', 'ignored', 'completed')),
+    rationale TEXT,
+    payload_json TEXT,
+    created_by INTEGER,
+    acted_by INTEGER,
+    acted_at TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(lab_id) REFERENCES labs(id),
+    FOREIGN KEY(project_id) REFERENCES projects(id),
+    FOREIGN KEY(cage_id) REFERENCES cages(id),
+    FOREIGN KEY(created_by) REFERENCES users(id),
+    FOREIGN KEY(acted_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS planner_scenarios (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER NOT NULL,
+    name TEXT NOT NULL,
+    needed_by TEXT,
+    target_animals INTEGER NOT NULL,
+    max_new_cages INTEGER,
+    assumptions_json TEXT,
+    status TEXT NOT NULL CHECK (status IN ('draft', 'approved', 'archived')),
+    created_by INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(lab_id) REFERENCES labs(id),
+    FOREIGN KEY(created_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS planner_scenario_projects (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scenario_id INTEGER NOT NULL,
+    project_id INTEGER NOT NULL,
+    animals_needed INTEGER NOT NULL,
+    priority INTEGER NOT NULL DEFAULT 3,
+    UNIQUE(scenario_id, project_id),
+    FOREIGN KEY(scenario_id) REFERENCES planner_scenarios(id),
+    FOREIGN KEY(project_id) REFERENCES projects(id)
+);
+
+CREATE TABLE IF NOT EXISTS planner_plans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scenario_id INTEGER NOT NULL,
+    estimated_litters INTEGER NOT NULL,
+    estimated_cages INTEGER NOT NULL,
+    projected_deficit INTEGER NOT NULL,
+    risk_level TEXT NOT NULL CHECK (risk_level IN ('low', 'medium', 'high')),
+    recommendation_json TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(scenario_id) REFERENCES planner_scenarios(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_cages_code ON cages(cage_code);
 CREATE INDEX IF NOT EXISTS idx_cages_qr ON cages(qr_token);
 CREATE INDEX IF NOT EXISTS idx_cages_room ON cages(room_id);
@@ -460,3 +771,15 @@ CREATE INDEX IF NOT EXISTS idx_orders_lab ON animal_orders(lab_id, status);
 CREATE INDEX IF NOT EXISTS idx_vet_cases_lab ON vet_cases(lab_id, case_status);
 CREATE INDEX IF NOT EXISTS idx_task_due ON task_assignments(due_on, status);
 CREATE INDEX IF NOT EXISTS idx_attach_entity ON record_attachments(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_health_round_status ON health_rounds(status, started_at);
+CREATE INDEX IF NOT EXISTS idx_protocol_dev_status ON protocol_deviations(status, reported_at);
+CREATE INDEX IF NOT EXISTS idx_euthanasia_time ON euthanasia_records(performed_at);
+CREATE INDEX IF NOT EXISTS idx_quarantine_status ON quarantine_intakes(status, arrival_date);
+CREATE INDEX IF NOT EXISTS idx_mortality_found_at ON mortality_records(found_at);
+CREATE INDEX IF NOT EXISTS idx_alert_status ON alert_notifications(status, severity, next_notify_at);
+CREATE INDEX IF NOT EXISTS idx_alert_cage ON alert_notifications(cage_id, status);
+CREATE INDEX IF NOT EXISTS idx_pair_lab_status ON breeding_pairs(lab_id, status);
+CREATE INDEX IF NOT EXISTS idx_sample_status ON sample_records(status, collected_on);
+CREATE INDEX IF NOT EXISTS idx_geno_order_status ON genotyping_orders(lab_id, status);
+CREATE INDEX IF NOT EXISTS idx_recommendation_status ON workflow_recommendations(lab_id, status);
+CREATE INDEX IF NOT EXISTS idx_planner_lab ON planner_scenarios(lab_id, status);

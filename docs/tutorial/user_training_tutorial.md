@@ -1,130 +1,130 @@
 ---
-title: "Murisphere Mobile Scan Tutorial"
-subtitle: "Professional Step-by-Step Guide for Printed Cage Cards"
+title: "Murisphere Workflow Tutorial"
+subtitle: "Technician + Facility Manager Workflow Guide"
 author: "Murisphere Operations"
-date: "2026-03-06"
-geometry: margin=0.8in
+date: "2026-03-05"
+geometry: margin=0.75in
 fontsize: 11pt
 colorlinks: true
 toc: true
-toc-depth: 2
+toc-depth: 3
 ---
 
 # Purpose
-This tutorial shows technicians exactly how to use a **phone camera** to scan a **printed cage card** and open the correct cage record in Murisphere.
+This tutorial is organized by **typical vivarium workflows** so teams can execute daily operations quickly and consistently.
 
-# Who Should Use This
-- Technicians working in-room
-- PI delegates verifying cage records
-- Facility trainers onboarding new users
+# Roles
+- Technician
+- PI / Facility Manager
+- Admin
 
-# Before You Start
-1. Confirm Murisphere is reachable from your phone browser.
-2. In the `Cages` tab, set `Scan Base URL` to a phone-reachable address.
-3. Print cards using `Generate + Print`.
+# 1. Quick Start
+1. Log in from phone/tablet/browser.
+2. Set `Scan Base URL` to a phone-reachable host.
+3. Print cards at 100% scale.
+4. Validate one real scan before room rounds.
 
-# Visual Walkthrough
-## Figure A - Printed Card to Phone Flow (Illustration)
+# 2. Mouse Technician Daily Workflows
+## 2.1 Start-of-shift room prep
+1. Review active alerts and prioritize high severity cages.
+2. Review assigned tasks and due windows.
+3. Confirm protocol blocks are addressed.
 
-```text
-+-------------------- Printed Cage Card --------------------+
-| Cage ID: C-A1-0243                                       |
-| Strain: C57BL/6J      M/F: 2/3                           |
-|                                                          |
-|   [ QR CODE ]        [ BARCODE ]                         |
-|                                                          |
-| Scan URL: https://vivarium.example.org/scan/tok_xxx      |
-+-----------------------------------------------------------+
-                 ||
-                 \/
-+-------------------- Phone Camera -------------------------+
-| Camera detects QR -> link banner appears                 |
-| Tap banner -> browser opens cage info page               |
-| Tap "Open Murisphere (login for edits)"                 |
-+-----------------------------------------------------------+
-```
+## 2.2 Phone scan of printed cage card
+1. Scan printed QR with phone camera (not the 1D barcode strip).
+2. Open link in browser.
+3. Verify cage ID/location.
+4. Update counts/status/notes.
+5. Save and confirm persistence.
 
-## Figure B - Troubleshooting Matrix (Illustration)
+## 2.3 Census and reconciliation
+1. Start census session.
+2. Scan each cage and record observed counts.
+3. Complete session and resolve mismatches.
 
-```text
-Issue                        Likely Cause                 Action
--------------------------    -------------------------    -------------------------------
-No scan prompt               Low contrast / glare         Improve lighting, flatten card
-Wrong page opens             Bad Scan Base URL            Use LAN IP/domain, not localhost
-Blank QR or broken image     Asset endpoint unavailable    Verify server is running, regenerate cards
-Slow open                    Weak room network            Retest on strong Wi-Fi
-```
+## 2.4 Breeding operations
+1. Create/manage breeding pairs.
+2. Log timed mating, plug check, weaning, transfer events.
+3. Review pair productivity and retire non-productive pairs.
 
-# Step-by-Step: Phone Scan of Printed Card
-## Step 1 - Print Fresh Cards
-1. Open `Cages`.
-2. Confirm `Scan Base URL` points to a phone-reachable host.
-3. Click `Generate + Print`.
-4. Verify each card has a visible square QR.
+## 2.5 Health and welfare
+1. Run health rounds and log findings.
+2. Open vet cases and treatments.
+3. Record mortality + necropsy requirement.
+4. Record euthanasia events.
 
-## Step 2 - Scan with Phone Camera
-1. Hold the printed card under even lighting.
-2. Open default camera app:
-   - iPhone: Camera app
-   - Android: Camera app
-3. Point camera at the **QR code** until a link banner appears.
-4. Tap the banner/link.
+## 2.6 Tagging and samples
+1. Add animal tags (ear tag/chip/tube/well).
+2. Create sample records.
+3. Advance sample status (collected→shipped→received→resulted).
+4. Verify sample chain-of-custody events.
 
-## Step 3 - Validate Identity
-1. Confirm cage ID on the opened page matches printed cage ID.
-2. Confirm location and M/F counts are plausible.
-3. If mismatch: stop and rescan before editing.
+# 3. Facility Manager Daily Workflows
+## 3.1 Morning operations review
+1. Review alert feed and severity distribution.
+2. Acknowledge/escalate unresolved alerts.
+3. Dispatch alert notifications.
 
-## Step 4 - Enter Edit Mode
-1. Tap `Open Murisphere (login for edits)`.
-2. Sign in if prompted.
-3. App should land in scan/edit context for that cage.
+## 3.2 Capacity and room operations
+1. Review capacity/quotas and cage-space forecasts.
+2. Review consolidation opportunities.
+3. Prioritize cage wash and transfer workflows.
 
-## Step 5 - Perform Update
-1. Update counts/status/notes.
-2. Save changes.
-3. Confirm save acknowledgement and audit trail entry.
-4. If network is unstable and update is queued, reconnect and confirm retry sync before ending rounds.
+## 3.3 Recommendation lifecycle
+1. Generate recommendations.
+2. Decision each recommendation: accept, adjust, ignore, complete.
+3. Track outcomes by recommendation type/status.
 
-# Required Quality Checks
-- Do not update if cage ID mismatch.
-- Do not use `localhost` for printed scan URLs.
-- Reprint cards after base URL changes.
-- If protocol is expired, stop edits and escalate protocol reassignment.
+## 3.4 Planner scenarios
+1. Create scenario with demand and constraints.
+2. Attach project-level demand.
+3. Evaluate projected deficit and risk.
+4. Review plan snapshots and assign corrective actions.
 
-# High-Value Troubleshooting
-## If camera does not detect code
-- Move 10-20 cm from card.
-- Avoid reflections and shadows.
-- Increase print quality.
+# 4. Regulatory and Compliance Workflows
+1. Protocol expiry monitoring and edit hard-stop.
+2. Deviation/CAPA logging and closure.
+3. Quarantine intake/clearance tracking.
+4. Qualification expiration monitoring.
+5. E-signature and attachment evidence.
+6. Full audit review.
 
-## If code opens but wrong destination
-- Check `Scan Base URL` in `Cages` tab.
-- Use LAN IP or production DNS.
+# 5. Research Support Workflows
+1. Pedigree analysis for breeding decisions.
+2. Genotyping order submission.
+3. Provider callback result ingestion.
+4. Mendelian/deviation monitoring.
+5. Reporting/export/integration jobs.
 
-## If QR appears broken
-- Confirm app server is reachable from browser.
-- Open `/api/assets/qrcode.png?v=test` in browser and verify PNG loads.
-- Regenerate cards and retry scan.
+# 6. Visual Walkthrough References
+- `assets/screenshot_login.svg`
+- `assets/screenshot_cards.svg`
+- `assets/screenshot_scan.svg`
+- `assets/screenshot_cages_alerts.svg`
+- `assets/screenshot_breeding_pairs.svg`
+- `assets/screenshot_samples_genotyping.svg`
+- `assets/screenshot_recommendations.svg`
+- `assets/screenshot_planner.svg`
+- `assets/screenshot_compliance.svg`
+- `assets/screenshot_pedigree.svg`
 
-## If save is queued (network interruption)
-- Keep device online and wait for auto-retry.
-- Reload cage and verify latest values persisted.
-- Do not assume update was applied until verified.
+# 7. End-of-Shift / End-of-Day Checklists
+## Technician
+1. Confirm offline queue drained and synced.
+2. Confirm health/vet/mortality/euthanasia records complete.
+3. Close open room sessions.
 
-## If protocol blocks editing
-- Open Compliance tab and check protocol expiry.
-- Reassign valid protocol before retrying edit.
+## Manager
+1. Resolve or owner-assign all high severity alerts.
+2. Review unresolved deviations/quarantine blocks.
+3. Review planner risk and recommendation decisions.
+4. Export daily summary/audit package.
 
-# Trainer Checklist
-1. Demonstrate one complete scan -> edit -> save cycle.
-2. Have trainee repeat with a second cage.
-3. Verify trainee can troubleshoot URL and scan issues.
-4. Confirm trainee understands ID verification before edits.
-5. Confirm trainee can respond correctly to queued-save and protocol-expired scenarios.
-
-# Daily Room SOP (Quick)
-1. Check scan URL base setting.
-2. Print cards for active cages.
-3. Run scan-update rounds.
-4. Review scheduled tasks and compliance alerts.
+# 8. Troubleshooting and Escalation
+- No scan prompt: improve lighting and card contrast.
+- Camera only sees barcode value: scan the QR square, not the CODE128 bars.
+- Wrong destination: fix `Scan Base URL`; never use localhost for printed cards.
+- QR broken: verify `/api/assets/qrcode.png?v=test`.
+- Save queued: reconnect and verify sync before leaving room.
+- Protocol hard-stop: assign valid protocol and retry.
+- Genotyping callback mismatch: verify callback token and sample code mapping.

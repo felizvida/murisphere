@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 960">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e9f5ef"/>
+      <stop offset="100%" stop-color="#dcebe4"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="960" fill="url(#bg)"/>
+  <rect x="52" y="52" width="1496" height="856" rx="20" fill="#fff" stroke="#c7ddd3"/>
+  <rect x="52" y="52" width="1496" height="84" rx="20" fill="#0f7a58"/>
+  <text x="96" y="104" font-family="Arial" font-size="36" font-weight="700" fill="#fff">Compliance Dashboard</text>
+
+  <rect x="90" y="162" width="460" height="220" rx="14" fill="#fff1ef" stroke="#e9b8b2"/>
+  <text x="116" y="202" font-family="Arial" font-size="24" font-weight="700" fill="#8a2f24">High Severity Alerts</text>
+  <text x="116" y="242" font-family="Arial" font-size="56" font-weight="700" fill="#8a2f24">9</text>
+  <text x="116" y="282" font-family="Arial" font-size="20" fill="#5b6f78">protocol expired, necropsy pending, critical deviations</text>
+
+  <rect x="570" y="162" width="460" height="220" rx="14" fill="#fff8ec" stroke="#ecd7b7"/>
+  <text x="596" y="202" font-family="Arial" font-size="24" font-weight="700" fill="#8a5b1f">Quarantine Blocks</text>
+  <text x="596" y="242" font-family="Arial" font-size="56" font-weight="700" fill="#8a5b1f">5</text>
+  <text x="596" y="282" font-family="Arial" font-size="20" fill="#5b6f78">in_quarantine beyond expected clearance date</text>
+
+  <rect x="1050" y="162" width="460" height="220" rx="14" fill="#eef6ff" stroke="#ccdaf4"/>
+  <text x="1076" y="202" font-family="Arial" font-size="24" font-weight="700" fill="#2d5f9e">Qualification Expiring</text>
+  <text x="1076" y="242" font-family="Arial" font-size="56" font-weight="700" fill="#2d5f9e">12</text>
+  <text x="1076" y="282" font-family="Arial" font-size="20" fill="#5b6f78">staff qualifications expiring in 30 days</text>
+
+  <rect x="90" y="406" width="1420" height="450" rx="14" fill="#fff" stroke="#d0e4da"/>
+  <text x="116" y="446" font-family="Arial" font-size="24" font-weight="700" fill="#2a4e59">Open Compliance Items (Sample)</text>
+
+  <rect x="116" y="472" width="1368" height="52" rx="10" fill="#eef6f2" stroke="#d4e4de"/>
+  <text x="136" y="505" font-family="Arial" font-size="19" font-weight="700" fill="#2b4c57">Item</text>
+  <text x="570" y="505" font-family="Arial" font-size="19" font-weight="700" fill="#2b4c57">Owner</text>
+  <text x="770" y="505" font-family="Arial" font-size="19" font-weight="700" fill="#2b4c57">Due</text>
+  <text x="920" y="505" font-family="Arial" font-size="19" font-weight="700" fill="#2b4c57">Status</text>
+  <text x="1080" y="505" font-family="Arial" font-size="19" font-weight="700" fill="#2b4c57">Evidence</text>
+
+  <text x="136" y="552" font-family="Arial" font-size="19" fill="#3d5b66">Deviation #112 CAPA completion</text>
+  <text x="570" y="552" font-family="Arial" font-size="19" fill="#3d5b66">PI (Lab 03)</text>
+  <text x="770" y="552" font-family="Arial" font-size="19" fill="#3d5b66">2026-03-09</text>
+  <rect x="920" y="528" width="118" height="30" rx="15" fill="#fde0dc"/><text x="952" y="549" font-family="Arial" font-size="16" fill="#8a2f24" font-weight="700">OPEN</text>
+  <text x="1080" y="552" font-family="Arial" font-size="19" fill="#3d5b66">e-sign + attachment</text>
+
+  <text x="136" y="602" font-family="Arial" font-size="19" fill="#3d5b66">Protocol IACUC-2026-0302 renewal</text>
+  <text x="570" y="602" font-family="Arial" font-size="19" fill="#3d5b66">Admin</text>
+  <text x="770" y="602" font-family="Arial" font-size="19" fill="#3d5b66">2026-03-07</text>
+  <rect x="920" y="578" width="130" height="30" rx="15" fill="#f8dfbb"/><text x="950" y="599" font-family="Arial" font-size="16" fill="#8a5a1e" font-weight="700">REVIEW</text>
+  <text x="1080" y="602" font-family="Arial" font-size="19" fill="#3d5b66">audit log linked</text>
+
+  <text x="136" y="652" font-family="Arial" font-size="19" fill="#3d5b66">Necropsy pending (Mortality #87)</text>
+  <text x="570" y="652" font-family="Arial" font-size="19" fill="#3d5b66">Vet Team</text>
+  <text x="770" y="652" font-family="Arial" font-size="19" fill="#3d5b66">2026-03-06</text>
+  <rect x="920" y="628" width="118" height="30" rx="15" fill="#fde0dc"/><text x="952" y="649" font-family="Arial" font-size="16" fill="#8a2f24" font-weight="700">OPEN</text>
+  <text x="1080" y="652" font-family="Arial" font-size="19" fill="#3d5b66">mortality report</text>
+
+  <text x="88" y="928" font-family="Arial" font-size="20" fill="#415c68">Sample-data screenshot: compliance risk summary with action ownership and evidence traceability.</text>
+</svg>

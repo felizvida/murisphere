@@ -1,18 +1,22 @@
 # Documentation Index
 
-- `docs/CHECKPOINT_2026-03-04.md` - full project checkpoint and resume instructions
-- `docs/CHECKPOINT_2026-03-05.md` - latest checkpoint after server-side QR fix
+- `docs/CHECKPOINT_2026-03-04.md` - historical checkpoint from pre-hardening phase
+- `docs/CHECKPOINT_2026-03-05.md` - current checkpoint with resume-from-zero-memory release state
 - `docs/CODE_AUDIT_REPORT.md` - formal audit findings and remediation priorities
 - `docs/POST_REMEDIATION_AUDIT.md` - remediation status and residual risk summary
-- `docs/ARCHITECTURE.md` - system and data architecture
-- `docs/API_REFERENCE.md` - endpoint catalog
-- `docs/DEPLOYMENT_RUNBOOK.md` - deployment and rollback procedures
-- `docs/OPERATIONS_RUNBOOK.md` - monitoring and incident response
-- `docs/SECURITY_COMPLIANCE.md` - security and governance posture
-- `docs/TESTING_STRATEGY.md` - automated and manual test approach
-- `docs/USER_GUIDE.md` - role-based user instructions
-- `docs/tutorial/user_training_tutorial.html` - step-by-step tutorial (HTML)
-- `docs/tutorial/user_training_tutorial.pdf` - step-by-step tutorial (PDF)
-- `docs/releases/v0.2.0.md` - release notes for server-side QR/barcode fix
+- `docs/ARCHITECTURE.md` - system shape, domains, and deployment architecture
+- `docs/API_REFERENCE.md` - API endpoint catalog
+- `docs/WORKFLOW_COVERAGE_MATRIX.md` - technician and manager routine workflow mapping
+- `docs/DEPLOYMENT_RUNBOOK.md` - deployment, upgrade, and rollback procedures
+- `docs/OPERATIONS_RUNBOOK.md` - monitoring, incident, and routine operations playbook
+- `docs/SECURITY_COMPLIANCE.md` - implemented controls, residual risks, governance practices
+- `docs/TESTING_STRATEGY.md` - automated, diagnostic, and release-gate testing strategy
+- `docs/USER_GUIDE.md` - role-based operating guide with phone scan workflow
+- `docs/tutorial/user_training_tutorial.md` - source markdown for tutorial content
+- `docs/tutorial/user_training_tutorial.html` - tutorial web version (screenshot-rich)
+- `docs/tutorial/user_training_tutorial.pdf` - tutorial PDF for distribution/training
+- `docs/releases/v0.2.0.md` - release notes for QR/barcode server-side rendering fix
+- `docs/releases/v0.3.0.md` - release notes for workflow/compliance/visualization expansion
 - `docs/test_reports/UI_CLICKABILITY_REPORT.html` - visual UI clickability contract report
 - `docs/test_reports/UI_CLICKABILITY_RESULT.json` - machine-readable UI clickability audit result
+- `docs/test_reports/ALERT_COVERAGE_RESULT.json` - synthesized-data alert coverage verification result

@@ -4,6 +4,7 @@
 - Web app architecture: Flask backend + SQLite database + static browser frontend.
 - Browser-only operation on desktop/tablet/phone.
 - Primary workflow: cage-card scan -> cage lookup -> in-room edit.
+- Design priority: cage-level speed -> data accuracy -> operational simplicity -> analytics.
 
 ## Core Components
 - API server: `app.py`
@@ -12,6 +13,7 @@
 - Card media rendering: server-side QR/Barcode asset endpoints
 - Data model: `schema.sql`
 - Demo scale seeding: `seed_large_demo.py`
+- Validation tools: `qrcode_diagnostic.py`, `ui_clickability_audit.py`, `alert_coverage_verifier.py`
 
 ## Data Domains
 - Facility hierarchy: Facility -> Room -> Rack -> Cage
@@ -19,11 +21,16 @@
 - Breeding/events: Timed mating, plug checks, weaning, harvest, retirement
 - Compliance/governance: Users, Roles, Sessions, Audit logs, IACUC protocols
 - Program layer: Lab, Project, Project-Cage mapping, Lab profiles
+- Enterprise operations: census sessions, facility requests, billing rules/entries/reviews, order lifecycle
+- Welfare and oversight: health rounds, vet cases/treatments, quarantine intake/status, mortality/necropsy
+- Planning intelligence: recommendation engine and planner scenarios with projected deficit/risk
 
 ## Security Model (Current)
 - Session bearer token in `Authorization` header.
 - Role gates: Technician, PI, Admin.
+- Lab scope enforcement across principal entity workflows.
 - Audit logs for create/update lifecycle actions.
+- Protocol-expiry hard stop on cage mutations.
 
 ## Security Model (Target)
 - Row-level tenant isolation by lab/facility scope.
@@ -42,3 +49,4 @@
 - Lightweight scan lookup path with indexed cage keys.
 - Bulk reporting endpoints for CSV/XLSX/PDF.
 - Demo scaling validated at 20 labs and 3,000 cages.
+- Alert/analytics layers are additive and do not block cage update paths.

@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 960">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#e9f5ef"/>
+      <stop offset="100%" stop-color="#dcebe4"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="960" fill="url(#bg)"/>
+  <rect x="52" y="52" width="1496" height="856" rx="20" fill="#fff" stroke="#c7ddd3"/>
+  <rect x="52" y="52" width="1496" height="84" rx="20" fill="#0f7a58"/>
+  <text x="96" y="104" font-family="Arial" font-size="36" font-weight="700" fill="#fff">Pedigree Explorer (Sample Data)</text>
+
+  <rect x="96" y="172" width="1408" height="688" rx="16" fill="#f6fcf9" stroke="#d2e5dc"/>
+
+  <g transform="translate(150,430)">
+    <rect width="240" height="86" rx="12" fill="#ffffff" stroke="#b9d8ca"/>
+    <text x="18" y="36" font-family="Arial" font-size="24" font-weight="700" fill="#2e5060">PUP-0042</text>
+    <text x="18" y="64" font-family="Arial" font-size="20" fill="#4f6672">M | fl/+ | Active</text>
+  </g>
+
+  <g transform="translate(520,270)">
+    <rect width="240" height="86" rx="12" fill="#e8f3ff" stroke="#8fb6d8"/>
+    <text x="18" y="36" font-family="Arial" font-size="24" font-weight="700" fill="#2e5060">SIRE-011</text>
+    <text x="18" y="64" font-family="Arial" font-size="20" fill="#4f6672">M | fl/+</text>
+  </g>
+
+  <g transform="translate(520,530)">
+    <rect width="240" height="86" rx="12" fill="#ffeef5" stroke="#d49eb5"/>
+    <text x="18" y="36" font-family="Arial" font-size="24" font-weight="700" fill="#2e5060">DAM-018</text>
+    <text x="18" y="64" font-family="Arial" font-size="20" fill="#4f6672">F | +/+</text>
+  </g>
+
+  <g transform="translate(900,180)">
+    <rect width="240" height="86" rx="12" fill="#e8f3ff" stroke="#8fb6d8"/>
+    <text x="18" y="36" font-family="Arial" font-size="24" font-weight="700" fill="#2e5060">SIRE-G1-02</text>
+    <text x="18" y="64" font-family="Arial" font-size="20" fill="#4f6672">M | fl/fl</text>
+  </g>
+
+  <g transform="translate(900,360)">
+    <rect width="240" height="86" rx="12" fill="#ffeef5" stroke="#d49eb5"/>
+    <text x="18" y="36" font-family="Arial" font-size="24" font-weight="700" fill="#2e5060">DAM-G1-04</text>
+    <text x="18" y="64" font-family="Arial" font-size="20" fill="#4f6672">F | +/+</text>
+  </g>
+
+  <g transform="translate(900,520)">
+    <rect width="240" height="86" rx="12" fill="#e8f3ff" stroke="#8fb6d8"/>
+    <text x="18" y="36" font-family="Arial" font-size="24" font-weight="700" fill="#2e5060">SIRE-G1-07</text>
+    <text x="18" y="64" font-family="Arial" font-size="20" fill="#4f6672">M | +/+</text>
+  </g>
+
+  <g transform="translate(900,700)">
+    <rect width="240" height="86" rx="12" fill="#ffeef5" stroke="#d49eb5"/>
+    <text x="18" y="36" font-family="Arial" font-size="24" font-weight="700" fill="#2e5060">DAM-G1-10</text>
+    <text x="18" y="64" font-family="Arial" font-size="20" fill="#4f6672">F | fl/+</text>
+  </g>
+
+  <path d="M390 473 C450 473 460 313 520 313" stroke="#7ea495" stroke-width="4" fill="none"/>
+  <path d="M390 473 C450 473 460 573 520 573" stroke="#7ea495" stroke-width="4" fill="none"/>
+  <path d="M760 313 C820 313 840 223 900 223" stroke="#7ea495" stroke-width="4" fill="none"/>
+  <path d="M760 313 C820 313 840 403 900 403" stroke="#7ea495" stroke-width="4" fill="none"/>
+  <path d="M760 573 C820 573 840 563 900 563" stroke="#7ea495" stroke-width="4" fill="none"/>
+  <path d="M760 573 C820 573 840 743 900 743" stroke="#7ea495" stroke-width="4" fill="none"/>
+
+  <rect x="1200" y="212" width="268" height="140" rx="12" fill="#fff" stroke="#d3e4dc"/>
+  <text x="1222" y="246" font-family="Arial" font-size="20" font-weight="700" fill="#2a4e59">Legend</text>
+  <text x="1222" y="280" font-family="Arial" font-size="18" fill="#2a5ea8">Blue node = male</text>
+  <text x="1222" y="308" font-family="Arial" font-size="18" fill="#8d3f60">Pink node = female</text>
+  <text x="1222" y="336" font-family="Arial" font-size="18" fill="#4d626e">Edges = sire/dam relation</text>
+
+  <text x="88" y="928" font-family="Arial" font-size="20" fill="#415c68">Sample-data screenshot: interactive pedigree view for multi-generation lineage decisions.</text>
+</svg>

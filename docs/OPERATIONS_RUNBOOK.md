@@ -6,6 +6,8 @@ Track:
 - Error rate by endpoint
 - DB file growth and free disk space
 - Failed login attempts
+- Alert feed backlog by severity/category
+- Export job run success/failure rate
 
 ## Routine Tasks
 - Daily: DB backup verification
@@ -15,6 +17,8 @@ Track:
 - Monthly: billing period run, statement export, and period close
 - Daily: review facility request queue and SLA summary
 - Weekly: review pending export jobs and delivery status
+- Daily: review unresolved high-severity alert notifications
+- Daily: review quarantine overdue and necropsy pending queues
 
 ## Incident Response
 1. Identify impacted endpoint and users.
@@ -33,3 +37,5 @@ Track:
   - billing statement export
   - request list/status update
   - export-job run path
+  - alert feed and acknowledgment path
+  - quarantine and mortality workflows

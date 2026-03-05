@@ -51,6 +51,13 @@
             <button id="scanBtn">Open Cage</button>
           </div>
           <div id="scanResult"></div>
+          <h4 class="viz-heading">Pedigree Explorer</h4>
+          <div class="inline-form">
+            <input id="pedigreeAnimalId" type="number" placeholder="Animal ID (e.g., 1)" />
+            <input id="pedigreeGenerations" type="number" min="1" max="6" value="3" placeholder="Generations" />
+            <button id="loadPedigreeBtn">Visualize Pedigree</button>
+          </div>
+          <div id="pedigreeViz" class="viz-card"></div>
         </section>
 
         <section id="tab-cages" class="tab-content card">
@@ -58,6 +65,7 @@
             <h3>Cage Management</h3>
             <button id="refreshCages">Refresh</button>
           </div>
+          <div id="alertBanner" class="alert-banner hidden"></div>
           <div class="inline-form">
             <input id="searchCages" placeholder="Search cage, strain, genotype" />
             <button id="searchBtn">Search</button>
@@ -69,6 +77,7 @@
             <button id="saveScanBaseBtn">Save Scan URL Base</button>
           </div>
           <p class="hint">Use a phone-reachable host/IP. Avoid localhost/127.0.0.1 for printed cards.</p>
+          <div id="cageVisuals" class="viz-grid"></div>
           <div id="cageTable"></div>
           <div id="cardPreview"></div>
         </section>
@@ -112,12 +121,14 @@
             <label>Date<input type="date" id="breedDate" required /></label>
             <button type="submit">Create Event</button>
           </form>
+          <div id="breedingVisuals" class="viz-grid"></div>
           <div id="calendarList"></div>
         </section>
 
         <section id="tab-analytics" class="tab-content card">
           <h3>Operations Dashboard</h3>
           <div id="analyticsSummary" class="kpis"></div>
+          <div id="analyticsVisuals" class="viz-grid"></div>
         </section>
 
         <section id="tab-reports" class="tab-content card">
@@ -146,9 +157,13 @@
         <section id="tab-compliance" class="tab-content card">
           <h3>Compliance & Audit</h3>
           <button id="loadAlertsBtn">Load Protocol Alerts</button>
+          <button id="loadAlertFeedBtn">Load Active Alerts</button>
+          <button id="dispatchAlertsBtn">Dispatch Alerts</button>
           <button id="loadAuditBtn">Load Audit Trail</button>
           <button id="loadRequestsBtn">Load Facility Requests</button>
           <button id="loadSlaBtn">Load SLA Dashboard</button>
+          <div id="activeAlerts"></div>
+          <div id="complianceVisuals" class="viz-grid"></div>
           <div id="alerts"></div>
           <div id="audit"></div>
           <div id="requests"></div>

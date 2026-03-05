@@ -1,0 +1,36 @@
+{
+  "ok": true,
+  "db_path": "murisphere.db",
+  "today": "2026-03-05",
+  "thresholds": {
+    "min_total_alerts": 100,
+    "min_distinct_cages": 50,
+    "required_categories": [
+      "protocol_expired",
+      "task_overdue",
+      "deviation_open",
+      "necropsy_pending",
+      "vet_open"
+    ]
+  },
+  "summary": {
+    "total_alert_candidates": 444,
+    "distinct_cages_with_alerts": 220,
+    "category_counts": {
+      "protocol_expired": 124,
+      "task_overdue": 120,
+      "deviation_open": 70,
+      "necropsy_pending": 60,
+      "vet_open": 70
+    },
+    "severity_counts": {
+      "high": 242,
+      "medium": 202,
+      "low": 0
+    }
+  },
+  "failed_checks": [],
+  "notes": [
+    "Synthetic dataset demonstrates broad, multi-category alert pressure."
+  ]
+}
