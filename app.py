@@ -16,6 +16,9 @@ from typing import Any
 from flask import Flask, Response, g, jsonify, render_template, request, send_file
 from openpyxl import Workbook
 from werkzeug.security import check_password_hash, generate_password_hash
+import qrcode
+from barcode import Code128
+from barcode.writer import SVGWriter
 
 APP_NAME = "Murisphere"
 DB_PATH = os.getenv("MURISPHERE_DB", "murisphere.db")
@@ -568,6 +571,51 @@ def public_scan(token: str) -> Response:
             }
         }
     )
+
+
+@app.get("/api/assets/qrcode.png")
+def qrcode_asset() -> Response:
+    value = request.args.get("v", "").strip()
+    if not value:
+        return jsonify({"error": "Missing query parameter: v"}), 400
+    if len(value) > 2048:
+        return jsonify({"error": "Value too long"}), 400
+
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=8,
+        border=2,
+    )
+    qr.add_data(value)
+    qr.make(fit=True)
+    image = qr.make_image(fill_color="#0f2027", back_color="#ffffff")
+    bio = io.BytesIO()
+    image.save(bio, format="PNG")
+    bio.seek(0)
+    return send_file(bio, mimetype="image/png")
+
+
+@app.get("/api/assets/barcode.svg")
+def barcode_asset() -> Response:
+    value = request.args.get("v", "").strip()
+    if not value:
+        return jsonify({"error": "Missing query parameter: v"}), 400
+    if len(value) > 80:
+        return jsonify({"error": "Value too long"}), 400
+
+    code = Code128(value, writer=SVGWriter())
+    svg_payload = code.render(
+        writer_options={
+            "module_width": 0.28,
+            "module_height": 14.0,
+            "quiet_zone": 1.0,
+            "font_size": 8,
+            "text_distance": 1.0,
+            "write_text": True,
+        }
+    )
+    return Response(svg_payload, mimetype="image/svg+xml")
 
 
 @app.post("/api/cages/<int:cage_id>/wean")

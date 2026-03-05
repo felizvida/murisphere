@@ -33,6 +33,11 @@ pip install -r requirements-dev.txt
 python -m unittest discover -s tests -v
 ```
 
+QR diagnostics:
+```bash
+python qrcode_diagnostic.py
+```
+
 ## CI/CD
 - CI workflow: `.github/workflows/ci.yml`
   - Python matrix tests (3.11, 3.12)
@@ -74,7 +79,7 @@ This seeds:
 
 ### 2) Cage-centric workflow
 - Cage card payload generation with all required fields.
-- QR/scan token support per cage.
+- Server-rendered QR PNG + CODE128 barcode SVG per cage card.
 - Scan-to-open and in-room quick updates (counts/status/notes).
 
 ### 3) Core colony management
@@ -112,3 +117,4 @@ This seeds:
 
 ## Notes
 - This is a production-oriented MVP foundation. For enterprise deployment, next steps are PostgreSQL, SSO/OIDC, background jobs, HA deployment, and hardened PDF card rendering.
+- QR and barcode rendering are intentionally server-generated to avoid client-side CDN/script failures in restricted facility networks.

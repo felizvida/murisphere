@@ -8,8 +8,8 @@
 ## Core Workflow
 1. Login.
 2. Open `Cages` tab to search and review cages.
-3. Use `Generate + Print` for cage cards with barcode.
-4. In-room scan barcode with phone camera.
+3. Use `Generate + Print` for cage cards with QR code + barcode.
+4. In-room scan the QR code with phone camera.
 5. Open cage info page, then open app for authenticated edits.
 
 ## Daily Technician Tasks
@@ -27,4 +27,5 @@
 ## Common Troubleshooting
 - Scan opens wrong host: set `Scan Base URL` to phone-reachable host.
 - Report export fails: re-login and retry endpoint.
-- Barcode not printing: use `Generate + Print`, allow pop-ups.
+- Card images missing: ensure server is running and reload cards.
+- Pop-up blocked during print: allow pop-ups and use `Generate + Print`.

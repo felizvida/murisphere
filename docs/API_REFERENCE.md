@@ -20,6 +20,10 @@ Auth: `Authorization: Bearer <token>` for protected endpoints.
 - `GET /scan/<token>` (browser page)
 - `GET /api/public/scan/<token>` (JSON payload)
 
+## Card Rendering Assets
+- `GET /api/assets/qrcode.png?v=<url_or_text>` (server-generated QR PNG)
+- `GET /api/assets/barcode.svg?v=<code128_value>` (server-generated barcode SVG)
+
 ## Lifecycle and Breeding
 - `POST /api/cages/<id>/wean`
 - `POST /api/cages/<id>/transfer`

@@ -115,6 +115,24 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertEqual(scan_page.status_code, 200)
         self.assertIn(b"Loading Cage Info", scan_page.data)
 
+        qr = self.client.get(f"/api/assets/qrcode.png?v=https://example.org{card['scanUrl']}")
+        self.assertEqual(qr.status_code, 200)
+        self.assertIn("image/png", qr.content_type)
+        self.assertTrue(qr.data.startswith(b"\x89PNG\r\n\x1a\n"))
+        self.assertGreater(len(qr.data), 300)
+
+        barcode = self.client.get(f"/api/assets/barcode.svg?v={card['cageCode']}")
+        self.assertEqual(barcode.status_code, 200)
+        self.assertIn("image/svg+xml", barcode.content_type)
+        self.assertIn(b"<svg", barcode.data)
+
+    def test_index_uses_local_card_rendering_assets(self) -> None:
+        page = self.client.get("/")
+        self.assertEqual(page.status_code, 200)
+        body = page.data.decode("utf-8")
+        self.assertNotIn("cdn.jsdelivr.net/npm/qrcode", body)
+        self.assertNotIn("cdn.jsdelivr.net/npm/jsbarcode", body)
+
     def test_breeding_calendar_forecast_and_analytics(self) -> None:
         token = self.login("admin@murisphere.local", "admin1234")
 

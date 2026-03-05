@@ -2,7 +2,7 @@
 title: "Murisphere Mobile Scan Tutorial"
 subtitle: "Professional Step-by-Step Guide for Printed Cage Cards"
 author: "Murisphere Operations"
-date: "2026-03-04"
+date: "2026-03-05"
 geometry: margin=0.8in
 fontsize: 11pt
 colorlinks: true
@@ -51,7 +51,7 @@ Issue                        Likely Cause                 Action
 -------------------------    -------------------------    -------------------------------
 No scan prompt               Low contrast / glare         Improve lighting, flatten card
 Wrong page opens             Bad Scan Base URL            Use LAN IP/domain, not localhost
-Blank QR or broken image     Cached JS / blocked lib      Hard refresh, regenerate cards
+Blank QR or broken image     Asset endpoint unavailable    Verify server is running, regenerate cards
 Slow open                    Weak room network            Retest on strong Wi-Fi
 ```
 
@@ -101,9 +101,9 @@ Slow open                    Weak room network            Retest on strong Wi-Fi
 - Use LAN IP or production DNS.
 
 ## If QR appears broken
-- Hard refresh page (`Cmd+Shift+R` / `Ctrl+F5`).
-- Regenerate cards.
-- If still broken, capture browser console errors and report with timestamp + cage ID.
+- Confirm app server is reachable from browser.
+- Open `/api/assets/qrcode.png?v=test` in browser and verify PNG loads.
+- Regenerate cards and retry scan.
 
 # Trainer Checklist
 1. Demonstrate one complete scan -> edit -> save cycle.

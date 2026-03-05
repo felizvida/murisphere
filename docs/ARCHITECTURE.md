@@ -9,6 +9,7 @@
 - API server: `app.py`
 - UI templates: `templates/index.html`, `templates/scan.html`
 - Frontend logic: `static/app.js`
+- Card media rendering: server-side QR/Barcode asset endpoints
 - Data model: `schema.sql`
 - Demo scale seeding: `seed_large_demo.py`
 
@@ -35,6 +36,7 @@
 - Container: `Dockerfile`
 - CI: `.github/workflows/ci.yml`
 - CD image publish: `.github/workflows/cd.yml`
+- No CDN dependency for cage-card QR/barcode rendering
 
 ## Performance Notes
 - Lightweight scan lookup path with indexed cage keys.

@@ -85,59 +85,28 @@ function scanUrlForCard(card) {
   return `${normalizedScanBase()}${card.scanUrl}`;
 }
 
-function renderBarcodes(root = document) {
-  if (!window.JsBarcode) return;
-  root.querySelectorAll("svg.barcode").forEach((svg) => {
-    const value = svg.getAttribute("data-barcode");
-    const label = svg.getAttribute("data-label") || value;
+function assignCardMedia(root = document) {
+  root.querySelectorAll("img.qrcode").forEach((img) => {
+    const value = img.getAttribute("data-qr");
     if (!value) return;
-    window.JsBarcode(svg, value, {
-      format: "CODE128",
-      lineColor: "#111111",
-      width: 2,
-      height: 54,
-      margin: 0,
-      displayValue: true,
-      text: label,
-      fontSize: 12,
-      textMargin: 3,
-    });
+    img.src = `/api/assets/qrcode.png?v=${encodeURIComponent(value)}`;
+  });
+  root.querySelectorAll("img.barcode").forEach((img) => {
+    const value = img.getAttribute("data-barcode");
+    if (!value) return;
+    img.src = `/api/assets/barcode.svg?v=${encodeURIComponent(value)}`;
   });
 }
 
-async function renderQRCodes(root = document) {
-  if (!window.QRCode || !window.QRCode.toDataURL) {
-    const node = el("cardPreview");
-    if (node) {
-      node.insertAdjacentHTML("afterbegin", '<div class="cage-card">QR library unavailable. Reload page and regenerate cards.</div>');
-    }
-    return;
-  }
-  const nodes = Array.from(root.querySelectorAll("img.qrcode"));
+async function waitForImages(root = document) {
+  const nodes = Array.from(root.querySelectorAll("img"));
   await Promise.all(
     nodes.map(
       (img) =>
         new Promise((resolve) => {
-          const value = img.getAttribute("data-qr");
-          if (!value) return resolve(null);
-          window.QRCode.toDataURL(
-            value,
-            {
-              width: 220,
-              margin: 1,
-              errorCorrectionLevel: "M",
-              color: { dark: "#0f2027", light: "#ffffff" },
-            },
-            (err, url) => {
-              if (err || !url) {
-                img.alt = "QR render failed";
-                img.style.borderColor = "#ca513d";
-              } else {
-                img.src = url;
-              }
-              resolve(null);
-            }
-          );
+          if (img.complete) return resolve(null);
+          img.addEventListener("load", () => resolve(null), { once: true });
+          img.addEventListener("error", () => resolve(null), { once: true });
         })
     )
   );
@@ -161,7 +130,7 @@ function cardMarkup(c) {
       </div>
       <div class="scan-block">
         <img class="qrcode" data-qr="${esc(scanUrlForCard(c))}" alt="QR code" />
-        <svg class="barcode" data-barcode="${esc(c.cageCode)}" data-label="${esc(c.cageCode)}"></svg>
+        <img class="barcode" data-barcode="${esc(c.cageCode)}" alt="Barcode" />
       </div>
       <div class="card-foot">Scan URL: ${esc(scanUrlForCard(c))}</div>
     </article>
@@ -171,8 +140,8 @@ function cardMarkup(c) {
 async function renderCards(cards) {
   state.cards = cards;
   el("cardPreview").innerHTML = `<div class="card-grid">${cards.map(cardMarkup).join("")}</div>`;
-  renderBarcodes(el("cardPreview"));
-  await renderQRCodes(el("cardPreview"));
+  assignCardMedia(el("cardPreview"));
+  await waitForImages(el("cardPreview"));
 }
 
 async function fetchCards() {
@@ -199,20 +168,10 @@ async function printCardsDirect() {
     const cards = await fetchCards();
     if (!cards.length) return;
     await renderCards(cards);
-  } else {
-    await renderQRCodes(el("cardPreview"));
   }
+  assignCardMedia(el("cardPreview"));
+  await waitForImages(el("cardPreview"));
   const printableRoot = el("cardPreview").cloneNode(true);
-  printableRoot.querySelectorAll("canvas.qrcode").forEach((canvas) => {
-    const img = document.createElement("img");
-    img.className = "qrcode";
-    try {
-      img.src = canvas.toDataURL("image/png");
-    } catch {
-      img.alt = "QR unavailable";
-    }
-    canvas.replaceWith(img);
-  });
   const source = printableRoot.innerHTML;
   const win = window.open("", "_blank", "width=1100,height=800");
   if (!win) {
