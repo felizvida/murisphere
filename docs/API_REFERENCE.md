@@ -91,3 +91,38 @@ Auth: `Authorization: Bearer <token>` for protected endpoints.
 - `POST /api/integrations/export-jobs`
 - `POST /api/integrations/export-jobs/<id>/run`
 - `GET /api/integrations/export-jobs`
+
+## Census
+- `POST /api/census/sessions`
+- `POST /api/census/sessions/<id>/scan`
+- `POST /api/census/sessions/<id>/complete`
+- `GET /api/census/sessions/<id>`
+
+## Orders
+- `POST /api/orders`
+- `GET /api/orders`
+- `POST /api/orders/<id>/status`
+
+## Protocol Lifecycle
+- `POST /api/protocols/<id>/versions`
+- `GET /api/protocols/<id>/versions`
+
+## Billing Advanced
+- `POST /api/billing/adjustments` (Admin)
+- `POST /api/billing/review` (PI/Admin)
+- `GET /api/billing/rate-model` (PI/Admin)
+
+## Vet Care
+- `POST /api/vet/cases`
+- `GET /api/vet/cases`
+- `POST /api/vet/cases/<id>/treatments`
+
+## Staff Scheduling
+- `POST /api/staff/qualifications` (Admin)
+- `POST /api/tasks/assign` (PI/Admin)
+
+## Attachments and Signatures
+- `POST /api/attachments`
+- `GET /api/attachments?entityType=&entityId=`
+- `GET /api/attachments/<id>/download`
+- `POST /api/sign`

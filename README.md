@@ -134,6 +134,17 @@ This seeds:
 ### 12) Operations Integration
 - Facility request/order workflow APIs with status progression.
 - Export job scheduling APIs for external integration pipelines.
+- Real outbound export dispatch attempt with failure/success status.
+
+### 13) Enterprise Parity Modules
+- Census session + scan reconciliation APIs.
+- Animal order lifecycle APIs.
+- Protocol version lifecycle APIs.
+- Billing adjustments and statement review APIs.
+- Vet case and treatment workflow APIs.
+- Qualification-aware task assignment APIs.
+- Attachment upload/download APIs.
+- Electronic signature endpoint for regulated actions.
 
 ### 10) Usability/performance
 - Search/filter and low-click cage editing.

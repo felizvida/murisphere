@@ -498,7 +498,7 @@ class AppIntegrationTests(unittest.TestCase):
         job = self.client.post(
             "/api/integrations/export-jobs",
             headers=self.auth_headers(admin),
-            json={"jobType": "daily_census", "targetUrl": "https://example.invalid/webhook", "payload": {"format": "csv"}},
+            json={"jobType": "daily_census", "payload": {"format": "csv"}},
         )
         self.assertEqual(job.status_code, 201)
         job_id = job.get_json()["id"]
@@ -509,6 +509,155 @@ class AppIntegrationTests(unittest.TestCase):
         jobs = self.client.get("/api/integrations/export-jobs", headers=self.auth_headers(admin))
         self.assertEqual(jobs.status_code, 200)
         self.assertTrue(any(j["id"] == job_id for j in jobs.get_json()))
+
+    def test_missing_feature_parity_modules_end_to_end(self) -> None:
+        admin = self.login("admin@murisphere.local", "admin1234")
+        tech = self.login("tech@murisphere.local", "tech1234")
+
+        # Census session workflow
+        sess = self.client.post("/api/census/sessions", headers=self.auth_headers(tech), json={"roomId": 1, "notes": "AM census"})
+        self.assertEqual(sess.status_code, 201)
+        session_id = sess.get_json()["id"]
+
+        scan = self.client.post(
+            f"/api/census/sessions/{session_id}/scan",
+            headers=self.auth_headers(tech),
+            json={"code": "C-A1-001", "maleCount": 1, "femaleCount": 2, "breedingStatus": "Breeding"},
+        )
+        self.assertEqual(scan.status_code, 200)
+
+        get_session = self.client.get(f"/api/census/sessions/{session_id}", headers=self.auth_headers(tech))
+        self.assertEqual(get_session.status_code, 200)
+        self.assertEqual(len(get_session.get_json()["scans"]), 1)
+
+        done = self.client.post(f"/api/census/sessions/{session_id}/complete", headers=self.auth_headers(tech), json={"notes": "done"})
+        self.assertEqual(done.status_code, 200)
+
+        # Order lifecycle
+        order = self.client.post(
+            "/api/orders",
+            headers=self.auth_headers(tech),
+            json={"quantity": 5, "vendor": "JAX", "strain": "C57BL/6J", "sex": "F"},
+        )
+        self.assertEqual(order.status_code, 201)
+        order_id = order.get_json()["id"]
+
+        promote = self.client.post(
+            f"/api/orders/{order_id}/status",
+            headers=self.auth_headers(admin),
+            json={"status": "ordered"},
+        )
+        self.assertEqual(promote.status_code, 200)
+
+        orders = self.client.get("/api/orders", headers=self.auth_headers(admin))
+        self.assertEqual(orders.status_code, 200)
+        self.assertTrue(any(o["id"] == order_id for o in orders.get_json()))
+
+        # Protocol lifecycle versions
+        pver = self.client.post(
+            "/api/protocols/1/versions",
+            headers=self.auth_headers(admin),
+            json={"title": "Protocol v2", "details": {"change": "new endpoint"}},
+        )
+        self.assertEqual(pver.status_code, 201)
+        pvers = self.client.get("/api/protocols/1/versions", headers=self.auth_headers(admin))
+        self.assertEqual(pvers.status_code, 200)
+        self.assertTrue(pvers.get_json())
+
+        # Billing depth
+        adj = self.client.post(
+            "/api/billing/adjustments",
+            headers=self.auth_headers(admin),
+            json={"periodStart": "2026-03-01", "periodEnd": "2026-03-31", "labId": 1, "amount": -12.5, "reason": "manual correction"},
+        )
+        self.assertEqual(adj.status_code, 201)
+        review = self.client.post(
+            "/api/billing/review",
+            headers=self.auth_headers(admin),
+            json={"periodStart": "2026-03-01", "periodEnd": "2026-03-31", "labId": 1, "reviewStatus": "approved", "note": "looks good"},
+        )
+        self.assertEqual(review.status_code, 200)
+        rate_model = self.client.get("/api/billing/rate-model?laborPerDay=0.5&housingPerDay=0.3&overheadPerDay=0.2&marginPct=20", headers=self.auth_headers(admin))
+        self.assertEqual(rate_model.status_code, 200)
+        self.assertIn("recommendedPerDiemRate", rate_model.get_json())
+
+        # Vet care and treatment
+        case = self.client.post(
+            "/api/vet/cases",
+            headers=self.auth_headers(tech),
+            json={"cageId": 1, "severity": "moderate", "notes": "monitor coat condition"},
+        )
+        self.assertEqual(case.status_code, 201)
+        case_id = case.get_json()["id"]
+        tx = self.client.post(
+            f"/api/vet/cases/{case_id}/treatments",
+            headers=self.auth_headers(tech),
+            json={"treatmentName": "Supportive care", "scheduleRule": "daily", "nextDueOn": date.today().isoformat()},
+        )
+        self.assertEqual(tx.status_code, 201)
+        cases = self.client.get("/api/vet/cases", headers=self.auth_headers(admin))
+        self.assertEqual(cases.status_code, 200)
+        self.assertTrue(any(c["id"] == case_id for c in cases.get_json()))
+
+        # Qualification-aware task assignment
+        self.client.post(
+            "/api/staff/qualifications",
+            headers=self.auth_headers(admin),
+            json={"userId": 2, "qualificationCode": "Q-WEAN"},
+        )
+        tgood = self.client.post(
+            "/api/tasks/assign",
+            headers=self.auth_headers(admin),
+            json={"taskType": "wean", "cageId": 1, "dueOn": date.today().isoformat(), "assignedTo": 2, "requiredQualification": "Q-WEAN"},
+        )
+        self.assertEqual(tgood.status_code, 201)
+        tbad = self.client.post(
+            "/api/tasks/assign",
+            headers=self.auth_headers(admin),
+            json={"taskType": "special", "cageId": 1, "dueOn": date.today().isoformat(), "assignedTo": 2, "requiredQualification": "Q-NONEXIST"},
+        )
+        self.assertEqual(tbad.status_code, 409)
+
+        # Attachments and e-signature
+        file_data = io.BytesIO(b"clinical note attachment")
+        up = self.client.post(
+            "/api/attachments",
+            headers=self.auth_headers(tech),
+            data={"entityType": "vet_case", "entityId": str(case_id), "file": (file_data, "note.txt")},
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(up.status_code, 201)
+        att_id = up.get_json()["id"]
+        alist = self.client.get(f"/api/attachments?entityType=vet_case&entityId={case_id}", headers=self.auth_headers(tech))
+        self.assertEqual(alist.status_code, 200)
+        self.assertTrue(alist.get_json())
+        dl = self.client.get(f"/api/attachments/{att_id}/download", headers=self.auth_headers(tech))
+        self.assertEqual(dl.status_code, 200)
+        dl.close()
+
+        sign_fail = self.client.post(
+            "/api/sign",
+            headers=self.auth_headers(tech),
+            json={"entityType": "animal_order", "entityId": order_id, "action": "approve", "password": "wrong"},
+        )
+        self.assertEqual(sign_fail.status_code, 403)
+        sign_ok = self.client.post(
+            "/api/sign",
+            headers=self.auth_headers(tech),
+            json={"entityType": "animal_order", "entityId": order_id, "action": "approve", "password": "tech1234"},
+        )
+        self.assertEqual(sign_ok.status_code, 200)
+        self.assertIn("signatureHash", sign_ok.get_json())
+
+        # Real export dispatch path: invalid target should fail
+        ejob = self.client.post(
+            "/api/integrations/export-jobs",
+            headers=self.auth_headers(admin),
+            json={"jobType": "lims_sync", "targetUrl": "https://example.invalid/ingest", "payload": {"kind": "census"}},
+        )
+        self.assertEqual(ejob.status_code, 201)
+        erun = self.client.post(f"/api/integrations/export-jobs/{ejob.get_json()['id']}/run", headers=self.auth_headers(admin))
+        self.assertEqual(erun.status_code, 502)
 
     def test_export_job_scope_isolation_for_pi(self) -> None:
         admin = self.login("admin@murisphere.local", "admin1234")

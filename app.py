@@ -4,6 +4,7 @@ import csv
 import hashlib
 import io
 import json
+import mimetypes
 import os
 import secrets
 import sqlite3
@@ -11,7 +12,10 @@ from contextlib import closing
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from functools import wraps
+from pathlib import Path
 from typing import Any
+from urllib import error as urlerror
+from urllib import request as urlrequest
 
 from flask import Flask, Response, g, jsonify, render_template, request, send_file
 from openpyxl import Workbook
@@ -22,6 +26,7 @@ from barcode.writer import SVGWriter
 
 APP_NAME = "Murisphere"
 DB_PATH = os.getenv("MURISPHERE_DB", "murisphere.db")
+ATTACHMENT_DIR = Path(os.getenv("MURISPHERE_ATTACHMENT_DIR", "uploads"))
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("MURISPHERE_MAX_UPLOAD_BYTES", "5242880"))
@@ -219,6 +224,30 @@ def ensure_project_scope(project_id: int, user: AuthContext) -> sqlite3.Row | No
     if user.lab_id is None:
         return None
     return db().execute("SELECT * FROM projects WHERE id = ? AND lab_id = ?", (project_id, user.lab_id)).fetchone()
+
+
+def ensure_order_scope(order_id: int, user: AuthContext) -> sqlite3.Row | None:
+    if is_admin(user):
+        return db().execute("SELECT * FROM animal_orders WHERE id = ?", (order_id,)).fetchone()
+    if user.lab_id is None:
+        return None
+    return db().execute("SELECT * FROM animal_orders WHERE id = ? AND lab_id = ?", (order_id, user.lab_id)).fetchone()
+
+
+def ensure_request_scope(request_id: int, user: AuthContext) -> sqlite3.Row | None:
+    if is_admin(user):
+        return db().execute("SELECT * FROM facility_requests WHERE id = ?", (request_id,)).fetchone()
+    if user.lab_id is None:
+        return None
+    return db().execute("SELECT * FROM facility_requests WHERE id = ? AND lab_id = ?", (request_id, user.lab_id)).fetchone()
+
+
+def ensure_vet_case_scope(case_id: int, user: AuthContext) -> sqlite3.Row | None:
+    if is_admin(user):
+        return db().execute("SELECT * FROM vet_cases WHERE id = ?", (case_id,)).fetchone()
+    if user.lab_id is None:
+        return None
+    return db().execute("SELECT * FROM vet_cases WHERE id = ? AND lab_id = ?", (case_id, user.lab_id)).fetchone()
 
 
 def cage_protocol_expired(cage_id: int) -> tuple[bool, str | None]:
@@ -2302,11 +2331,28 @@ def run_export_job(job_id: int) -> Response:
         return jsonify({"error": "Not found"}), 404
     if not is_admin(g.user) and int(row["creator_lab_id"] or -1) != int(g.user.lab_id or -1):
         return jsonify({"error": "Not found"}), 404
-    # Simulated dispatch; external webhook delivery can be added in worker.
-    db().execute("UPDATE export_jobs SET status = 'sent', sent_at = ? WHERE id = ?", (now_iso(), job_id))
-    db().commit()
-    audit_log(g.user.user_id, "export_job", job_id, "run", {"status": row["status"]}, {"status": "sent"})
-    return jsonify({"ok": True, "status": "sent"})
+    payload = row["payload_json"] or "{}"
+    target = row["target_url"]
+    try:
+        if target:
+            req = urlrequest.Request(
+                target,
+                data=payload.encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urlrequest.urlopen(req, timeout=8) as resp:
+                if resp.status >= 400:
+                    raise RuntimeError(f"dispatch_failed_{resp.status}")
+        db().execute("UPDATE export_jobs SET status = 'sent', sent_at = ? WHERE id = ?", (now_iso(), job_id))
+        db().commit()
+        audit_log(g.user.user_id, "export_job", job_id, "run", {"status": row["status"]}, {"status": "sent"})
+        return jsonify({"ok": True, "status": "sent"})
+    except (urlerror.URLError, TimeoutError, RuntimeError) as exc:
+        db().execute("UPDATE export_jobs SET status = 'failed' WHERE id = ?", (job_id,))
+        db().commit()
+        audit_log(g.user.user_id, "export_job", job_id, "run_failed", {"status": row["status"]}, {"status": "failed", "error": str(exc)})
+        return jsonify({"ok": False, "status": "failed", "error": str(exc)}), 502
 
 
 @app.get("/api/integrations/export-jobs")
@@ -2327,6 +2373,508 @@ def list_export_jobs() -> Response:
     ).fetchall()
     return jsonify([dict(r) for r in rows])
 
+
+@app.post("/api/census/sessions")
+@require_auth(("Technician", "PI", "Admin"))
+def create_census_session() -> Response:
+    payload = request.get_json(force=True)
+    room_id = payload.get("roomId")
+    cur = db().execute(
+        "INSERT INTO cage_census_sessions (room_id, started_by, started_at, status, notes) VALUES (?, ?, ?, 'active', ?)",
+        (room_id, g.user.user_id, now_iso(), payload.get("notes")),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "census_session", cur.lastrowid, "create", None, payload)
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.post("/api/census/sessions/<int:session_id>/scan")
+@require_auth(("Technician", "PI", "Admin"))
+def census_scan(session_id: int) -> Response:
+    session = db().execute("SELECT * FROM cage_census_sessions WHERE id = ?", (session_id,)).fetchone()
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+    if session["status"] != "active":
+        return jsonify({"error": "Session is not active"}), 409
+
+    payload = request.get_json(force=True)
+    code = str(payload.get("code", "")).strip()
+    cage = db().execute(
+        "SELECT id, lab_id FROM cages WHERE cage_code = ? OR qr_token = ?",
+        (code, code),
+    ).fetchone()
+    if not cage:
+        return jsonify({"error": "Cage not found"}), 404
+    if not is_admin(g.user) and int(cage["lab_id"]) != int(g.user.lab_id or -1):
+        return jsonify({"error": "Not found"}), 404
+
+    db().execute(
+        """
+        INSERT OR REPLACE INTO cage_census_scans
+        (session_id, cage_id, scanned_at, scanned_by, observed_male_count, observed_female_count, observed_status)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            session_id,
+            cage["id"],
+            now_iso(),
+            g.user.user_id,
+            payload.get("maleCount"),
+            payload.get("femaleCount"),
+            payload.get("breedingStatus"),
+        ),
+    )
+    db().commit()
+    return jsonify({"ok": True, "cageId": cage["id"]})
+
+
+@app.post("/api/census/sessions/<int:session_id>/complete")
+@require_auth(("Technician", "PI", "Admin"))
+def complete_census_session(session_id: int) -> Response:
+    row = db().execute("SELECT * FROM cage_census_sessions WHERE id = ?", (session_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Session not found"}), 404
+    db().execute(
+        "UPDATE cage_census_sessions SET status = 'completed', ended_at = ?, notes = COALESCE(?, notes) WHERE id = ?",
+        (now_iso(), (request.get_json(silent=True) or {}).get("notes"), session_id),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "census_session", session_id, "complete", {"status": row["status"]}, {"status": "completed"})
+    return jsonify({"ok": True})
+
+
+@app.get("/api/census/sessions/<int:session_id>")
+@require_auth()
+def get_census_session(session_id: int) -> Response:
+    session = db().execute(
+        "SELECT id, room_id, started_by, started_at, ended_at, status, notes FROM cage_census_sessions WHERE id = ?",
+        (session_id,),
+    ).fetchone()
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+    scans = db().execute(
+        """
+        SELECT s.id, s.scanned_at, s.observed_male_count, s.observed_female_count, s.observed_status, c.cage_code
+        FROM cage_census_scans s
+        JOIN cages c ON c.id = s.cage_id
+        WHERE s.session_id = ?
+        ORDER BY s.scanned_at ASC
+        """,
+        (session_id,),
+    ).fetchall()
+    return jsonify({"session": dict(session), "scans": [dict(r) for r in scans]})
+
+
+@app.post("/api/orders")
+@require_auth(("Technician", "PI", "Admin"))
+def create_order() -> Response:
+    payload = request.get_json(force=True)
+    lab_id = int(payload.get("labId", g.user.lab_id or 1))
+    if not is_admin(g.user) and int(g.user.lab_id or -1) != lab_id:
+        return jsonify({"error": "Forbidden"}), 403
+    quantity = int(payload.get("quantity", 0))
+    if quantity <= 0:
+        return jsonify({"error": "quantity must be positive"}), 400
+    cur = db().execute(
+        """
+        INSERT INTO animal_orders
+        (lab_id, project_id, vendor, strain, sex, quantity, requested_date, needed_by, status, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'submitted', ?, ?, ?)
+        """,
+        (
+            lab_id,
+            payload.get("projectId"),
+            payload.get("vendor"),
+            payload.get("strain"),
+            payload.get("sex"),
+            quantity,
+            payload.get("requestedDate", datetime.now(UTC).date().isoformat()),
+            payload.get("neededBy"),
+            g.user.user_id,
+            now_iso(),
+            now_iso(),
+        ),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "animal_order", cur.lastrowid, "create", None, payload)
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.get("/api/orders")
+@require_auth()
+def list_orders() -> Response:
+    status = request.args.get("status", "").strip()
+    clauses = []
+    params: list[Any] = []
+    if status:
+        clauses.append("o.status = ?")
+        params.append(status)
+    if not is_admin(g.user):
+        clauses.append("o.lab_id = ?")
+        params.append(g.user.lab_id)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    rows = db().execute(
+        f"""
+        SELECT o.*, l.name AS lab_name, p.project_code, u.full_name AS creator_name
+        FROM animal_orders o
+        JOIN labs l ON l.id = o.lab_id
+        LEFT JOIN projects p ON p.id = o.project_id
+        LEFT JOIN users u ON u.id = o.created_by
+        {where}
+        ORDER BY o.id DESC
+        LIMIT 500
+        """,
+        params,
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/orders/<int:order_id>/status")
+@require_auth(("PI", "Admin"))
+def order_status(order_id: int) -> Response:
+    row = ensure_order_scope(order_id, g.user)
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    payload = request.get_json(force=True)
+    status = str(payload.get("status", "")).strip()
+    if status not in {"submitted", "approved", "ordered", "received", "cancelled"}:
+        return jsonify({"error": "Invalid status"}), 400
+    received_qty = payload.get("receivedQuantity")
+    db().execute(
+        "UPDATE animal_orders SET status = ?, reviewed_by = ?, received_quantity = COALESCE(?, received_quantity), updated_at = ? WHERE id = ?",
+        (status, g.user.user_id, received_qty, now_iso(), order_id),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "animal_order", order_id, "status", {"status": row["status"]}, {"status": status})
+    return jsonify({"ok": True})
+
+
+@app.post("/api/protocols/<int:protocol_id>/versions")
+@require_auth(("PI", "Admin"))
+def create_protocol_version(protocol_id: int) -> Response:
+    protocol = db().execute("SELECT * FROM iacuc_protocols WHERE id = ?", (protocol_id,)).fetchone()
+    if not protocol:
+        return jsonify({"error": "Not found"}), 404
+    if not is_admin(g.user) and int(protocol["lab_id"]) != int(g.user.lab_id or -1):
+        return jsonify({"error": "Forbidden"}), 403
+    payload = request.get_json(force=True)
+    prev = db().execute("SELECT COALESCE(MAX(version_number), 0) AS v FROM protocol_versions WHERE protocol_id = ?", (protocol_id,)).fetchone()
+    version = int(payload.get("versionNumber", int(prev["v"]) + 1))
+    cur = db().execute(
+        """
+        INSERT INTO protocol_versions (protocol_id, version_number, title, details_json, effective_on, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            protocol_id,
+            version,
+            payload.get("title", protocol["title"]),
+            json.dumps(payload.get("details", {})),
+            payload.get("effectiveOn", datetime.now(UTC).date().isoformat()),
+            g.user.user_id,
+            now_iso(),
+        ),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "protocol_version", cur.lastrowid, "create", None, payload)
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.get("/api/protocols/<int:protocol_id>/versions")
+@require_auth()
+def list_protocol_versions(protocol_id: int) -> Response:
+    protocol = db().execute("SELECT * FROM iacuc_protocols WHERE id = ?", (protocol_id,)).fetchone()
+    if not protocol:
+        return jsonify({"error": "Not found"}), 404
+    if not is_admin(g.user) and int(protocol["lab_id"]) != int(g.user.lab_id or -1):
+        return jsonify({"error": "Not found"}), 404
+    rows = db().execute(
+        "SELECT id, version_number, title, details_json, effective_on, created_at FROM protocol_versions WHERE protocol_id = ? ORDER BY version_number DESC",
+        (protocol_id,),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/billing/adjustments")
+@require_auth(("Admin",))
+def add_billing_adjustment() -> Response:
+    payload = request.get_json(force=True)
+    cur = db().execute(
+        """
+        INSERT INTO billing_adjustments (period_start, period_end, lab_id, amount, reason, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            payload["periodStart"],
+            payload["periodEnd"],
+            int(payload["labId"]),
+            float(payload["amount"]),
+            str(payload.get("reason", "")).strip(),
+            g.user.user_id,
+            now_iso(),
+        ),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "billing_adjustment", cur.lastrowid, "create", None, payload)
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.post("/api/billing/review")
+@require_auth(("PI", "Admin"))
+def billing_review() -> Response:
+    payload = request.get_json(force=True)
+    lab_id = int(payload.get("labId", g.user.lab_id or 0))
+    if not is_admin(g.user) and lab_id != int(g.user.lab_id or -1):
+        return jsonify({"error": "Forbidden"}), 403
+    status = str(payload.get("reviewStatus", "draft")).strip()
+    if status not in {"draft", "approved", "rejected"}:
+        return jsonify({"error": "Invalid reviewStatus"}), 400
+    db().execute(
+        """
+        INSERT OR REPLACE INTO billing_reviews (period_start, period_end, lab_id, review_status, note, reviewed_by, reviewed_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            payload["periodStart"],
+            payload["periodEnd"],
+            lab_id,
+            status,
+            payload.get("note"),
+            g.user.user_id,
+            now_iso(),
+        ),
+    )
+    db().commit()
+    return jsonify({"ok": True})
+
+
+@app.get("/api/billing/rate-model")
+@require_auth(("PI", "Admin"))
+def billing_rate_model() -> Response:
+    labor_per_day = float(request.args.get("laborPerDay", 0.42))
+    housing_per_day = float(request.args.get("housingPerDay", 0.28))
+    overhead_per_day = float(request.args.get("overheadPerDay", 0.15))
+    margin_pct = float(request.args.get("marginPct", 10.0))
+    base = labor_per_day + housing_per_day + overhead_per_day
+    recommended = round(base * (1.0 + margin_pct / 100.0), 4)
+    return jsonify(
+        {
+            "inputs": {
+                "laborPerDay": labor_per_day,
+                "housingPerDay": housing_per_day,
+                "overheadPerDay": overhead_per_day,
+                "marginPct": margin_pct,
+            },
+            "baseRate": round(base, 4),
+            "recommendedPerDiemRate": recommended,
+        }
+    )
+
+
+@app.post("/api/vet/cases")
+@require_auth(("Technician", "PI", "Admin"))
+def create_vet_case() -> Response:
+    payload = request.get_json(force=True)
+    cage_id = payload.get("cageId")
+    animal_id = payload.get("animalId")
+    lab_id = int(payload.get("labId", g.user.lab_id or 1))
+    if not is_admin(g.user) and lab_id != int(g.user.lab_id or -1):
+        return jsonify({"error": "Forbidden"}), 403
+    cur = db().execute(
+        """
+        INSERT INTO vet_cases (cage_id, animal_id, lab_id, case_status, severity, opened_at, opened_by, notes)
+        VALUES (?, ?, ?, 'open', ?, ?, ?, ?)
+        """,
+        (cage_id, animal_id, lab_id, payload.get("severity"), now_iso(), g.user.user_id, payload.get("notes")),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "vet_case", cur.lastrowid, "create", None, payload)
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.get("/api/vet/cases")
+@require_auth()
+def list_vet_cases() -> Response:
+    status = request.args.get("status", "").strip()
+    clauses = []
+    params: list[Any] = []
+    if status:
+        clauses.append("vc.case_status = ?")
+        params.append(status)
+    if not is_admin(g.user):
+        clauses.append("vc.lab_id = ?")
+        params.append(g.user.lab_id)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    rows = db().execute(
+        f"""
+        SELECT vc.id, vc.case_status, vc.severity, vc.opened_at, vc.closed_at, vc.notes,
+               c.cage_code, a.animal_code, l.name AS lab_name
+        FROM vet_cases vc
+        LEFT JOIN cages c ON c.id = vc.cage_id
+        LEFT JOIN animals a ON a.id = vc.animal_id
+        LEFT JOIN labs l ON l.id = vc.lab_id
+        {where}
+        ORDER BY vc.id DESC
+        LIMIT 500
+        """,
+        params,
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/vet/cases/<int:case_id>/treatments")
+@require_auth(("Technician", "PI", "Admin"))
+def add_treatment(case_id: int) -> Response:
+    vc = ensure_vet_case_scope(case_id, g.user)
+    if not vc:
+        return jsonify({"error": "Not found"}), 404
+    payload = request.get_json(force=True)
+    cur = db().execute(
+        """
+        INSERT INTO vet_treatments (case_id, treatment_name, schedule_rule, next_due_on, status, created_by, created_at)
+        VALUES (?, ?, ?, ?, 'active', ?, ?)
+        """,
+        (case_id, payload["treatmentName"], payload.get("scheduleRule"), payload.get("nextDueOn"), g.user.user_id, now_iso()),
+    )
+    db().commit()
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.post("/api/tasks/assign")
+@require_auth(("PI", "Admin"))
+def assign_task() -> Response:
+    payload = request.get_json(force=True)
+    assignee = payload.get("assignedTo")
+    required = payload.get("requiredQualification")
+    if assignee and required:
+        qual = db().execute(
+            "SELECT 1 FROM staff_qualifications WHERE user_id = ? AND qualification_code = ?",
+            (assignee, required),
+        ).fetchone()
+        if not qual:
+            return jsonify({"error": "Assignee missing required qualification"}), 409
+    cur = db().execute(
+        """
+        INSERT INTO task_assignments (task_type, cage_id, due_on, assigned_to, required_qualification, status, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)
+        """,
+        (
+            payload["taskType"],
+            payload.get("cageId"),
+            payload["dueOn"],
+            assignee,
+            required,
+            g.user.user_id,
+            now_iso(),
+        ),
+    )
+    db().commit()
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.post("/api/staff/qualifications")
+@require_auth(("Admin",))
+def add_staff_qualification() -> Response:
+    payload = request.get_json(force=True)
+    db().execute(
+        """
+        INSERT OR REPLACE INTO staff_qualifications (user_id, qualification_code, granted_on, expires_on)
+        VALUES (?, ?, ?, ?)
+        """,
+        (
+            int(payload["userId"]),
+            str(payload["qualificationCode"]),
+            payload.get("grantedOn", datetime.now(UTC).date().isoformat()),
+            payload.get("expiresOn"),
+        ),
+    )
+    db().commit()
+    return jsonify({"ok": True})
+
+
+@app.post("/api/attachments")
+@require_auth(("Technician", "PI", "Admin"))
+def upload_attachment() -> Response:
+    entity_type = request.form.get("entityType", "").strip()
+    entity_id = request.form.get("entityId", "").strip()
+    f = request.files.get("file")
+    if not entity_type or not entity_id or f is None:
+        return jsonify({"error": "entityType, entityId and file are required"}), 400
+    ATTACHMENT_DIR.mkdir(parents=True, exist_ok=True)
+    safe_name = f.filename or "attachment.bin"
+    unique_name = f"{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}_{secrets.token_hex(6)}_{safe_name}"
+    out_path = ATTACHMENT_DIR / unique_name
+    f.save(out_path)
+    content_type = f.mimetype or mimetypes.guess_type(safe_name)[0]
+    cur = db().execute(
+        """
+        INSERT INTO record_attachments (entity_type, entity_id, filename, file_path, content_type, uploaded_by, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (entity_type, entity_id, safe_name, str(out_path), content_type, g.user.user_id, now_iso()),
+    )
+    db().commit()
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.get("/api/attachments")
+@require_auth()
+def list_attachments() -> Response:
+    entity_type = request.args.get("entityType", "").strip()
+    entity_id = request.args.get("entityId", "").strip()
+    if not entity_type or not entity_id:
+        return jsonify({"error": "entityType and entityId required"}), 400
+    rows = db().execute(
+        """
+        SELECT id, entity_type, entity_id, filename, content_type, uploaded_by, created_at
+        FROM record_attachments
+        WHERE entity_type = ? AND entity_id = ?
+        ORDER BY id DESC
+        """,
+        (entity_type, entity_id),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.get("/api/attachments/<int:attachment_id>/download")
+@require_auth()
+def download_attachment(attachment_id: int) -> Response:
+    row = db().execute("SELECT * FROM record_attachments WHERE id = ?", (attachment_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    path = Path(row["file_path"])
+    if not path.exists():
+        return jsonify({"error": "File missing"}), 404
+    return send_file(path, as_attachment=True, download_name=row["filename"], mimetype=row["content_type"] or "application/octet-stream")
+
+
+@app.post("/api/sign")
+@require_auth(("Technician", "PI", "Admin"))
+def e_sign() -> Response:
+    payload = request.get_json(force=True)
+    password = str(payload.get("password", ""))
+    user = db().execute("SELECT password_hash FROM users WHERE id = ?", (g.user.user_id,)).fetchone()
+    if not user or not check_password_hash(user["password_hash"], password):
+        return jsonify({"error": "Signature authentication failed"}), 403
+    signature_basis = f"{g.user.user_id}:{payload.get('entityType')}:{payload.get('entityId')}:{payload.get('action')}:{now_iso()}"
+    sig_hash = hashlib.sha256(signature_basis.encode("utf-8")).hexdigest()
+    cur = db().execute(
+        """
+        INSERT INTO e_signatures (signer_user_id, entity_type, entity_id, action, reason, signature_hash, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            g.user.user_id,
+            payload["entityType"],
+            str(payload["entityId"]),
+            payload["action"],
+            payload.get("reason"),
+            sig_hash,
+            now_iso(),
+        ),
+    )
+    db().commit()
+    return jsonify({"id": cur.lastrowid, "signatureHash": sig_hash})
 
 @app.get("/api/audit")
 @require_auth(("Admin",))
