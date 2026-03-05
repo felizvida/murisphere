@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 980">
+  <defs>
+    <linearGradient id="bg3" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#edf6f2"/>
+      <stop offset="100%" stop-color="#deede6"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="980" fill="url(#bg3)"/>
+  <rect x="60" y="50" width="1480" height="880" rx="24" fill="#fff" stroke="#c8ddd3"/>
+  <text x="110" y="120" font-family="Arial" font-size="40" font-weight="700" fill="#163742">Scan/Edit Workflow</text>
+
+  <rect x="110" y="170" width="760" height="700" rx="16" fill="#f9fcfb" stroke="#d4e4dd"/>
+  <text x="140" y="225" font-family="Arial" font-size="30" font-weight="700" fill="#193f4c">1. Enter QR token or scan link</text>
+  <rect x="140" y="250" width="700" height="64" rx="10" fill="#fff" stroke="#b9cec5"/>
+  <text x="162" y="292" font-family="Arial" font-size="24" fill="#607680">tok_a1_0243Xc98...</text>
+
+  <rect x="140" y="340" width="240" height="60" rx="10" fill="#0f7a58"/>
+  <text x="186" y="379" font-family="Arial" font-size="26" font-weight="700" fill="#fff">Open Cage</text>
+
+  <rect x="140" y="430" width="700" height="380" rx="12" fill="#ffffff" stroke="#9db9ad"/>
+  <text x="166" y="475" font-family="Arial" font-size="28" font-weight="700" fill="#214a58">C-A1-0243 (lookup 132ms)</text>
+  <text x="166" y="520" font-family="Arial" font-size="22" fill="#365663">C57BL/6J | WT/WT | Breeding</text>
+  <text x="166" y="558" font-family="Arial" font-size="22" fill="#365663">Room A1 / Rack R3</text>
+
+  <text x="166" y="620" font-family="Arial" font-size="22" fill="#214652">Male Count</text>
+  <rect x="300" y="588" width="130" height="48" rx="8" fill="#fff" stroke="#b9cec5"/>
+  <text x="352" y="620" font-family="Arial" font-size="22" fill="#516b76">2</text>
+
+  <text x="460" y="620" font-family="Arial" font-size="22" fill="#214652">Female Count</text>
+  <rect x="620" y="588" width="130" height="48" rx="8" fill="#fff" stroke="#b9cec5"/>
+  <text x="672" y="620" font-family="Arial" font-size="22" fill="#516b76">3</text>
+
+  <rect x="166" y="720" width="320" height="64" rx="10" fill="#15966d"/>
+  <text x="240" y="762" font-family="Arial" font-size="28" font-weight="700" fill="#fff">Save Changes</text>
+
+  <rect x="920" y="170" width="570" height="700" rx="16" fill="#f7fcfa" stroke="#d4e4dd"/>
+  <text x="950" y="226" font-family="Arial" font-size="30" font-weight="700" fill="#193f4c">2. Phone Camera Scan</text>
+  <rect x="1030" y="280" width="340" height="560" rx="36" fill="#223741"/>
+  <rect x="1060" y="330" width="280" height="430" rx="20" fill="#eef8f4"/>
+  <rect x="1084" y="360" width="232" height="66" rx="10" fill="#d8efe5"/>
+  <text x="1106" y="402" font-family="Arial" font-size="24" font-weight="700" fill="#246149">Open in Browser</text>
+  <text x="1092" y="468" font-family="Arial" font-size="20" fill="#3a5864">Tap banner to open</text>
+  <text x="1092" y="500" font-family="Arial" font-size="20" fill="#3a5864">/scan/tok_a1_0243...</text>
+
+  <text x="96" y="910" font-family="Arial" font-size="22" fill="#3d5864">Vectorized screenshot: Scan token lookup and edit confirmation</text>
+</svg>

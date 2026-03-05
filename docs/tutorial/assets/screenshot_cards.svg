@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 980">
+  <defs>
+    <linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#edf6f2"/>
+      <stop offset="100%" stop-color="#dcece5"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="980" fill="url(#bg2)"/>
+  <rect x="60" y="50" width="1480" height="880" rx="24" fill="#ffffff" stroke="#c8ddd3"/>
+  <text x="110" y="120" font-family="Arial" font-size="40" font-weight="700" fill="#163742">Cages > Generate + Print</text>
+
+  <rect x="110" y="160" width="1380" height="88" rx="14" fill="#f4faf7" stroke="#d1e2db"/>
+  <rect x="980" y="178" width="220" height="52" rx="10" fill="#0f7a58"/>
+  <text x="1014" y="212" font-family="Arial" font-size="23" font-weight="700" fill="#fff">Generate Cards</text>
+  <rect x="1220" y="178" width="220" height="52" rx="10" fill="#15966d"/>
+  <text x="1276" y="212" font-family="Arial" font-size="23" font-weight="700" fill="#fff">Quick Print</text>
+
+  <rect x="110" y="280" width="660" height="590" rx="16" fill="#fdfefe" stroke="#d4e4dd"/>
+  <text x="140" y="326" font-family="Arial" font-size="30" font-weight="700" fill="#193f4c">Card Preview (C-A1-0243)</text>
+  <rect x="140" y="360" width="600" height="460" rx="12" fill="#ffffff" stroke="#9db9ad"/>
+  <rect x="174" y="420" width="170" height="170" fill="#fff" stroke="#173d49" stroke-width="3"/>
+  <rect x="188" y="434" width="32" height="32" fill="#173d49"/>
+  <rect x="228" y="434" width="24" height="24" fill="#173d49"/>
+  <rect x="260" y="434" width="28" height="28" fill="#173d49"/>
+  <rect x="188" y="474" width="24" height="24" fill="#173d49"/>
+  <rect x="220" y="474" width="44" height="44" fill="#173d49"/>
+  <rect x="272" y="474" width="30" height="30" fill="#173d49"/>
+  <text x="174" y="618" font-family="Arial" font-size="18" fill="#425f6b">QR code (scan with phone)</text>
+
+  <rect x="372" y="450" width="330" height="92" fill="#fff" stroke="#173d49" stroke-width="2"/>
+  <line x1="386" y1="466" x2="688" y2="466" stroke="#173d49" stroke-width="3"/>
+  <line x1="386" y1="488" x2="688" y2="488" stroke="#173d49" stroke-width="2"/>
+  <line x1="386" y1="510" x2="688" y2="510" stroke="#173d49" stroke-width="4"/>
+  <text x="372" y="560" font-family="Arial" font-size="18" fill="#425f6b">Barcode (optional)</text>
+  <text x="174" y="700" font-family="Arial" font-size="22" fill="#244c5a">Scan URL: https://vivarium.example.org/scan/tok_a1_0243</text>
+
+  <rect x="810" y="280" width="680" height="590" rx="16" fill="#f8fcfa" stroke="#d4e4dd"/>
+  <text x="840" y="326" font-family="Arial" font-size="30" font-weight="700" fill="#193f4c">Printing Checklist</text>
+  <text x="850" y="390" font-family="Arial" font-size="24" fill="#2f525e">1. Confirm Scan Base URL is phone-reachable</text>
+  <text x="850" y="440" font-family="Arial" font-size="24" fill="#2f525e">2. Confirm each card shows visible QR square</text>
+  <text x="850" y="490" font-family="Arial" font-size="24" fill="#2f525e">3. Print at 100% scale</text>
+  <text x="850" y="540" font-family="Arial" font-size="24" fill="#2f525e">4. Test one printed card with phone camera</text>
+
+  <text x="96" y="910" font-family="Arial" font-size="22" fill="#3d5864">Vectorized screenshot: Cage card generation and print readiness</text>
+</svg>
