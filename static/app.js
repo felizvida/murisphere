@@ -66,6 +66,44 @@ function tableFromCages(rows) {
   `;
 }
 
+function tableFromProjects(rows) {
+  return `
+    <table class="table">
+      <thead><tr><th>Code</th><th>Title</th><th>Status</th><th>Target</th><th>Lab</th><th>Assigned Cages</th></tr></thead>
+      <tbody>
+        ${rows
+          .map(
+            (p) => `
+          <tr>
+            <td>${esc(p.project_code)}</td><td>${esc(p.title)}</td><td>${esc(p.status)}</td>
+            <td>${esc(p.target_animals)}</td><td>${esc(p.lab_name)}</td><td>${esc(p.assigned_cages)}</td>
+          </tr>`
+          )
+          .join("")}
+      </tbody>
+    </table>
+  `;
+}
+
+function tableFromQuotas(rows) {
+  return `
+    <table class="table">
+      <thead><tr><th>Lab</th><th>Tier</th><th>Expected Cages</th><th>Current Cages</th><th>Remaining</th><th>Projects</th></tr></thead>
+      <tbody>
+        ${rows
+          .map(
+            (q) => `
+          <tr>
+            <td>${esc(q.labName)}</td><td>${esc(q.sizeTier)}</td><td>${esc(q.expectedCageLoad)}</td>
+            <td>${esc(q.currentCages)}</td><td>${esc(q.remainingQuota)}</td><td>${esc(q.currentProjects)}</td>
+          </tr>`
+          )
+          .join("")}
+      </tbody>
+    </table>
+  `;
+}
+
 function esc(text) {
   return String(text ?? "")
     .replaceAll("&", "&amp;")
@@ -272,12 +310,23 @@ async function openPendingScanIfAny() {
 }
 
 async function loadAnalytics() {
-  const a = await api("/api/analytics/summary", { headers: headers(false) });
+  const [a, nonProd, reminders, space, consolidation] = await Promise.all([
+    api("/api/analytics/summary", { headers: headers(false) }),
+    api("/api/breeding/non-productive?staleDays=45", { headers: headers(false) }),
+    api("/api/tasks/reminders?windowDays=14", { headers: headers(false) }),
+    api("/api/forecast/cage-space?days=30", { headers: headers(false) }),
+    api("/api/forecast/consolidation?maxAnimals=2", { headers: headers(false) }),
+  ]);
+  const projectedOverCap = (space.rooms || []).filter((r) => (r.projectedUtilizationPct || 0) > 100).length;
   el("analyticsSummary").innerHTML = `
     <div class="kpi"><div>Total Cages</div><div class="value">${a.totalCages}</div></div>
     <div class="kpi"><div>Active Animals</div><div class="value">${a.totalActiveAnimals}</div></div>
     <div class="kpi"><div>Pup Survival</div><div class="value">${a.pupSurvivalPct}%</div></div>
     <div class="kpi"><div>Sex Ratio (M/F)</div><div class="value">${a.sexRatio.M}/${a.sexRatio.F}</div></div>
+    <div class="kpi"><div>Non-Productive Breeders</div><div class="value">${nonProd.length}</div></div>
+    <div class="kpi"><div>Upcoming/Overdue Tasks</div><div class="value">${reminders.length}</div></div>
+    <div class="kpi"><div>Projected Over-Cap Rooms (30d)</div><div class="value">${projectedOverCap}</div></div>
+    <div class="kpi"><div>Consolidation Opportunities</div><div class="value">${consolidation.length}</div></div>
   `;
 }
 
@@ -288,12 +337,26 @@ async function loadCalendar() {
     .join("");
 }
 
+async function loadProjects() {
+  const rows = await api("/api/projects", { headers: headers(false) });
+  el("projectList").innerHTML = rows.length ? tableFromProjects(rows) : `<p class="hint">No projects yet.</p>`;
+}
+
+async function loadQuotas() {
+  const rows = await api("/api/facility/quotas", { headers: headers(false) });
+  el("quotaList").innerHTML = rows.length ? tableFromQuotas(rows) : `<p class="hint">No quota data.</p>`;
+}
+
 async function init() {
   document.querySelectorAll(".tabs button").forEach((btn) => {
     btn.addEventListener("click", () => {
       activateTab(btn.dataset.tab);
       if (btn.dataset.tab === "analytics") loadAnalytics().catch(console.error);
       if (btn.dataset.tab === "breeding") loadCalendar().catch(console.error);
+      if (btn.dataset.tab === "projects") {
+        loadProjects().catch(console.error);
+        loadQuotas().catch(console.error);
+      }
     });
   });
 
@@ -307,6 +370,7 @@ async function init() {
       });
       setAuth(data.token, data.user);
       await loadCages();
+      await loadProjects();
       await openPendingScanIfAny();
     } catch (err) {
       alert(err.message);
@@ -349,6 +413,27 @@ async function init() {
     alert("Breeding event scheduled.");
   });
 
+  el("projectForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await api("/api/projects", {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        projectCode: el("projectCode").value.trim(),
+        title: el("projectTitle").value.trim(),
+        status: el("projectStatus").value,
+        targetAnimals: Number(el("projectTarget").value || 0),
+      }),
+    });
+    el("projectCode").value = "";
+    el("projectTitle").value = "";
+    el("projectTarget").value = "0";
+    await loadProjects();
+    alert("Project created.");
+  });
+  el("refreshProjectsBtn").addEventListener("click", () => loadProjects());
+  el("loadQuotasBtn").addEventListener("click", () => loadQuotas());
+
   el("genoUploadForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     const fd = new FormData();
@@ -389,6 +474,7 @@ async function init() {
     const me = await api("/api/auth/me", { headers: headers(false) });
     setAuth("", me);
     await loadCages();
+    await loadProjects();
     await openPendingScanIfAny();
   } catch {
     setAuth("", null);

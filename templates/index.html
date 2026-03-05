@@ -36,6 +36,7 @@
         <nav class="tabs">
           <button data-tab="scan" class="active">Scan/Edit</button>
           <button data-tab="cages">Cages</button>
+          <button data-tab="projects">Projects</button>
           <button data-tab="breeding">Breeding</button>
           <button data-tab="analytics">Analytics</button>
           <button data-tab="reports">Reports</button>
@@ -72,6 +73,29 @@
           <div id="cardPreview"></div>
         </section>
 
+        <section id="tab-projects" class="tab-content card">
+          <h3>Projects & Quotas</h3>
+          <form id="projectForm" class="grid-form">
+            <label>Project Code<input id="projectCode" required /></label>
+            <label>Title<input id="projectTitle" required /></label>
+            <label>Status
+              <select id="projectStatus">
+                <option>active</option>
+                <option>paused</option>
+                <option>closed</option>
+              </select>
+            </label>
+            <label>Target Animals<input id="projectTarget" type="number" min="0" value="0" /></label>
+            <button type="submit">Create Project</button>
+          </form>
+          <div class="inline-form">
+            <button id="refreshProjectsBtn">Refresh Projects</button>
+            <button id="loadQuotasBtn">Load Quotas</button>
+          </div>
+          <div id="projectList"></div>
+          <div id="quotaList"></div>
+        </section>
+
         <section id="tab-breeding" class="tab-content card">
           <h3>Breeding Scheduler</h3>
           <form id="breedingForm" class="grid-form">
@@ -102,6 +126,9 @@
             <a class="button-link" href="/api/reports/cages.csv" target="_blank">Export CSV</a>
             <a class="button-link" href="/api/reports/cages.xlsx" target="_blank">Export Excel</a>
             <a class="button-link" href="/api/reports/cages.pdf" target="_blank">Export PDF</a>
+            <a class="button-link" href="/api/reports/breeder-productivity.csv" target="_blank">Breeder Productivity CSV</a>
+            <a class="button-link" href="/api/reports/survival.csv" target="_blank">Survival CSV</a>
+            <a class="button-link" href="/api/reports/protocol-usage.csv" target="_blank">Protocol Usage CSV</a>
           </div>
           <h4>Genotyping Upload (CSV)</h4>
           <form id="genoUploadForm" class="inline-form">

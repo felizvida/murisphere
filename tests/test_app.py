@@ -230,6 +230,167 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertEqual(audit.status_code, 200)
         self.assertIsInstance(audit.get_json(), list)
 
+    def test_project_management_assignment_and_scope(self) -> None:
+        admin = self.login("admin@murisphere.local", "admin1234")
+        tech = self.login("tech@murisphere.local", "tech1234")
+
+        create = self.client.post(
+            "/api/projects",
+            headers=self.auth_headers(admin),
+            json={"labId": 1, "projectCode": "PRJ-NG-001", "title": "Neuro Cohort", "status": "active", "targetAnimals": 120},
+        )
+        self.assertEqual(create.status_code, 201)
+        project_id = create.get_json()["id"]
+
+        cages = self.client.get("/api/cages", headers=self.auth_headers(admin)).get_json()
+        assign = self.client.post(
+            f"/api/projects/{project_id}/assign-cages",
+            headers=self.auth_headers(admin),
+            json={"cageIds": [cages[0]["id"], cages[1]["id"]]},
+        )
+        self.assertEqual(assign.status_code, 200)
+        self.assertEqual(assign.get_json()["assigned"], 2)
+
+        plist = self.client.get("/api/projects", headers=self.auth_headers(admin))
+        self.assertEqual(plist.status_code, 200)
+        self.assertTrue(any(p["project_code"] == "PRJ-NG-001" for p in plist.get_json()))
+
+        pcages = self.client.get(f"/api/projects/{project_id}/cages", headers=self.auth_headers(admin))
+        self.assertEqual(pcages.status_code, 200)
+        self.assertEqual(len(pcages.get_json()), 2)
+
+        forbidden = self.client.post(
+            "/api/projects",
+            headers=self.auth_headers(tech),
+            json={"labId": 1, "projectCode": "PRJ-TECH-001", "title": "Should Fail"},
+        )
+        self.assertEqual(forbidden.status_code, 403)
+
+    def test_bulk_actions_and_quota_tracking(self) -> None:
+        admin = self.login("admin@murisphere.local", "admin1234")
+
+        with sqlite3.connect(appmod.DB_PATH) as conn:
+            now = datetime.now(UTC).isoformat()
+            conn.execute(
+                "INSERT OR REPLACE INTO lab_profiles (lab_id, size_tier, staff_count, expected_cage_load, active_project_count, updated_at) VALUES (1, 'medium', 6, 20, 2, ?)",
+                (now,),
+            )
+            conn.commit()
+
+        cages = self.client.get("/api/cages", headers=self.auth_headers(admin)).get_json()
+        ids = [cages[0]["id"], cages[1]["id"]]
+
+        retire = self.client.post(
+            "/api/cages/bulk-actions",
+            headers=self.auth_headers(admin),
+            json={"action": "retire_breeders", "cageIds": ids, "reason": "non-productive"},
+        )
+        self.assertEqual(retire.status_code, 200)
+        self.assertEqual(retire.get_json()["updated"], 2)
+
+        updated_cage = self.client.get(f"/api/cages/{ids[0]}", headers=self.auth_headers(admin)).get_json()["cage"]
+        self.assertEqual(updated_cage["breedingStatus"], "Retired")
+
+        transfer = self.client.post(
+            "/api/cages/bulk-actions",
+            headers=self.auth_headers(admin),
+            json={"action": "transfer", "cageIds": ids, "roomId": 1, "rackId": 1},
+        )
+        self.assertEqual(transfer.status_code, 200)
+        self.assertEqual(transfer.get_json()["updated"], 2)
+
+        quotas = self.client.get("/api/facility/quotas", headers=self.auth_headers(admin))
+        self.assertEqual(quotas.status_code, 200)
+        payload = quotas.get_json()
+        self.assertTrue(payload)
+        self.assertTrue(any(row["labId"] == 1 for row in payload))
+
+    def test_advanced_analytics_and_operational_endpoints(self) -> None:
+        admin = self.login("admin@murisphere.local", "admin1234")
+
+        # Seed lineage and litter/genotype records
+        with sqlite3.connect(appmod.DB_PATH) as conn:
+            now = datetime.now(UTC).isoformat()
+            conn.row_factory = sqlite3.Row
+            conn.execute(
+                "INSERT INTO animals (animal_code, sex, dob, strain, genotype, status, cage_id, litter_id, sire_id, dam_id, created_at, updated_at) VALUES (?, 'M', ?, 'C57BL/6J', 'fl/+','Active',1,NULL,NULL,NULL,?,?)",
+                ("SIRE-001", date.today().isoformat(), now, now),
+            )
+            sire_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute(
+                "INSERT INTO animals (animal_code, sex, dob, strain, genotype, status, cage_id, litter_id, sire_id, dam_id, created_at, updated_at) VALUES (?, 'F', ?, 'C57BL/6J', '+/+','Active',1,NULL,NULL,NULL,?,?)",
+                ("DAM-001", date.today().isoformat(), now, now),
+            )
+            dam_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute(
+                "INSERT INTO litters (cage_id, birth_date, litter_size, survived_count, created_at) VALUES (1, ?, 4, 3, ?)",
+                (date.today().isoformat(), now),
+            )
+            litter_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute(
+                "INSERT INTO animals (animal_code, sex, dob, strain, genotype, status, cage_id, litter_id, sire_id, dam_id, created_at, updated_at) VALUES (?, 'M', ?, 'C57BL/6J', 'fl/+','Active',1,?,?,?,?,?)",
+                ("PUP-001", date.today().isoformat(), litter_id, sire_id, dam_id, now, now),
+            )
+            conn.execute(
+                "INSERT INTO animals (animal_code, sex, dob, strain, genotype, status, cage_id, litter_id, sire_id, dam_id, created_at, updated_at) VALUES (?, 'F', ?, 'C57BL/6J', '+/+','Active',1,?,?,?,?,?)",
+                ("PUP-002", date.today().isoformat(), litter_id, sire_id, dam_id, now, now),
+            )
+            conn.commit()
+
+        animals = self.client.get("/api/animals?q=PUP-001", headers=self.auth_headers(admin))
+        self.assertEqual(animals.status_code, 200)
+        pup_id = animals.get_json()[0]["id"]
+
+        pedigree = self.client.get(f"/api/animals/{pup_id}/pedigree?generations=2", headers=self.auth_headers(admin))
+        self.assertEqual(pedigree.status_code, 200)
+        pdata = pedigree.get_json()
+        self.assertGreaterEqual(len(pdata["nodes"]), 3)
+        self.assertTrue(any(e["relation"] == "sire" for e in pdata["edges"]))
+
+        productivity = self.client.get("/api/breeding/productivity", headers=self.auth_headers(admin))
+        self.assertEqual(productivity.status_code, 200)
+        self.assertTrue(isinstance(productivity.get_json(), list))
+
+        non_productive = self.client.get("/api/breeding/non-productive?staleDays=0", headers=self.auth_headers(admin))
+        self.assertEqual(non_productive.status_code, 200)
+
+        reminders = self.client.get("/api/tasks/reminders?windowDays=30", headers=self.auth_headers(admin))
+        self.assertEqual(reminders.status_code, 200)
+
+        mendelian = self.client.get("/api/genotyping/mendelian", headers=self.auth_headers(admin))
+        self.assertEqual(mendelian.status_code, 200)
+        self.assertTrue(isinstance(mendelian.get_json(), list))
+
+        alerts = self.client.get("/api/genotyping/alerts?threshold=0.1", headers=self.auth_headers(admin))
+        self.assertEqual(alerts.status_code, 200)
+
+        space = self.client.get("/api/forecast/cage-space?days=30", headers=self.auth_headers(admin))
+        self.assertEqual(space.status_code, 200)
+        self.assertIn("rooms", space.get_json())
+
+        consolidation = self.client.get("/api/forecast/consolidation?maxAnimals=5", headers=self.auth_headers(admin))
+        self.assertEqual(consolidation.status_code, 200)
+
+        facilities = self.client.get("/api/facilities", headers=self.auth_headers(admin))
+        self.assertEqual(facilities.status_code, 200)
+        self.assertTrue(facilities.get_json())
+
+        chargeback = self.client.get("/api/facility/chargeback?periodDays=30&ratePerCageDay=1.0", headers=self.auth_headers(admin))
+        self.assertEqual(chargeback.status_code, 200)
+        self.assertTrue(chargeback.get_json())
+
+        breeder_csv = self.client.get("/api/reports/breeder-productivity.csv", headers=self.auth_headers(admin))
+        self.assertEqual(breeder_csv.status_code, 200)
+        self.assertIn("text/csv", breeder_csv.content_type)
+
+        survival_csv = self.client.get("/api/reports/survival.csv", headers=self.auth_headers(admin))
+        self.assertEqual(survival_csv.status_code, 200)
+        self.assertIn("text/csv", survival_csv.content_type)
+
+        protocol_csv = self.client.get("/api/reports/protocol-usage.csv", headers=self.auth_headers(admin))
+        self.assertEqual(protocol_csv.status_code, 200)
+        self.assertIn("text/csv", protocol_csv.content_type)
+
     def test_technician_cannot_access_other_lab_cage(self) -> None:
         tech_token = self.login("tech@murisphere.local", "tech1234")
 

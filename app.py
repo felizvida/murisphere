@@ -213,6 +213,14 @@ def ensure_cage_scope(cage_id: int, user: AuthContext) -> sqlite3.Row | None:
     return db().execute("SELECT * FROM cages WHERE id = ? AND lab_id = ?", (cage_id, user.lab_id)).fetchone()
 
 
+def ensure_project_scope(project_id: int, user: AuthContext) -> sqlite3.Row | None:
+    if is_admin(user):
+        return db().execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
+    if user.lab_id is None:
+        return None
+    return db().execute("SELECT * FROM projects WHERE id = ? AND lab_id = ?", (project_id, user.lab_id)).fetchone()
+
+
 def cage_payload(row: sqlite3.Row) -> dict[str, Any]:
     return {
         "id": row["id"],
@@ -342,6 +350,140 @@ def logout() -> Response:
 def me() -> Response:
     user = g.user
     return jsonify({"id": user.user_id, "email": user.email, "fullName": user.full_name, "role": user.role, "labId": user.lab_id})
+
+
+@app.get("/api/projects")
+@require_auth()
+def list_projects() -> Response:
+    params: tuple[Any, ...] = ()
+    query = """
+        SELECT p.id, p.lab_id, p.project_code, p.title, p.status, p.target_animals, p.created_at,
+               l.name AS lab_name,
+               COUNT(pc.cage_id) AS assigned_cages
+        FROM projects p
+        JOIN labs l ON l.id = p.lab_id
+        LEFT JOIN project_cages pc ON pc.project_id = p.id
+    """
+    if not is_admin(g.user):
+        query += " WHERE p.lab_id = ? "
+        params = (g.user.lab_id,)
+    query += " GROUP BY p.id ORDER BY p.created_at DESC LIMIT 500"
+    rows = db().execute(query, params).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/projects")
+@require_auth(("PI", "Admin"))
+def create_project() -> Response:
+    payload = request.get_json(force=True)
+    project_code = str(payload.get("projectCode", "")).strip()
+    title = str(payload.get("title", "")).strip()
+    if not project_code or not title:
+        return jsonify({"error": "projectCode and title are required"}), 400
+    status = str(payload.get("status", "active")).strip() or "active"
+    target_animals = int(payload.get("targetAnimals", 0))
+    if target_animals < 0:
+        return jsonify({"error": "targetAnimals cannot be negative"}), 400
+
+    lab_id = int(payload.get("labId", g.user.lab_id or 1))
+    if not is_admin(g.user) and g.user.lab_id != lab_id:
+        return jsonify({"error": "Forbidden"}), 403
+
+    try:
+        cur = db().execute(
+            "INSERT INTO projects (lab_id, project_code, title, status, target_animals, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (lab_id, project_code, title, status, target_animals, now_iso()),
+        )
+        db().commit()
+    except sqlite3.IntegrityError:
+        return jsonify({"error": "projectCode must be unique"}), 409
+
+    project_id = cur.lastrowid
+    audit_log(g.user.user_id, "project", project_id, "create", None, payload)
+    return jsonify({"id": project_id}), 201
+
+
+@app.patch("/api/projects/<int:project_id>")
+@require_auth(("PI", "Admin"))
+def update_project(project_id: int) -> Response:
+    payload = request.get_json(force=True)
+    row = ensure_project_scope(project_id, g.user)
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+
+    allowed = {
+        "title": "title",
+        "status": "status",
+        "targetAnimals": "target_animals",
+    }
+    updates = {}
+    for api_field, db_field in allowed.items():
+        if api_field in payload:
+            updates[db_field] = payload[api_field]
+    if "target_animals" in updates and int(updates["target_animals"]) < 0:
+        return jsonify({"error": "targetAnimals cannot be negative"}), 400
+    if not updates:
+        return jsonify({"error": "No changes supplied"}), 400
+
+    before = dict(row)
+    set_sql = ", ".join([f"{k} = ?" for k in updates])
+    params = list(updates.values()) + [project_id]
+    db().execute(f"UPDATE projects SET {set_sql} WHERE id = ?", params)
+    db().commit()
+    after = dict(db().execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone())
+    audit_log(g.user.user_id, "project", project_id, "update", before, after)
+    return jsonify({"ok": True})
+
+
+@app.get("/api/projects/<int:project_id>/cages")
+@require_auth()
+def project_cages(project_id: int) -> Response:
+    project = ensure_project_scope(project_id, g.user)
+    if not project:
+        return jsonify({"error": "Not found"}), 404
+    rows = db().execute(
+        """
+        SELECT c.id, c.cage_code, c.strain, c.genotype_summary, c.breeding_status, c.male_count, c.female_count
+        FROM project_cages pc
+        JOIN cages c ON c.id = pc.cage_id
+        WHERE pc.project_id = ?
+        ORDER BY c.cage_code
+        """,
+        (project_id,),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/projects/<int:project_id>/assign-cages")
+@require_auth(("PI", "Admin"))
+def assign_project_cages(project_id: int) -> Response:
+    project = ensure_project_scope(project_id, g.user)
+    if not project:
+        return jsonify({"error": "Not found"}), 404
+    payload = request.get_json(force=True)
+    cage_ids = payload.get("cageIds", [])
+    if not cage_ids:
+        return jsonify({"error": "Provide cageIds"}), 400
+
+    assigned = 0
+    for raw_id in cage_ids:
+        cage_id = int(raw_id)
+        cage = ensure_cage_scope(cage_id, g.user)
+        if not cage:
+            continue
+        if int(cage["lab_id"]) != int(project["lab_id"]):
+            continue
+        try:
+            db().execute(
+                "INSERT INTO project_cages (project_id, cage_id, assigned_at) VALUES (?, ?, ?)",
+                (project_id, cage_id, now_iso()),
+            )
+            assigned += 1
+        except sqlite3.IntegrityError:
+            continue
+    db().commit()
+    audit_log(g.user.user_id, "project", project_id, "assign_cages", None, {"cageIds": cage_ids, "assigned": assigned})
+    return jsonify({"assigned": assigned})
 
 
 @app.get("/api/cages")
@@ -693,6 +835,66 @@ def add_note(cage_id: int) -> Response:
     return jsonify({"ok": True})
 
 
+@app.post("/api/cages/bulk-actions")
+@require_auth(("PI", "Admin"))
+def bulk_cage_actions() -> Response:
+    payload = request.get_json(force=True)
+    action = str(payload.get("action", "")).strip()
+    cage_ids = payload.get("cageIds", [])
+    if action not in {"retire_breeders", "transfer"}:
+        return jsonify({"error": "Unsupported action"}), 400
+    if not cage_ids:
+        return jsonify({"error": "Provide cageIds"}), 400
+
+    updated = 0
+    if action == "retire_breeders":
+        for raw_id in cage_ids:
+            cage_id = int(raw_id)
+            row = ensure_cage_scope(cage_id, g.user)
+            if not row:
+                continue
+            before = dict(row)
+            db().execute(
+                "UPDATE cages SET breeding_status = 'Retired', updated_at = ? WHERE id = ?",
+                (now_iso(), cage_id),
+            )
+            db().execute(
+                "INSERT INTO lifecycle_events (cage_id, event_type, details_json, event_date, created_by, created_at) VALUES (?, 'retire', ?, ?, ?, ?)",
+                (cage_id, json.dumps({"reason": payload.get("reason", "bulk_retire")}), datetime.now(UTC).date().isoformat(), g.user.user_id, now_iso()),
+            )
+            updated += 1
+            audit_log(g.user.user_id, "cage", cage_id, "retire", before, {"breeding_status": "Retired"})
+    else:
+        room_id = int(payload.get("roomId", 0))
+        rack_id = int(payload.get("rackId", 0))
+        if room_id <= 0 or rack_id <= 0:
+            return jsonify({"error": "roomId and rackId are required for transfer"}), 400
+        for raw_id in cage_ids:
+            cage_id = int(raw_id)
+            row = ensure_cage_scope(cage_id, g.user)
+            if not row:
+                continue
+            before = {"room_id": row["room_id"], "rack_id": row["rack_id"]}
+            db().execute(
+                "UPDATE cages SET room_id = ?, rack_id = ?, updated_at = ? WHERE id = ?",
+                (room_id, rack_id, now_iso(), cage_id),
+            )
+            db().execute(
+                "INSERT INTO lifecycle_events (cage_id, event_type, details_json, event_date, created_by, created_at) VALUES (?, 'transfer', ?, ?, ?, ?)",
+                (
+                    cage_id,
+                    json.dumps({"fromRoom": row["room_id"], "fromRack": row["rack_id"], "toRoom": room_id, "toRack": rack_id}),
+                    datetime.now(UTC).date().isoformat(),
+                    g.user.user_id,
+                    now_iso(),
+                ),
+            )
+            updated += 1
+            audit_log(g.user.user_id, "cage", cage_id, "transfer", before, {"room_id": room_id, "rack_id": rack_id})
+    db().commit()
+    return jsonify({"updated": updated})
+
+
 @app.post("/api/litters")
 @require_auth(("Technician", "PI", "Admin"))
 def create_litter() -> Response:
@@ -821,6 +1023,371 @@ def genotype_upload() -> Response:
         inserted += 1
     db().commit()
     return jsonify({"updatedAnimals": inserted})
+
+
+@app.get("/api/animals")
+@require_auth()
+def list_animals() -> Response:
+    q = request.args.get("q", "").strip()
+    sex = request.args.get("sex", "").strip()
+    status = request.args.get("status", "").strip()
+    genotype = request.args.get("genotype", "").strip()
+
+    clauses = ["1 = 1"]
+    params: list[Any] = []
+    if q:
+        clauses.append("(a.animal_code LIKE ? OR a.strain LIKE ? OR COALESCE(a.genotype, '') LIKE ?)")
+        params.extend([f"%{q}%", f"%{q}%", f"%{q}%"])
+    if sex:
+        clauses.append("a.sex = ?")
+        params.append(sex)
+    if status:
+        clauses.append("a.status = ?")
+        params.append(status)
+    if genotype:
+        clauses.append("COALESCE(a.genotype, '') LIKE ?")
+        params.append(f"%{genotype}%")
+    if not is_admin(g.user):
+        clauses.append("c.lab_id = ?")
+        params.append(g.user.lab_id)
+
+    rows = db().execute(
+        f"""
+        SELECT a.id, a.animal_code, a.sex, a.dob, a.strain, a.genotype, a.status, a.cage_id, c.cage_code
+        FROM animals a
+        LEFT JOIN cages c ON c.id = a.cage_id
+        WHERE {' AND '.join(clauses)}
+        ORDER BY a.id DESC
+        LIMIT 1000
+        """,
+        params,
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.get("/api/animals/<int:animal_id>/pedigree")
+@require_auth()
+def animal_pedigree(animal_id: int) -> Response:
+    generations = max(1, min(int(request.args.get("generations", 3)), 6))
+    root = db().execute(
+        """
+        SELECT a.id, a.animal_code, a.sex, a.dob, a.strain, a.genotype, a.status, a.sire_id, a.dam_id
+        FROM animals a
+        LEFT JOIN cages c ON c.id = a.cage_id
+        WHERE a.id = ?
+        """
+        + ("" if is_admin(g.user) else " AND c.lab_id = ? "),
+        (animal_id,) if is_admin(g.user) else (animal_id, g.user.lab_id),
+    ).fetchone()
+    if not root:
+        return jsonify({"error": "Not found"}), 404
+
+    queue: list[tuple[int, int]] = [(animal_id, 0)]
+    seen: set[int] = set()
+    nodes: dict[int, dict[str, Any]] = {}
+    edges: list[dict[str, Any]] = []
+
+    while queue:
+        aid, depth = queue.pop(0)
+        if aid in seen or depth > generations:
+            continue
+        seen.add(aid)
+        row = db().execute(
+            "SELECT id, animal_code, sex, dob, strain, genotype, status, sire_id, dam_id FROM animals WHERE id = ?",
+            (aid,),
+        ).fetchone()
+        if not row:
+            continue
+        nodes[aid] = dict(row)
+        if depth == generations:
+            continue
+        for rel, pid in (("sire", row["sire_id"]), ("dam", row["dam_id"])):
+            if pid:
+                edges.append({"from": aid, "to": pid, "relation": rel})
+                queue.append((int(pid), depth + 1))
+
+    return jsonify({"rootId": animal_id, "generations": generations, "nodes": list(nodes.values()), "edges": edges})
+
+
+@app.get("/api/breeding/productivity")
+@require_auth()
+def breeding_productivity() -> Response:
+    min_litters = int(request.args.get("minLitters", 0))
+    scope = ""
+    params: list[Any] = []
+    if not is_admin(g.user):
+        scope = " WHERE c.lab_id = ? "
+        params.append(g.user.lab_id)
+
+    rows = db().execute(
+        f"""
+        SELECT c.id AS cage_id, c.cage_code, c.breeding_status,
+               COUNT(l.id) AS litter_count,
+               COALESCE(AVG(l.survived_count), 0) AS avg_survived,
+               MAX(l.birth_date) AS last_litter_date
+        FROM cages c
+        LEFT JOIN litters l ON l.cage_id = c.id
+        {scope}
+        GROUP BY c.id
+        HAVING COUNT(l.id) >= ?
+        ORDER BY litter_count DESC, avg_survived DESC
+        LIMIT 500
+        """,
+        params + [min_litters],
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.get("/api/breeding/non-productive")
+@require_auth()
+def breeding_non_productive() -> Response:
+    stale_days = int(request.args.get("staleDays", 45))
+    cutoff = (datetime.now(UTC).date() - timedelta(days=stale_days)).isoformat()
+
+    params: list[Any] = []
+    scope = ""
+    if not is_admin(g.user):
+        scope = " AND c.lab_id = ? "
+        params.append(g.user.lab_id)
+    params.append(cutoff)
+    rows = db().execute(
+        """
+        SELECT c.id AS cage_id, c.cage_code, c.breeding_status, MAX(l.birth_date) AS last_litter_date, COUNT(l.id) AS litter_count
+        FROM cages c
+        LEFT JOIN litters l ON l.cage_id = c.id
+        WHERE c.breeding_status IN ('Breeding', 'Timed Mating', 'Holding')
+        """
+        + scope
+        + """
+        GROUP BY c.id
+        HAVING (MAX(l.birth_date) IS NULL OR MAX(l.birth_date) < ?)
+        ORDER BY last_litter_date ASC
+        LIMIT 500
+        """,
+        params,
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.get("/api/tasks/reminders")
+@require_auth()
+def task_reminders() -> Response:
+    window_days = int(request.args.get("windowDays", 14))
+    today = datetime.now(UTC).date().isoformat()
+    horizon = (datetime.now(UTC).date() + timedelta(days=window_days)).isoformat()
+    params: list[Any] = [today, horizon]
+    scope = ""
+    if not is_admin(g.user):
+        scope = " AND c.lab_id = ? "
+        params.append(g.user.lab_id)
+    rows = db().execute(
+        """
+        SELECT b.id, b.event_type, b.event_date, b.cage_id, c.cage_code, b.assigned_to, u.full_name AS assignee
+        FROM breeding_events b
+        JOIN cages c ON c.id = b.cage_id
+        LEFT JOIN users u ON u.id = b.assigned_to
+        WHERE b.event_date <= ?
+          AND b.event_date >= ?
+        """
+        + scope
+        + """
+        ORDER BY b.event_date ASC
+        LIMIT 500
+        """,
+        [horizon, today] + ([g.user.lab_id] if not is_admin(g.user) else []),
+    ).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["overdue"] = d["event_date"] < today
+        out.append(d)
+    return jsonify(out)
+
+
+@app.get("/api/genotyping/mendelian")
+@require_auth()
+def mendelian_tracking() -> Response:
+    scope = ""
+    params: list[Any] = []
+    if not is_admin(g.user):
+        scope = " AND c.lab_id = ? "
+        params.append(g.user.lab_id)
+
+    rows = db().execute(
+        """
+        SELECT l.id AS litter_id, l.birth_date, c.cage_code, a.genotype, COUNT(a.id) AS n
+        FROM litters l
+        JOIN cages c ON c.id = l.cage_id
+        LEFT JOIN animals a ON a.litter_id = l.id
+        WHERE 1 = 1
+        """
+        + scope
+        + """
+        GROUP BY l.id, a.genotype
+        ORDER BY l.birth_date DESC
+        LIMIT 2000
+        """,
+        params,
+    ).fetchall()
+
+    by_litter: dict[int, dict[str, Any]] = {}
+    for r in rows:
+        lid = r["litter_id"]
+        if lid not in by_litter:
+            by_litter[lid] = {
+                "litterId": lid,
+                "birthDate": r["birth_date"],
+                "cageCode": r["cage_code"],
+                "observed": {},
+            }
+        gkey = r["genotype"] or "Unknown"
+        by_litter[lid]["observed"][gkey] = int(r["n"])
+
+    result = []
+    for payload in by_litter.values():
+        observed = payload["observed"]
+        total = sum(observed.values())
+        if total <= 0:
+            continue
+        expected = {k: round(1.0 / len(observed), 4) for k in observed.keys()}
+        observed_ratio = {k: round(v / total, 4) for k, v in observed.items()}
+        payload["expectedRatio"] = expected
+        payload["observedRatio"] = observed_ratio
+        payload["totalGenotyped"] = total
+        result.append(payload)
+    return jsonify(result)
+
+
+@app.get("/api/genotyping/alerts")
+@require_auth()
+def genotyping_alerts() -> Response:
+    threshold = float(request.args.get("threshold", 0.25))
+    tracked = mendelian_tracking().get_json()
+    alerts = []
+    for row in tracked:
+        max_dev = 0.0
+        for gkey, exp in row["expectedRatio"].items():
+            obs = row["observedRatio"].get(gkey, 0.0)
+            max_dev = max(max_dev, abs(obs - exp))
+        if max_dev >= threshold:
+            alerts.append(
+                {
+                    "litterId": row["litterId"],
+                    "cageCode": row["cageCode"],
+                    "birthDate": row["birthDate"],
+                    "maxDeviation": round(max_dev, 4),
+                    "threshold": threshold,
+                }
+            )
+    return jsonify(alerts)
+
+
+@app.get("/api/forecast/cage-space")
+@require_auth(("PI", "Admin"))
+def forecast_cage_space() -> Response:
+    days = int(request.args.get("days", 30))
+    if is_admin(g.user):
+        rooms = db().execute(
+            """
+            SELECT r.id, r.name, r.capacity, COUNT(c.id) AS occupied
+            FROM rooms r
+            LEFT JOIN cages c ON c.room_id = r.id
+            GROUP BY r.id
+            """
+        ).fetchall()
+        created_recent = db().execute(
+            "SELECT COUNT(*) AS c FROM cages WHERE created_at >= ?",
+            ((datetime.now(UTC) - timedelta(days=30)).isoformat(),),
+        ).fetchone()["c"]
+    else:
+        rooms = db().execute(
+            """
+            SELECT r.id, r.name, r.capacity, SUM(CASE WHEN c.lab_id = ? THEN 1 ELSE 0 END) AS occupied
+            FROM rooms r
+            LEFT JOIN cages c ON c.room_id = r.id
+            GROUP BY r.id
+            """,
+            (g.user.lab_id,),
+        ).fetchall()
+        created_recent = db().execute(
+            "SELECT COUNT(*) AS c FROM cages WHERE created_at >= ? AND lab_id = ?",
+            ((datetime.now(UTC) - timedelta(days=30)).isoformat(), g.user.lab_id),
+        ).fetchone()["c"]
+
+    retire_recent = db().execute(
+        """
+        SELECT COUNT(*) AS c
+        FROM lifecycle_events le
+        JOIN cages c ON c.id = le.cage_id
+        WHERE le.event_type = 'retire' AND le.created_at >= ?
+        """
+        + ("" if is_admin(g.user) else " AND c.lab_id = ? "),
+        ((datetime.now(UTC) - timedelta(days=30)).isoformat(),)
+        if is_admin(g.user)
+        else ((datetime.now(UTC) - timedelta(days=30)).isoformat(), g.user.lab_id),
+    ).fetchone()["c"]
+
+    net_per_day = (created_recent - retire_recent) / 30.0
+    out = []
+    for r in rooms:
+        projected = int(round(r["occupied"] + net_per_day * days))
+        out.append(
+            {
+                "roomId": r["id"],
+                "roomName": r["name"],
+                "capacity": r["capacity"],
+                "occupiedNow": r["occupied"],
+                "projectedOccupied": projected,
+                "projectedUtilizationPct": round((projected * 100.0) / r["capacity"], 2) if r["capacity"] else None,
+            }
+        )
+    return jsonify({"days": days, "netCageDeltaPerDay": round(net_per_day, 3), "rooms": out})
+
+
+@app.get("/api/forecast/consolidation")
+@require_auth(("PI", "Admin"))
+def forecast_consolidation() -> Response:
+    max_animals = int(request.args.get("maxAnimals", 2))
+    scope = ""
+    params: list[Any] = [max_animals]
+    if not is_admin(g.user):
+        scope = " AND c.lab_id = ? "
+        params.append(g.user.lab_id)
+    rows = db().execute(
+        """
+        SELECT c.id, c.cage_code, c.strain, c.genotype_summary, c.room_id, c.rack_id, (c.male_count + c.female_count) AS total_animals
+        FROM cages c
+        WHERE c.breeding_status = 'Holding'
+          AND (c.male_count + c.female_count) <= ?
+        """
+        + scope
+        + """
+        ORDER BY c.room_id, c.strain, c.genotype_summary, total_animals ASC
+        LIMIT 2000
+        """,
+        params,
+    ).fetchall()
+
+    grouped: dict[tuple[Any, ...], list[sqlite3.Row]] = {}
+    for r in rows:
+        key = (r["room_id"], r["strain"], r["genotype_summary"])
+        grouped.setdefault(key, []).append(r)
+
+    recommendations = []
+    for key, candidates in grouped.items():
+        while len(candidates) >= 2:
+            a = candidates.pop(0)
+            b = candidates.pop(0)
+            recommendations.append(
+                {
+                    "roomId": key[0],
+                    "strain": key[1],
+                    "genotype": key[2],
+                    "fromCages": [a["cage_code"], b["cage_code"]],
+                    "combinedAnimals": int(a["total_animals"]) + int(b["total_animals"]),
+                }
+            )
+    return jsonify(recommendations)
 
 
 @app.get("/api/analytics/summary")
@@ -1169,6 +1736,188 @@ def facility_capacity() -> Response:
             (facility["facility_id"],),
         ).fetchall()
     return jsonify([dict(r) for r in rooms])
+
+
+@app.get("/api/facilities")
+@require_auth(("Admin", "PI"))
+def list_facilities() -> Response:
+    rows = db().execute(
+        """
+        SELECT f.id, f.name, f.timezone,
+               COUNT(DISTINCT l.id) AS labs,
+               COUNT(DISTINCT r.id) AS rooms,
+               COUNT(DISTINCT c.id) AS cages
+        FROM facilities f
+        LEFT JOIN labs l ON l.facility_id = f.id
+        LEFT JOIN rooms r ON r.facility_id = f.id
+        LEFT JOIN cages c ON c.room_id = r.id
+        GROUP BY f.id
+        ORDER BY f.name
+        """
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.get("/api/facility/quotas")
+@require_auth(("Admin", "PI"))
+def facility_quotas() -> Response:
+    if is_admin(g.user):
+        rows = db().execute(
+            """
+            SELECT l.id AS lab_id,
+                   l.name AS lab_name,
+                   COALESCE(lp.size_tier, 'unassigned') AS size_tier,
+                   COALESCE(lp.expected_cage_load, 0) AS expected_cage_load,
+                   COALESCE(lp.active_project_count, 0) AS expected_active_projects,
+                   COUNT(DISTINCT c.id) AS current_cages,
+                   COUNT(DISTINCT p.id) AS current_projects
+            FROM labs l
+            LEFT JOIN lab_profiles lp ON lp.lab_id = l.id
+            LEFT JOIN cages c ON c.lab_id = l.id
+            LEFT JOIN projects p ON p.lab_id = l.id
+            GROUP BY l.id
+            ORDER BY current_cages DESC
+            """
+        ).fetchall()
+    else:
+        rows = db().execute(
+            """
+            SELECT l.id AS lab_id,
+                   l.name AS lab_name,
+                   COALESCE(lp.size_tier, 'unassigned') AS size_tier,
+                   COALESCE(lp.expected_cage_load, 0) AS expected_cage_load,
+                   COALESCE(lp.active_project_count, 0) AS expected_active_projects,
+                   COUNT(DISTINCT c.id) AS current_cages,
+                   COUNT(DISTINCT p.id) AS current_projects
+            FROM labs l
+            LEFT JOIN lab_profiles lp ON lp.lab_id = l.id
+            LEFT JOIN cages c ON c.lab_id = l.id
+            LEFT JOIN projects p ON p.lab_id = l.id
+            WHERE l.id = ?
+            GROUP BY l.id
+            """,
+            (g.user.lab_id,),
+        ).fetchall()
+
+    results = []
+    for r in rows:
+        expected_load = int(r["expected_cage_load"] or 0)
+        current = int(r["current_cages"] or 0)
+        remaining = expected_load - current
+        utilization = round((current * 100.0) / expected_load, 2) if expected_load > 0 else None
+        results.append(
+            {
+                "labId": r["lab_id"],
+                "labName": r["lab_name"],
+                "sizeTier": r["size_tier"],
+                "expectedCageLoad": expected_load,
+                "expectedActiveProjects": int(r["expected_active_projects"] or 0),
+                "currentCages": current,
+                "currentProjects": int(r["current_projects"] or 0),
+                "remainingQuota": remaining,
+                "utilizationPct": utilization,
+            }
+        )
+    return jsonify(results)
+
+
+@app.get("/api/facility/chargeback")
+@require_auth(("Admin", "PI"))
+def facility_chargeback() -> Response:
+    period_days = int(request.args.get("periodDays", 30))
+    rate_per_cage_day = float(request.args.get("ratePerCageDay", 0.85))
+    if is_admin(g.user):
+        rows = db().execute(
+            """
+            SELECT l.id AS lab_id, l.name AS lab_name, COUNT(c.id) AS cage_count
+            FROM labs l
+            LEFT JOIN cages c ON c.lab_id = l.id
+            GROUP BY l.id
+            ORDER BY cage_count DESC
+            """
+        ).fetchall()
+    else:
+        rows = db().execute(
+            """
+            SELECT l.id AS lab_id, l.name AS lab_name, COUNT(c.id) AS cage_count
+            FROM labs l
+            LEFT JOIN cages c ON c.lab_id = l.id
+            WHERE l.id = ?
+            GROUP BY l.id
+            """,
+            (g.user.lab_id,),
+        ).fetchall()
+
+    out = []
+    for r in rows:
+        cage_days = int(r["cage_count"]) * period_days
+        amount = round(cage_days * rate_per_cage_day, 2)
+        out.append(
+            {
+                "labId": r["lab_id"],
+                "labName": r["lab_name"],
+                "periodDays": period_days,
+                "cageCount": int(r["cage_count"]),
+                "cageDays": cage_days,
+                "ratePerCageDay": rate_per_cage_day,
+                "estimatedCharge": amount,
+            }
+        )
+    return jsonify(out)
+
+
+@app.get("/api/reports/breeder-productivity.csv")
+@require_auth(("PI", "Admin"))
+def report_breeder_productivity() -> Response:
+    rows = breeding_productivity().get_json()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["cage_code", "breeding_status", "litter_count", "avg_survived", "last_litter_date"])
+    for r in rows:
+        writer.writerow([r["cage_code"], r["breeding_status"], r["litter_count"], r["avg_survived"], r["last_litter_date"]])
+    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=breeder_productivity.csv"})
+
+
+@app.get("/api/reports/survival.csv")
+@require_auth(("PI", "Admin"))
+def report_survival() -> Response:
+    query = "SELECT l.id, l.birth_date, l.litter_size, l.survived_count, c.cage_code FROM litters l JOIN cages c ON c.id = l.cage_id"
+    params: tuple[Any, ...] = ()
+    if not is_admin(g.user):
+        query += " WHERE c.lab_id = ?"
+        params = (g.user.lab_id,)
+    query += " ORDER BY l.birth_date DESC LIMIT 2000"
+    rows = db().execute(query, params).fetchall()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["litter_id", "birth_date", "cage_code", "litter_size", "survived_count", "survival_pct"])
+    for r in rows:
+        pct = round((r["survived_count"] * 100.0) / r["litter_size"], 2) if r["litter_size"] else 0.0
+        writer.writerow([r["id"], r["birth_date"], r["cage_code"], r["litter_size"], r["survived_count"], pct])
+    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=survival_report.csv"})
+
+
+@app.get("/api/reports/protocol-usage.csv")
+@require_auth(("PI", "Admin"))
+def report_protocol_usage() -> Response:
+    query = """
+        SELECT p.protocol_number, p.title, l.name AS lab_name, COUNT(c.id) AS cages
+        FROM iacuc_protocols p
+        JOIN labs l ON l.id = p.lab_id
+        LEFT JOIN cages c ON c.protocol_id = p.id
+    """
+    params: tuple[Any, ...] = ()
+    if not is_admin(g.user):
+        query += " WHERE p.lab_id = ? "
+        params = (g.user.lab_id,)
+    query += " GROUP BY p.id ORDER BY cages DESC"
+    rows = db().execute(query, params).fetchall()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["protocol_number", "title", "lab", "cages"])
+    for r in rows:
+        writer.writerow([r["protocol_number"], r["title"], r["lab_name"], r["cages"]])
+    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=protocol_usage.csv"})
 
 
 @app.get("/api/audit")

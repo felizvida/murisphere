@@ -85,23 +85,29 @@ This seeds:
 ### 3) Core colony management
 - Cages, animals, litters, lifecycle events, location hierarchy.
 - Bulk litter-to-animal creation.
+- Animal query API + multi-generation pedigree endpoint.
 
 ### 4) Breeding & scheduling
 - Breeding event APIs + calendar view.
 - Task-style event tracking for plug checks/weaning/harvests/retirement.
+- Bulk breeder retirement and bulk cage transfer action API.
 
 ### 5) Genotyping integration
 - CSV upload workflow to populate genotype results.
 - Animal genotype update pipeline.
+- Mendelian ratio tracking + deviation alerts endpoints.
 
 ### 6) Analytics and planning
 - Dashboard metrics: colony size, sex ratio, survival, capacity.
 - Demand forecast endpoint for projected litter needs.
+- Cage-space forecast + consolidation recommendation endpoints.
+- Breeder productivity + non-productive breeder endpoints.
 
 ### 7) Reporting & interoperability
 - CSV / XLSX / PDF endpoints.
 - JSON APIs suitable for LIMS/ELN integration.
 - Excel onboarding import endpoint.
+- Additional CSV reports for breeder productivity, survival, and protocol usage.
 
 ### 8) Compliance & governance
 - IACUC protocol table + near-expiration alerts.
@@ -110,6 +116,12 @@ This seeds:
 ### 9) Facility administration
 - Multi-entity model: facilities/labs/rooms/racks.
 - Capacity utilization endpoint.
+- Lab quota/space allocation endpoint (`/api/facility/quotas`).
+- Optional-style chargeback endpoint (`/api/facility/chargeback`).
+
+### 11) Project Operations
+- Project CRUD + lab-scoped access control.
+- Project-to-cage assignment endpoint for multi-project labs.
 
 ### 10) Usability/performance
 - Search/filter and low-click cage editing.
