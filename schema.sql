@@ -204,6 +204,77 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     FOREIGN KEY(actor_user_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS billing_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER,
+    room_id INTEGER,
+    line_type TEXT NOT NULL CHECK (line_type IN ('per_diem', 'service')),
+    rate REAL NOT NULL,
+    service_name TEXT,
+    active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(lab_id) REFERENCES labs(id),
+    FOREIGN KEY(room_id) REFERENCES rooms(id)
+);
+
+CREATE TABLE IF NOT EXISTS billing_periods (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    period_start TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('open', 'closed')),
+    closed_by INTEGER,
+    closed_at TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(period_start, period_end),
+    FOREIGN KEY(closed_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS billing_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    period_start TEXT NOT NULL,
+    period_end TEXT NOT NULL,
+    lab_id INTEGER NOT NULL,
+    cage_id INTEGER,
+    line_type TEXT NOT NULL,
+    quantity REAL NOT NULL,
+    rate REAL NOT NULL,
+    amount REAL NOT NULL,
+    description TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(period_start, period_end, lab_id, cage_id, line_type, description),
+    FOREIGN KEY(lab_id) REFERENCES labs(id),
+    FOREIGN KEY(cage_id) REFERENCES cages(id)
+);
+
+CREATE TABLE IF NOT EXISTS facility_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    request_type TEXT NOT NULL,
+    lab_id INTEGER NOT NULL,
+    project_id INTEGER,
+    status TEXT NOT NULL CHECK (status IN ('submitted', 'approved', 'fulfilled', 'rejected')),
+    details_json TEXT,
+    requested_by INTEGER,
+    reviewed_by INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(lab_id) REFERENCES labs(id),
+    FOREIGN KEY(project_id) REFERENCES projects(id),
+    FOREIGN KEY(requested_by) REFERENCES users(id),
+    FOREIGN KEY(reviewed_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS export_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_type TEXT NOT NULL,
+    target_url TEXT,
+    status TEXT NOT NULL CHECK (status IN ('pending', 'sent', 'failed')),
+    payload_json TEXT,
+    created_by INTEGER,
+    created_at TEXT NOT NULL,
+    sent_at TEXT,
+    FOREIGN KEY(created_by) REFERENCES users(id)
+);
+
 CREATE INDEX IF NOT EXISTS idx_cages_code ON cages(cage_code);
 CREATE INDEX IF NOT EXISTS idx_cages_qr ON cages(qr_token);
 CREATE INDEX IF NOT EXISTS idx_cages_room ON cages(room_id);
@@ -213,3 +284,5 @@ CREATE INDEX IF NOT EXISTS idx_breeding_date ON breeding_events(event_date);
 CREATE INDEX IF NOT EXISTS idx_projects_lab ON projects(lab_id);
 CREATE INDEX IF NOT EXISTS idx_project_cages_project ON project_cages(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_cages_cage ON project_cages(cage_id);
+CREATE INDEX IF NOT EXISTS idx_billing_entries_period ON billing_entries(period_start, period_end);
+CREATE INDEX IF NOT EXISTS idx_facility_requests_lab ON facility_requests(lab_id);

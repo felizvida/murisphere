@@ -42,6 +42,7 @@ Auth: `Authorization: Bearer <token>` for protected endpoints.
 - `GET /api/breeding/productivity`
 - `GET /api/breeding/non-productive`
 - `GET /api/tasks/reminders`
+- `GET /api/operations/sla`
 
 ## Genotyping and Imports
 - `POST /api/genotyping/upload` (CSV multipart)
@@ -71,4 +72,22 @@ Auth: `Authorization: Bearer <token>` for protected endpoints.
 - `GET /api/facility/quotas` (PI/Admin)
 - `GET /api/facilities` (PI/Admin)
 - `GET /api/facility/chargeback` (PI/Admin)
+- `GET /api/facility/benchmark` (Admin)
 - `GET /api/audit` (PI/Admin)
+
+## Billing
+- `GET /api/billing/rules` (PI/Admin)
+- `POST /api/billing/rules` (Admin)
+- `POST /api/billing/run` (PI/Admin)
+- `POST /api/billing/close-period` (Admin)
+- `GET /api/billing/statements.csv` (PI/Admin)
+
+## Facility Requests
+- `GET /api/requests`
+- `POST /api/requests`
+- `POST /api/requests/<id>/status` (PI/Admin)
+
+## Integration Jobs
+- `POST /api/integrations/export-jobs`
+- `POST /api/integrations/export-jobs/<id>/run`
+- `GET /api/integrations/export-jobs`

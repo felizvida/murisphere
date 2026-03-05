@@ -81,6 +81,7 @@ This seeds:
 - Cage card payload generation with all required fields.
 - Server-rendered QR PNG + CODE128 barcode SVG per cage card.
 - Scan-to-open and in-room quick updates (counts/status/notes).
+- Offline-safe mutation queue for key room-floor updates (auto-sync on reconnect).
 
 ### 3) Core colony management
 - Cages, animals, litters, lifecycle events, location hierarchy.
@@ -112,16 +113,22 @@ This seeds:
 ### 8) Compliance & governance
 - IACUC protocol table + near-expiration alerts.
 - RBAC and full audit history endpoint.
+- Hard-stop mutation guard when cage protocol is expired.
 
 ### 9) Facility administration
 - Multi-entity model: facilities/labs/rooms/racks.
 - Capacity utilization endpoint.
 - Lab quota/space allocation endpoint (`/api/facility/quotas`).
 - Optional-style chargeback endpoint (`/api/facility/chargeback`).
+- Billing engine with rule management, period run/close, and statements export.
 
 ### 11) Project Operations
 - Project CRUD + lab-scoped access control.
 - Project-to-cage assignment endpoint for multi-project labs.
+
+### 12) Operations Integration
+- Facility request/order workflow APIs with status progression.
+- Export job scheduling APIs for external integration pipelines.
 
 ### 10) Usability/performance
 - Search/filter and low-click cage editing.

@@ -221,6 +221,31 @@ def ensure_project_scope(project_id: int, user: AuthContext) -> sqlite3.Row | No
     return db().execute("SELECT * FROM projects WHERE id = ? AND lab_id = ?", (project_id, user.lab_id)).fetchone()
 
 
+def cage_protocol_expired(cage_id: int) -> tuple[bool, str | None]:
+    row = db().execute(
+        """
+        SELECT p.protocol_number, p.expires_on
+        FROM cages c
+        LEFT JOIN iacuc_protocols p ON p.id = c.protocol_id
+        WHERE c.id = ?
+        """,
+        (cage_id,),
+    ).fetchone()
+    if not row or not row["expires_on"]:
+        return False, None
+    expired = row["expires_on"] < datetime.now(UTC).date().isoformat()
+    if not expired:
+        return False, None
+    return True, f"Protocol {row['protocol_number']} expired on {row['expires_on']}"
+
+
+def require_nonexpired_protocol(cage_id: int) -> Response | None:
+    expired, msg = cage_protocol_expired(cage_id)
+    if expired:
+        return jsonify({"error": msg, "code": "PROTOCOL_EXPIRED"}), 409
+    return None
+
+
 def cage_payload(row: sqlite3.Row) -> dict[str, Any]:
     return {
         "id": row["id"],
@@ -569,6 +594,9 @@ def update_cage(cage_id: int) -> Response:
     row = ensure_cage_scope(cage_id, g.user)
     if not row:
         return jsonify({"error": "Not found"}), 404
+    blocked = require_nonexpired_protocol(cage_id)
+    if blocked:
+        return blocked
 
     allowed = {
         "maleCount": "male_count",
@@ -771,6 +799,9 @@ def wean(cage_id: int) -> Response:
         return jsonify({"error": "Counts cannot be negative"}), 400
     if not ensure_cage_scope(cage_id, g.user):
         return jsonify({"error": "Not found"}), 404
+    blocked = require_nonexpired_protocol(cage_id)
+    if blocked:
+        return blocked
 
     cur = db().execute(
         "INSERT INTO lifecycle_events (cage_id, event_type, details_json, event_date, created_by, created_at) VALUES (?, 'weaning', ?, ?, ?, ?)",
@@ -795,6 +826,9 @@ def transfer(cage_id: int) -> Response:
     scoped = ensure_cage_scope(cage_id, g.user)
     if not scoped:
         return jsonify({"error": "Not found"}), 404
+    blocked = require_nonexpired_protocol(cage_id)
+    if blocked:
+        return blocked
     before = db().execute("SELECT room_id, rack_id FROM cages WHERE id = ?", (cage_id,)).fetchone()
     if not before:
         return jsonify({"error": "Not found"}), 404
@@ -824,6 +858,9 @@ def add_note(cage_id: int) -> Response:
     text = payload.get("text", "").strip()
     if not ensure_cage_scope(cage_id, g.user):
         return jsonify({"error": "Not found"}), 404
+    blocked = require_nonexpired_protocol(cage_id)
+    if blocked:
+        return blocked
     if not text:
         return jsonify({"error": "Note cannot be empty"}), 400
     db().execute(
@@ -853,6 +890,9 @@ def bulk_cage_actions() -> Response:
             row = ensure_cage_scope(cage_id, g.user)
             if not row:
                 continue
+            blocked = require_nonexpired_protocol(cage_id)
+            if blocked:
+                continue
             before = dict(row)
             db().execute(
                 "UPDATE cages SET breeding_status = 'Retired', updated_at = ? WHERE id = ?",
@@ -873,6 +913,9 @@ def bulk_cage_actions() -> Response:
             cage_id = int(raw_id)
             row = ensure_cage_scope(cage_id, g.user)
             if not row:
+                continue
+            blocked = require_nonexpired_protocol(cage_id)
+            if blocked:
                 continue
             before = {"room_id": row["room_id"], "rack_id": row["rack_id"]}
             db().execute(
@@ -907,6 +950,9 @@ def create_litter() -> Response:
         return jsonify({"error": "Litter counts cannot be negative"}), 400
     if not ensure_cage_scope(cage_id, g.user):
         return jsonify({"error": "Not found"}), 404
+    blocked = require_nonexpired_protocol(cage_id)
+    if blocked:
+        return blocked
 
     cur = db().execute(
         "INSERT INTO litters (cage_id, birth_date, litter_size, survived_count, created_at) VALUES (?, ?, ?, ?, ?)",
@@ -941,12 +987,16 @@ def create_litter() -> Response:
 @require_auth(("Technician", "PI", "Admin"))
 def breeding_event() -> Response:
     payload = request.get_json(force=True)
-    if not ensure_cage_scope(int(payload["cageId"]), g.user):
+    cage_id = int(payload["cageId"])
+    if not ensure_cage_scope(cage_id, g.user):
         return jsonify({"error": "Not found"}), 404
+    blocked = require_nonexpired_protocol(cage_id)
+    if blocked:
+        return blocked
     cur = db().execute(
         "INSERT INTO breeding_events (cage_id, event_type, event_date, details_json, assigned_to, created_at) VALUES (?, ?, ?, ?, ?, ?)",
         (
-            payload["cageId"],
+            cage_id,
             payload["eventType"],
             payload["eventDate"],
             json.dumps(payload.get("details", {})),
@@ -1918,6 +1968,333 @@ def report_protocol_usage() -> Response:
     for r in rows:
         writer.writerow([r["protocol_number"], r["title"], r["lab_name"], r["cages"]])
     return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=protocol_usage.csv"})
+
+
+@app.get("/api/billing/rules")
+@require_auth(("Admin", "PI"))
+def billing_rules_list() -> Response:
+    query = """
+        SELECT br.id, br.lab_id, br.room_id, br.line_type, br.rate, br.service_name, br.active, br.created_at,
+               l.name AS lab_name, r.name AS room_name
+        FROM billing_rules br
+        LEFT JOIN labs l ON l.id = br.lab_id
+        LEFT JOIN rooms r ON r.id = br.room_id
+    """
+    params: tuple[Any, ...] = ()
+    if not is_admin(g.user):
+        query += " WHERE br.lab_id = ? OR br.lab_id IS NULL "
+        params = (g.user.lab_id,)
+    query += " ORDER BY br.id DESC"
+    rows = db().execute(query, params).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/billing/rules")
+@require_auth(("Admin",))
+def billing_rule_create() -> Response:
+    payload = request.get_json(force=True)
+    line_type = str(payload.get("lineType", "per_diem")).strip()
+    rate = float(payload.get("rate", 0))
+    if line_type not in {"per_diem", "service"}:
+        return jsonify({"error": "Invalid lineType"}), 400
+    if rate < 0:
+        return jsonify({"error": "rate must be non-negative"}), 400
+    cur = db().execute(
+        "INSERT INTO billing_rules (lab_id, room_id, line_type, rate, service_name, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (
+            payload.get("labId"),
+            payload.get("roomId"),
+            line_type,
+            rate,
+            payload.get("serviceName"),
+            1 if payload.get("active", True) else 0,
+            now_iso(),
+        ),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "billing_rule", cur.lastrowid, "create", None, payload)
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.post("/api/billing/run")
+@require_auth(("Admin", "PI"))
+def billing_run() -> Response:
+    payload = request.get_json(force=True)
+    period_start = str(payload.get("periodStart", "")).strip()
+    period_end = str(payload.get("periodEnd", "")).strip()
+    if not period_start or not period_end:
+        return jsonify({"error": "periodStart and periodEnd are required"}), 400
+    if period_end < period_start:
+        return jsonify({"error": "periodEnd must be >= periodStart"}), 400
+
+    # Ensure period exists and is open
+    period = db().execute(
+        "SELECT id, status FROM billing_periods WHERE period_start = ? AND period_end = ?",
+        (period_start, period_end),
+    ).fetchone()
+    if not period:
+        db().execute(
+            "INSERT INTO billing_periods (period_start, period_end, status, created_at) VALUES (?, ?, 'open', ?)",
+            (period_start, period_end, now_iso()),
+        )
+        db().commit()
+        period = db().execute(
+            "SELECT id, status FROM billing_periods WHERE period_start = ? AND period_end = ?",
+            (period_start, period_end),
+        ).fetchone()
+    if period["status"] == "closed":
+        return jsonify({"error": "Billing period is closed"}), 409
+
+    # Derive per-diem rate per cage (lab-specific override > global)
+    cages = db().execute(
+        """
+        SELECT c.id, c.lab_id, c.cage_code
+        FROM cages c
+        """
+        + ("" if is_admin(g.user) else " WHERE c.lab_id = ? "),
+        () if is_admin(g.user) else (g.user.lab_id,),
+    ).fetchall()
+
+    days = (datetime.fromisoformat(period_end) - datetime.fromisoformat(period_start)).days + 1
+    days = max(days, 1)
+    created = 0
+    for c in cages:
+        rule = db().execute(
+            """
+            SELECT rate
+            FROM billing_rules
+            WHERE active = 1 AND line_type = 'per_diem'
+              AND (lab_id = ? OR lab_id IS NULL)
+            ORDER BY CASE WHEN lab_id = ? THEN 0 ELSE 1 END, id DESC
+            LIMIT 1
+            """,
+            (c["lab_id"], c["lab_id"]),
+        ).fetchone()
+        rate = float(rule["rate"]) if rule else 0.85
+        qty = float(days)
+        amount = round(qty * rate, 2)
+        db().execute(
+            """
+            INSERT OR REPLACE INTO billing_entries
+            (period_start, period_end, lab_id, cage_id, line_type, quantity, rate, amount, description, created_at)
+            VALUES (?, ?, ?, ?, 'per_diem', ?, ?, ?, ?, ?)
+            """,
+            (period_start, period_end, c["lab_id"], c["id"], qty, rate, amount, f"Cage {c['cage_code']} per-diem", now_iso()),
+        )
+        created += 1
+    db().commit()
+    audit_log(g.user.user_id, "billing_period", f"{period_start}:{period_end}", "run", None, {"entries": created})
+    return jsonify({"entriesUpserted": created, "periodStart": period_start, "periodEnd": period_end})
+
+
+@app.post("/api/billing/close-period")
+@require_auth(("Admin",))
+def billing_close_period() -> Response:
+    payload = request.get_json(force=True)
+    period_start = str(payload.get("periodStart", "")).strip()
+    period_end = str(payload.get("periodEnd", "")).strip()
+    row = db().execute(
+        "SELECT id, status FROM billing_periods WHERE period_start = ? AND period_end = ?",
+        (period_start, period_end),
+    ).fetchone()
+    if not row:
+        return jsonify({"error": "Period not found"}), 404
+    if row["status"] == "closed":
+        return jsonify({"ok": True, "status": "closed"})
+    db().execute(
+        "UPDATE billing_periods SET status = 'closed', closed_by = ?, closed_at = ? WHERE id = ?",
+        (g.user.user_id, now_iso(), row["id"]),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "billing_period", row["id"], "close", None, {"periodStart": period_start, "periodEnd": period_end})
+    return jsonify({"ok": True, "status": "closed"})
+
+
+@app.get("/api/billing/statements.csv")
+@require_auth(("Admin", "PI"))
+def billing_statements_csv() -> Response:
+    period_start = request.args.get("periodStart", "").strip()
+    period_end = request.args.get("periodEnd", "").strip()
+    clauses = []
+    params: list[Any] = []
+    if period_start:
+        clauses.append("be.period_start = ?")
+        params.append(period_start)
+    if period_end:
+        clauses.append("be.period_end = ?")
+        params.append(period_end)
+    if not is_admin(g.user):
+        clauses.append("be.lab_id = ?")
+        params.append(g.user.lab_id)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    rows = db().execute(
+        f"""
+        SELECT be.period_start, be.period_end, l.name AS lab_name, be.line_type,
+               SUM(be.quantity) AS quantity, AVG(be.rate) AS rate, SUM(be.amount) AS amount
+        FROM billing_entries be
+        JOIN labs l ON l.id = be.lab_id
+        {where}
+        GROUP BY be.period_start, be.period_end, be.lab_id, be.line_type
+        ORDER BY be.period_start DESC, lab_name
+        """,
+        params,
+    ).fetchall()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["period_start", "period_end", "lab", "line_type", "quantity", "avg_rate", "amount"])
+    for r in rows:
+        writer.writerow([r["period_start"], r["period_end"], r["lab_name"], r["line_type"], r["quantity"], r["rate"], r["amount"]])
+    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition": "attachment; filename=billing_statements.csv"})
+
+
+@app.get("/api/requests")
+@require_auth()
+def facility_requests_list() -> Response:
+    params: list[Any] = []
+    where = ""
+    if not is_admin(g.user):
+        where = "WHERE fr.lab_id = ?"
+        params.append(g.user.lab_id)
+    rows = db().execute(
+        f"""
+        SELECT fr.id, fr.request_type, fr.status, fr.details_json, fr.created_at, fr.updated_at,
+               l.name AS lab_name, p.project_code, u.full_name AS requested_by_name
+        FROM facility_requests fr
+        JOIN labs l ON l.id = fr.lab_id
+        LEFT JOIN projects p ON p.id = fr.project_id
+        LEFT JOIN users u ON u.id = fr.requested_by
+        {where}
+        ORDER BY fr.id DESC
+        LIMIT 500
+        """,
+        params,
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/requests")
+@require_auth(("Technician", "PI", "Admin"))
+def facility_request_create() -> Response:
+    payload = request.get_json(force=True)
+    lab_id = int(payload.get("labId", g.user.lab_id or 1))
+    if not is_admin(g.user) and g.user.lab_id != lab_id:
+        return jsonify({"error": "Forbidden"}), 403
+    cur = db().execute(
+        """
+        INSERT INTO facility_requests
+        (request_type, lab_id, project_id, status, details_json, requested_by, created_at, updated_at)
+        VALUES (?, ?, ?, 'submitted', ?, ?, ?, ?)
+        """,
+        (
+            payload.get("requestType", "general"),
+            lab_id,
+            payload.get("projectId"),
+            json.dumps(payload.get("details", {})),
+            g.user.user_id,
+            now_iso(),
+            now_iso(),
+        ),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "facility_request", cur.lastrowid, "create", None, payload)
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.post("/api/requests/<int:request_id>/status")
+@require_auth(("PI", "Admin"))
+def facility_request_status(request_id: int) -> Response:
+    payload = request.get_json(force=True)
+    status = str(payload.get("status", "")).strip()
+    if status not in {"submitted", "approved", "fulfilled", "rejected"}:
+        return jsonify({"error": "Invalid status"}), 400
+    row = db().execute("SELECT * FROM facility_requests WHERE id = ?", (request_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    if not is_admin(g.user) and int(row["lab_id"]) != int(g.user.lab_id or -1):
+        return jsonify({"error": "Forbidden"}), 403
+    db().execute(
+        "UPDATE facility_requests SET status = ?, reviewed_by = ?, updated_at = ? WHERE id = ?",
+        (status, g.user.user_id, now_iso(), request_id),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "facility_request", request_id, "status", {"status": row["status"]}, {"status": status})
+    return jsonify({"ok": True})
+
+
+@app.get("/api/operations/sla")
+@require_auth(("PI", "Admin"))
+def operations_sla() -> Response:
+    rows = db().execute(
+        """
+        SELECT request_type, status, AVG((julianday(updated_at) - julianday(created_at)) * 24.0) AS avg_hours, COUNT(*) AS n
+        FROM facility_requests
+        """
+        + ("" if is_admin(g.user) else " WHERE lab_id = ? ")
+        + """
+        GROUP BY request_type, status
+        ORDER BY n DESC
+        """,
+        () if is_admin(g.user) else (g.user.lab_id,),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.get("/api/facility/benchmark")
+@require_auth(("Admin",))
+def facility_benchmark() -> Response:
+    rows = db().execute(
+        """
+        SELECT f.id AS facility_id, f.name AS facility_name,
+               COUNT(DISTINCT l.id) AS labs,
+               COUNT(DISTINCT c.id) AS cages,
+               COUNT(DISTINCT p.id) AS projects,
+               COUNT(DISTINCT a.id) AS active_animals
+        FROM facilities f
+        LEFT JOIN labs l ON l.facility_id = f.id
+        LEFT JOIN projects p ON p.lab_id = l.id
+        LEFT JOIN cages c ON c.lab_id = l.id
+        LEFT JOIN animals a ON a.cage_id = c.id AND a.status = 'Active'
+        GROUP BY f.id
+        ORDER BY cages DESC
+        """
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/integrations/export-jobs")
+@require_auth(("PI", "Admin"))
+def create_export_job() -> Response:
+    payload = request.get_json(force=True)
+    job_type = str(payload.get("jobType", "")).strip()
+    if not job_type:
+        return jsonify({"error": "jobType is required"}), 400
+    cur = db().execute(
+        "INSERT INTO export_jobs (job_type, target_url, status, payload_json, created_by, created_at) VALUES (?, ?, 'pending', ?, ?, ?)",
+        (job_type, payload.get("targetUrl"), json.dumps(payload.get("payload", {})), g.user.user_id, now_iso()),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "export_job", cur.lastrowid, "create", None, payload)
+    return jsonify({"id": cur.lastrowid}), 201
+
+
+@app.post("/api/integrations/export-jobs/<int:job_id>/run")
+@require_auth(("PI", "Admin"))
+def run_export_job(job_id: int) -> Response:
+    row = db().execute("SELECT * FROM export_jobs WHERE id = ?", (job_id,)).fetchone()
+    if not row:
+        return jsonify({"error": "Not found"}), 404
+    # Simulated dispatch; external webhook delivery can be added in worker.
+    db().execute("UPDATE export_jobs SET status = 'sent', sent_at = ? WHERE id = ?", (now_iso(), job_id))
+    db().commit()
+    audit_log(g.user.user_id, "export_job", job_id, "run", {"status": row["status"]}, {"status": "sent"})
+    return jsonify({"ok": True, "status": "sent"})
+
+
+@app.get("/api/integrations/export-jobs")
+@require_auth(("PI", "Admin"))
+def list_export_jobs() -> Response:
+    rows = db().execute("SELECT id, job_type, target_url, status, created_at, sent_at FROM export_jobs ORDER BY id DESC LIMIT 500").fetchall()
+    return jsonify([dict(r) for r in rows])
 
 
 @app.get("/api/audit")

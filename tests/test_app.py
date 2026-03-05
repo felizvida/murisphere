@@ -391,6 +391,124 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertEqual(protocol_csv.status_code, 200)
         self.assertIn("text/csv", protocol_csv.content_type)
 
+    def test_protocol_expiry_hard_stop(self) -> None:
+        tech = self.login("tech@murisphere.local", "tech1234")
+        admin = self.login("admin@murisphere.local", "admin1234")
+        with sqlite3.connect(appmod.DB_PATH) as conn:
+            now = datetime.now(UTC).isoformat()
+            conn.execute(
+                "INSERT INTO iacuc_protocols (protocol_number, title, lab_id, expires_on, created_at) VALUES (?, ?, ?, ?, ?)",
+                ("IACUC-EXPIRED-1", "Expired Protocol", 1, "2020-01-01", now),
+            )
+            protocol_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute("UPDATE cages SET protocol_id = ? WHERE id = 1", (protocol_id,))
+            conn.commit()
+
+        blocked = self.client.patch("/api/cages/1", headers=self.auth_headers(tech), json={"notes": "should fail"})
+        self.assertEqual(blocked.status_code, 409)
+        self.assertEqual(blocked.get_json()["code"], "PROTOCOL_EXPIRED")
+
+        # Restore valid protocol for further actions in this test
+        with sqlite3.connect(appmod.DB_PATH) as conn:
+            conn.execute("UPDATE cages SET protocol_id = 1 WHERE id = 1")
+            conn.commit()
+
+        ok = self.client.patch("/api/cages/1", headers=self.auth_headers(admin), json={"notes": "ok now"})
+        self.assertEqual(ok.status_code, 200)
+
+    def test_billing_engine_and_requests_and_exports(self) -> None:
+        admin = self.login("admin@murisphere.local", "admin1234")
+        pi = self.login("pi@murisphere.local", "pi1234")
+
+        rule = self.client.post(
+            "/api/billing/rules",
+            headers=self.auth_headers(admin),
+            json={"labId": 1, "lineType": "per_diem", "rate": 1.25},
+        )
+        self.assertEqual(rule.status_code, 201)
+
+        rules = self.client.get("/api/billing/rules", headers=self.auth_headers(pi))
+        self.assertEqual(rules.status_code, 200)
+        self.assertTrue(rules.get_json())
+
+        run = self.client.post(
+            "/api/billing/run",
+            headers=self.auth_headers(admin),
+            json={"periodStart": "2026-03-01", "periodEnd": "2026-03-31"},
+        )
+        self.assertEqual(run.status_code, 200)
+        self.assertGreater(run.get_json()["entriesUpserted"], 0)
+
+        # rerun-safe upsert
+        rerun = self.client.post(
+            "/api/billing/run",
+            headers=self.auth_headers(admin),
+            json={"periodStart": "2026-03-01", "periodEnd": "2026-03-31"},
+        )
+        self.assertEqual(rerun.status_code, 200)
+
+        statement = self.client.get(
+            "/api/billing/statements.csv?periodStart=2026-03-01&periodEnd=2026-03-31",
+            headers=self.auth_headers(admin),
+        )
+        self.assertEqual(statement.status_code, 200)
+        self.assertIn("text/csv", statement.content_type)
+
+        close = self.client.post(
+            "/api/billing/close-period",
+            headers=self.auth_headers(admin),
+            json={"periodStart": "2026-03-01", "periodEnd": "2026-03-31"},
+        )
+        self.assertEqual(close.status_code, 200)
+
+        after_close = self.client.post(
+            "/api/billing/run",
+            headers=self.auth_headers(admin),
+            json={"periodStart": "2026-03-01", "periodEnd": "2026-03-31"},
+        )
+        self.assertEqual(after_close.status_code, 409)
+
+        req = self.client.post(
+            "/api/requests",
+            headers=self.auth_headers(pi),
+            json={"requestType": "animal_order", "details": {"count": 12, "strain": "C57BL/6J"}},
+        )
+        self.assertEqual(req.status_code, 201)
+        req_id = req.get_json()["id"]
+
+        reqs = self.client.get("/api/requests", headers=self.auth_headers(pi))
+        self.assertEqual(reqs.status_code, 200)
+        self.assertTrue(reqs.get_json())
+
+        status = self.client.post(
+            f"/api/requests/{req_id}/status",
+            headers=self.auth_headers(admin),
+            json={"status": "approved"},
+        )
+        self.assertEqual(status.status_code, 200)
+
+        sla = self.client.get("/api/operations/sla", headers=self.auth_headers(admin))
+        self.assertEqual(sla.status_code, 200)
+
+        bench = self.client.get("/api/facility/benchmark", headers=self.auth_headers(admin))
+        self.assertEqual(bench.status_code, 200)
+        self.assertTrue(bench.get_json())
+
+        job = self.client.post(
+            "/api/integrations/export-jobs",
+            headers=self.auth_headers(admin),
+            json={"jobType": "daily_census", "targetUrl": "https://example.invalid/webhook", "payload": {"format": "csv"}},
+        )
+        self.assertEqual(job.status_code, 201)
+        job_id = job.get_json()["id"]
+
+        run_job = self.client.post(f"/api/integrations/export-jobs/{job_id}/run", headers=self.auth_headers(admin))
+        self.assertEqual(run_job.status_code, 200)
+
+        jobs = self.client.get("/api/integrations/export-jobs", headers=self.auth_headers(admin))
+        self.assertEqual(jobs.status_code, 200)
+        self.assertTrue(any(j["id"] == job_id for j in jobs.get_json()))
+
     def test_technician_cannot_access_other_lab_cage(self) -> None:
         tech_token = self.login("tech@murisphere.local", "tech1234")
 

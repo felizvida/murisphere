@@ -6,6 +6,7 @@ const state = {
 };
 const PENDING_SCAN_KEY = "murisphere_pending_scan";
 const SCAN_BASE_KEY = "murisphere_scan_base_url";
+const MUTATION_QUEUE_KEY = "murisphere_mutation_queue";
 
 const el = (id) => document.getElementById(id);
 
@@ -45,6 +46,53 @@ async function api(path, opts = {}) {
     throw new Error(data.error || `Request failed: ${res.status}`);
   }
   return res.json();
+}
+
+function readMutationQueue() {
+  try {
+    return JSON.parse(localStorage.getItem(MUTATION_QUEUE_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function writeMutationQueue(items) {
+  localStorage.setItem(MUTATION_QUEUE_KEY, JSON.stringify(items));
+}
+
+function enqueueMutation(path, opts) {
+  const queue = readMutationQueue();
+  queue.push({
+    path,
+    opts: {
+      method: opts.method || "POST",
+      body: opts.body || null,
+    },
+    queuedAt: new Date().toISOString(),
+  });
+  writeMutationQueue(queue);
+}
+
+async function flushMutationQueue() {
+  const queue = readMutationQueue();
+  if (!queue.length) return 0;
+  const remaining = [];
+  let sent = 0;
+  for (const item of queue) {
+    try {
+      const opts = {
+        method: item.opts.method || "POST",
+        headers: headers(),
+      };
+      if (item.opts.body != null) opts.body = item.opts.body;
+      await api(item.path, opts);
+      sent += 1;
+    } catch {
+      remaining.push(item);
+    }
+  }
+  writeMutationQueue(remaining);
+  return sent;
 }
 
 function tableFromCages(rows) {
@@ -272,18 +320,25 @@ async function runScan() {
     `;
     el("quickUpdate").addEventListener("submit", async (e) => {
       e.preventDefault();
-      await api(`/api/cages/${c.id}`, {
+      const payload = {
+        maleCount: Number(el("uMale").value),
+        femaleCount: Number(el("uFemale").value),
+        breedingStatus: el("uStatus").value,
+        notes: el("uNotes").value,
+      };
+      const req = {
         method: "PATCH",
         headers: headers(),
-        body: JSON.stringify({
-          maleCount: Number(el("uMale").value),
-          femaleCount: Number(el("uFemale").value),
-          breedingStatus: el("uStatus").value,
-          notes: el("uNotes").value,
-        }),
-      });
-      await loadCages();
-      alert("Saved with audit log.");
+        body: JSON.stringify(payload),
+      };
+      try {
+        await api(`/api/cages/${c.id}`, req);
+        await loadCages();
+        alert("Saved with audit log.");
+      } catch (err) {
+        enqueueMutation(`/api/cages/${c.id}`, req);
+        alert(`Network issue: queued locally and will retry automatically. (${err.message})`);
+      }
     });
   } catch (err) {
     el("scanResult").innerHTML = `<p class="hint">${err.message}</p>`;
@@ -400,7 +455,7 @@ async function init() {
 
   el("breedingForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    await api("/api/breeding/events", {
+    const req = {
       method: "POST",
       headers: headers(),
       body: JSON.stringify({
@@ -408,9 +463,15 @@ async function init() {
         eventType: el("breedType").value,
         eventDate: el("breedDate").value,
       }),
-    });
-    await loadCalendar();
-    alert("Breeding event scheduled.");
+    };
+    try {
+      await api("/api/breeding/events", req);
+      await loadCalendar();
+      alert("Breeding event scheduled.");
+    } catch (err) {
+      enqueueMutation("/api/breeding/events", req);
+      alert(`Network issue: event queued locally. (${err.message})`);
+    }
   });
 
   el("projectForm").addEventListener("submit", async (e) => {
@@ -470,15 +531,36 @@ async function init() {
       .join("");
   });
 
+  el("loadRequestsBtn").addEventListener("click", async () => {
+    const rows = await api("/api/requests", { headers: headers(false) });
+    el("requests").innerHTML = rows
+      .slice(0, 40)
+      .map((r) => `<div class="cage-card">${esc(r.created_at)} | ${esc(r.request_type)} | ${esc(r.status)} | ${esc(r.lab_name)}</div>`)
+      .join("");
+  });
+
+  el("loadSlaBtn").addEventListener("click", async () => {
+    const rows = await api("/api/operations/sla", { headers: headers(false) });
+    el("sla").innerHTML = rows
+      .slice(0, 40)
+      .map((r) => `<div class="cage-card">${esc(r.request_type)} | ${esc(r.status)} | avg ${Number(r.avg_hours || 0).toFixed(1)}h | n=${esc(r.n)}</div>`)
+      .join("");
+  });
+
   try {
     const me = await api("/api/auth/me", { headers: headers(false) });
     setAuth("", me);
     await loadCages();
     await loadProjects();
+    await flushMutationQueue();
     await openPendingScanIfAny();
   } catch {
     setAuth("", null);
   }
+
+  window.addEventListener("online", () => {
+    flushMutationQueue().catch(() => undefined);
+  });
 }
 
 init().catch((e) => console.error(e));
