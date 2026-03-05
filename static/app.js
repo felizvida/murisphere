@@ -545,11 +545,11 @@ function cardMarkup(c) {
     .map(
       (a) => `
       <tr>
-        <td>${esc(a.animalCode || "")}</td>
-        <td>${esc(a.sex || "U")}</td>
-        <td>${esc(fmtDate(a.dob))}</td>
+        <td class="center">${esc(a.animalCode || "")}</td>
+        <td class="center">${esc(a.sex || "U")}</td>
+        <td class="center">${esc(fmtDate(a.dob))}</td>
         <td>${esc(a.genotype || "Pending")}</td>
-        <td>${esc(a.status || "Active")}</td>
+        <td class="center">${esc(a.status || "Active")}</td>
       </tr>`
     )
     .join("");
@@ -566,11 +566,11 @@ function cardMarkup(c) {
     .map(
       (l, idx) => `
       <tr>
-        <td>${esc(idx + 1)}</td>
-        <td>${esc(fmtDate(l.birthDate))}</td>
-        <td>${esc(l.born)}</td>
-        <td>${esc(l.survived)}</td>
-        <td>${esc(`${toNum(l.maleCount)}/${toNum(l.femaleCount)}`)}</td>
+        <td class="center">${esc(idx + 1)}</td>
+        <td class="center">${esc(fmtDate(l.birthDate))}</td>
+        <td class="center">${esc(l.born)}</td>
+        <td class="center">${esc(l.survived)}</td>
+        <td class="center">${esc(`${toNum(l.maleCount)}/${toNum(l.femaleCount)}`)}</td>
       </tr>`
     )
     .join("");
@@ -587,46 +587,69 @@ function cardMarkup(c) {
     <article class="print-card">
       <div class="print-card-header">
         <div class="print-card-identity">
-          <div class="card-kv"><span class="k">Cage:</span><strong>${esc(c.cageCode)}</strong></div>
-          <div class="card-kv"><span class="k">Location:</span><strong>${esc(location)}</strong></div>
-          <div class="card-kv"><span class="k">Breeding:</span><strong>${esc(c.breedingStatus)}</strong></div>
+          <div class="card-badge">Murisphere Cage Card</div>
+          <div class="card-title">${esc(c.cageCode)}</div>
+          <div class="card-subtitle">${esc(location)}</div>
         </div>
         <div class="card-code-block">
           <img class="qrcode" data-qr="${esc(scanUrlForCard(c))}" alt="QR code" />
           <div class="qr-caption">Scan with phone camera</div>
         </div>
       </div>
-      <div class="print-card-core">
-        <div class="card-kv"><span class="k">Group Owner:</span><strong>${esc(c.groupOwner || "N/A")}</strong></div>
-        <div class="card-kv"><span class="k">Group Name:</span><strong>${esc(c.groupName || c.piLab || "N/A")}</strong></div>
-        <div class="card-kv"><span class="k">Projects:</span><strong>${esc(projects)}</strong></div>
-        <div class="card-kv"><span class="k">Protocol:</span><strong>${esc(c.protocol || "N/A")}</strong></div>
-        <div class="card-kv"><span class="k">Description:</span><strong>${esc(c.protocolDescription || "N/A")}</strong></div>
-        <div class="card-kv"><span class="k">Expires:</span><strong>${esc(fmtDate(c.protocolExpiresOn))}</strong></div>
-        <div class="card-kv"><span class="k">Strain:</span><strong>${esc(c.strain)}</strong></div>
-        <div class="card-kv"><span class="k">Genotype:</span><strong>${esc(c.genotype)}</strong></div>
-        <div class="card-kv"><span class="k">Cage DOB:</span><strong>${esc(fmtDate(c.dob))}</strong></div>
-        <div class="card-kv"><span class="k">Population:</span><strong>${esc(`M${male} / F${female} / T${total}`)}</strong></div>
+
+      <div class="card-facts-grid">
+        <div class="card-fact"><span>Group Owner</span><strong>${esc(c.groupOwner || "N/A")}</strong></div>
+        <div class="card-fact"><span>Group Name</span><strong>${esc(c.groupName || c.piLab || "N/A")}</strong></div>
+        <div class="card-fact"><span>Projects</span><strong>${esc(projects)}</strong></div>
+        <div class="card-fact"><span>Protocol</span><strong>${esc(c.protocol || "N/A")}</strong></div>
+        <div class="card-fact"><span>Description</span><strong>${esc(c.protocolDescription || "N/A")}</strong></div>
+        <div class="card-fact"><span>Protocol Expires</span><strong>${esc(fmtDate(c.protocolExpiresOn))}</strong></div>
+        <div class="card-fact"><span>Breeding Status</span><strong>${esc(c.breedingStatus || "N/A")}</strong></div>
+        <div class="card-fact"><span>Cage DOB</span><strong>${esc(fmtDate(c.dob))}</strong></div>
+        <div class="card-fact"><span>Strain</span><strong>${esc(c.strain)}</strong></div>
+        <div class="card-fact"><span>Genotype</span><strong>${esc(c.genotype)}</strong></div>
+        <div class="card-fact"><span>Population</span><strong>${esc(`M${male} / F${female} / T${total}`)}</strong></div>
+        <div class="card-fact"><span>Room / Rack</span><strong>${esc(location)}</strong></div>
       </div>
 
-      <table class="card-table">
-        <thead>
-          <tr><th>ID</th><th>Sex</th><th>DOB</th><th>Genotype</th><th>Status</th></tr>
-        </thead>
-        <tbody>
-          ${animalRows}${animalFill}
-        </tbody>
-      </table>
-
-      <div class="litters-title">Litters</div>
-      <table class="card-table litters-table">
-        <thead>
-          <tr><th>#</th><th>DOB</th><th>Born</th><th>Survived</th><th>M/F</th></tr>
-        </thead>
-        <tbody>
-          ${litterRows}${litterFill}
-        </tbody>
-      </table>
+      <div class="card-panels">
+        <div class="card-panel">
+          <div class="panel-title">Animals</div>
+          <table class="card-table animals-table">
+            <colgroup>
+              <col style="width:18%" />
+              <col style="width:10%" />
+              <col style="width:24%" />
+              <col style="width:32%" />
+              <col style="width:16%" />
+            </colgroup>
+            <thead>
+              <tr><th>ID</th><th>Sex</th><th>DOB</th><th>Genotype</th><th>Status</th></tr>
+            </thead>
+            <tbody>
+              ${animalRows}${animalFill}
+            </tbody>
+          </table>
+        </div>
+        <div class="card-panel">
+          <div class="panel-title">Litters</div>
+          <table class="card-table litters-table">
+            <colgroup>
+              <col style="width:10%" />
+              <col style="width:35%" />
+              <col style="width:16%" />
+              <col style="width:20%" />
+              <col style="width:19%" />
+            </colgroup>
+            <thead>
+              <tr><th>#</th><th>DOB</th><th>Born</th><th>Survived</th><th>M/F</th></tr>
+            </thead>
+            <tbody>
+              ${litterRows}${litterFill}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
       <div class="scan-block">
         <img class="barcode" data-barcode="${esc(c.cageCode)}" alt="Barcode" />
@@ -684,25 +707,101 @@ async function printCardsDirect() {
         <meta charset="UTF-8" />
         <title>Murisphere Cage Cards</title>
         <style>
-          body { font-family: Arial, sans-serif; margin: 12px; color: #111; }
-          .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(540px, 1fr)); gap: 10px; }
-          .print-card { border: 1px solid #222; border-radius: 6px; padding: 8px; break-inside: avoid; min-height: 350px; }
-          .print-card-header { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
-          .print-card-identity { flex: 1; display: grid; gap: 3px; align-content: start; }
-          .card-kv { font-size: 11px; line-height: 1.2; display: flex; gap: 6px; }
-          .card-kv .k { min-width: 78px; font-weight: 700; }
+          body {
+            font-family: "Avenir Next", "Segoe UI", Arial, sans-serif;
+            margin: 12px;
+            color: #102a36;
+            background: linear-gradient(155deg, #f6fbf9, #edf6f2);
+          }
+          .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(640px, 1fr)); gap: 12px; }
+          .print-card {
+            border: 1.25px solid #7fa296;
+            border-radius: 12px;
+            padding: 10px;
+            break-inside: avoid;
+            min-height: 440px;
+            background:
+              linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 251, 248, 0.98)),
+              radial-gradient(circle at 90% 0, rgba(24, 161, 114, 0.08), transparent 42%);
+            box-shadow: 0 4px 18px rgba(24, 56, 48, 0.12);
+          }
+          .print-card-header { display: grid; grid-template-columns: minmax(0, 1fr) 112px; gap: 10px; margin-bottom: 8px; align-items: start; }
+          .print-card-identity { display: grid; gap: 2px; }
+          .card-badge {
+            display: inline-flex;
+            width: fit-content;
+            font-size: 9px;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            padding: 2px 7px;
+            border-radius: 999px;
+            color: #0f5942;
+            background: #e7f6ef;
+            border: 1px solid #b8dccb;
+          }
+          .card-title { font-size: 20px; font-weight: 700; letter-spacing: .01em; color: #0f2f3c; }
+          .card-subtitle { font-size: 11px; color: #415d69; line-height: 1.2; }
           .card-code-block { width: 108px; text-align: center; }
-          .qrcode { width: 102px; height: 102px; border: 1px solid #111; border-radius: 4px; object-fit: contain; background: #fff; }
-          .qr-caption { margin-top: 2px; font-size: 9px; color: #2d4956; }
-          .print-card-core { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 8px; margin-bottom: 6px; }
-          .card-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 5px; table-layout: fixed; }
-          .card-table th, .card-table td { border: 1px solid #111; padding: 3px 4px; vertical-align: top; }
-          .card-table thead th { background: #f7f7f7; text-align: left; }
+          .qrcode { width: 104px; height: 104px; border: 1px solid #2a4a57; border-radius: 8px; object-fit: contain; background: #fff; }
+          .qr-caption { margin-top: 3px; font-size: 9px; color: #2d4956; }
+          .card-facts-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 4px 10px;
+            margin-bottom: 8px;
+          }
+          .card-fact {
+            display: grid;
+            grid-template-columns: 112px minmax(0, 1fr);
+            gap: 6px;
+            align-items: baseline;
+            font-size: 10px;
+            line-height: 1.2;
+          }
+          .card-fact > span { color: #33525f; font-weight: 600; }
+          .card-fact > strong { color: #163744; font-weight: 700; overflow-wrap: anywhere; }
+          .card-panels { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+          .card-panel {
+            border: 1px solid #9dbbb0;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #fff;
+          }
+          .panel-title {
+            padding: 4px 6px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: .02em;
+            color: #123844;
+            background: linear-gradient(180deg, #edf7f3, #e6f1ec);
+            border-bottom: 1px solid #9dbbb0;
+          }
+          .card-table { width: 100%; border-collapse: collapse; font-size: 9.5px; table-layout: fixed; }
+          .card-table th, .card-table td {
+            border-right: 1px solid #abc5ba;
+            border-bottom: 1px solid #abc5ba;
+            padding: 3px 4px;
+            vertical-align: top;
+            overflow-wrap: anywhere;
+          }
+          .card-table th:last-child, .card-table td:last-child { border-right: none; }
+          .card-table thead th { background: #f3faf7; text-align: left; color: #163744; }
+          .card-table td.center, .card-table th.center { text-align: center; }
           .card-table tr.empty td { color: transparent; }
-          .litters-title { font-size: 10px; font-weight: 700; margin: 2px 0; }
-          .scan-block { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; align-items: center; }
-          .barcode { width: 100%; height: 58px; border: 1px solid #111; }
-          .card-foot { font-size: 9px; word-break: break-all; }
+          .scan-block { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; align-items: center; margin-top: 8px; }
+          .barcode {
+            width: 100%;
+            height: 56px;
+            border: 1px solid #2a4a57;
+            background: #fff;
+            border-radius: 5px;
+          }
+          .card-foot {
+            font-size: 9px;
+            color: #2e4956;
+            word-break: break-all;
+            font-family: "IBM Plex Mono", "Consolas", monospace;
+          }
           @page { size: letter portrait; margin: 0.35in; }
         </style>
       </head>
