@@ -2,6 +2,7 @@ const state = {
   token: "",
   user: null,
   cages: [],
+  projects: [],
   cards: [],
   alerts: [],
   alertsByCage: {},
@@ -12,6 +13,46 @@ const MUTATION_QUEUE_KEY = "murisphere_mutation_queue";
 const SEVERITY_RANK = { high: 3, medium: 2, low: 1 };
 
 const el = (id) => document.getElementById(id);
+
+function showMessage(text, tone = "info") {
+  const node = el("globalMessage");
+  if (!node) return;
+  node.textContent = text || "";
+  node.className = `global-message ${tone}`;
+  if (!text) {
+    node.classList.add("hidden");
+    return;
+  }
+  node.classList.remove("hidden");
+  window.clearTimeout(showMessage._timer);
+  showMessage._timer = window.setTimeout(() => {
+    node.classList.add("hidden");
+  }, 3600);
+}
+
+function handleSessionExpired(message = "Session expired. Please sign in again.") {
+  setAuth("", null);
+  state.cages = [];
+  state.projects = [];
+  state.cards = [];
+  state.alerts = [];
+  state.alertsByCage = {};
+  showMessage(message, "warn");
+}
+
+async function withAction(label, fn) {
+  try {
+    await fn();
+  } catch (err) {
+    if (err && Number(err.status) === 401) {
+      handleSessionExpired();
+      return;
+    }
+    const message = err?.message || "Action failed";
+    showMessage(`${label}: ${message}`, "error");
+    throw err;
+  }
+}
 
 function headers(isJson = true) {
   const base = {};
@@ -44,11 +85,14 @@ function activateTab(name) {
 
 async function api(path, opts = {}) {
   const res = await fetch(path, { credentials: "same-origin", ...opts });
+  const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || `Request failed: ${res.status}`);
+    const err = new Error(data.error || `Request failed: ${res.status}`);
+    err.status = res.status;
+    err.payload = data;
+    throw err;
   }
-  return res.json();
+  return data;
 }
 
 function mutationQueueKey() {
@@ -116,7 +160,7 @@ function alertBadge(alerts) {
 function tableFromCages(rows, alertsByCage = {}) {
   return `
     <table class="table">
-      <thead><tr><th>ID</th><th>Cage</th><th>Alert</th><th>Strain</th><th>Genotype</th><th>Status</th><th>M/F</th><th>Location</th></tr></thead>
+      <thead><tr><th>ID</th><th>Cage</th><th>Alert</th><th>Strain</th><th>Genotype</th><th>Status</th><th>M/F</th><th>Projects</th><th>Location</th></tr></thead>
       <tbody>
         ${rows
           .map(
@@ -125,8 +169,10 @@ function tableFromCages(rows, alertsByCage = {}) {
               const rowClass = alerts.length ? `alert-${severityClass(alerts[0].severity)}` : "";
               return `
           <tr class="${rowClass}">
-            <td>${esc(c.id)}</td><td>${esc(c.cageCode)}</td><td>${alertBadge(alerts)}</td><td>${esc(c.strain)}</td><td>${esc(c.genotypeSummary)}</td><td>${esc(c.breedingStatus)}</td>
-            <td>${esc(c.maleCount)}/${esc(c.femaleCount)}</td><td>${esc(c.room)} / ${esc(c.rack)}</td>
+            <td>${esc(c.id)}</td>
+            <td><button type="button" class="table-link" data-cage-id="${esc(c.id)}">${esc(c.cageCode)}</button></td>
+            <td>${alertBadge(alerts)}</td><td>${esc(c.strain)}</td><td>${esc(c.genotypeSummary)}</td><td>${esc(c.breedingStatus)}</td>
+            <td>${esc(c.maleCount)}/${esc(c.femaleCount)}</td><td>${esc(c.projectCodes || "Unassigned")}</td><td>${esc(c.room)} / ${esc(c.rack)}</td>
           </tr>`;
             }
           )
@@ -145,7 +191,8 @@ function tableFromProjects(rows) {
           .map(
             (p) => `
           <tr>
-            <td>${esc(p.project_code)}</td><td>${esc(p.title)}</td><td>${esc(p.status)}</td>
+            <td><button type="button" class="table-link" data-project-id="${esc(p.id)}">${esc(p.project_code)}</button></td>
+            <td><button type="button" class="table-link" data-project-id="${esc(p.id)}">${esc(p.title)}</button></td><td>${esc(p.status)}</td>
             <td>${esc(p.target_animals)}</td><td>${esc(p.lab_name)}</td><td>${esc(p.assigned_cages)}</td>
           </tr>`
           )
@@ -413,6 +460,174 @@ function renderComplianceVisuals(alerts, protocolAlerts = []) {
   ].join("");
 }
 
+function renderDashboardVisuals(summary, alerts, reminders, quotas) {
+  const sevCounts = { high: 0, medium: 0, low: 0 };
+  for (const a of alerts) sevCounts[a.severity] = (sevCounts[a.severity] || 0) + 1;
+  const sevBars = Object.entries(sevCounts).map(([label, value]) => ({
+    label,
+    value,
+    color: label === "high" ? "#ca513d" : label === "medium" ? "#eb9c44" : "#18a172",
+  }));
+
+  const taskBins = {};
+  for (const t of reminders.slice(0, 30)) {
+    const d = String(t.event_date || t.due_on || "").slice(5, 10);
+    if (!d) continue;
+    taskBins[d] = (taskBins[d] || 0) + 1;
+  }
+  const taskBars = Object.entries(taskBins).map(([label, value]) => ({ label, value, color: "#4f8ef7" }));
+  const quotaBars = quotas.slice(0, 10).map((q) => ({
+    label: q.labName,
+    value: toNum(q.utilizationPct || 0),
+    color: toNum(q.utilizationPct || 0) > 100 ? "#ca513d" : "#18a172",
+  }));
+
+  const sexParts = [
+    { label: "Male", value: toNum(summary.sexRatio?.M || 0), color: "#3ba0d8" },
+    { label: "Female", value: toNum(summary.sexRatio?.F || 0), color: "#e6739f" },
+  ];
+
+  el("dashboardVisuals").innerHTML = [
+    chartCard("Alert Pressure", "Current active alert severities", drawBars(sevBars, { height: 120 }), sevBars.map((r) => `<span class="legend-item">${esc(r.label)} ${esc(r.value)}</span>`).join("")),
+    chartCard("Task Queue", "Near-term reminders by day", `${drawBars(taskBars, { height: 120 })}${drawSparkline(taskBars.map((x) => x.value), "#4f8ef7")}`, taskBars.map((r) => `<span class="legend-item">${esc(r.label)} ${esc(r.value)}</span>`).join("")),
+    chartCard("Lab Utilization", "Quota utilization by lab", drawBars(quotaBars, { height: 120 }), quotaBars.map((r) => `<span class="legend-item">${esc(r.label)} ${toNum(r.value).toFixed(0)}%</span>`).join("")),
+    chartCard("Population Balance", "Active sex ratio", drawDonut(sexParts), sexParts.map((r) => `<span class="legend-item">${esc(r.label)} ${esc(r.value)}</span>`).join("")),
+  ].join("");
+}
+
+function renderCageInspector(detail) {
+  if (!detail?.cage) {
+    el("cageInspector").innerHTML = "";
+    return;
+  }
+  const cage = detail.cage;
+  const animals = detail.animals || [];
+  const history = detail.history || [];
+  const statusCounts = {};
+  for (const a of animals) statusCounts[a.status || "Unknown"] = (statusCounts[a.status || "Unknown"] || 0) + 1;
+  const statusBars = Object.entries(statusCounts).map(([label, value], i) => ({
+    label,
+    value,
+    color: ["#18a172", "#4f8ef7", "#eb9c44", "#ca513d", "#7c6cf2"][i % 5],
+  }));
+  const historyRows = history
+    .slice(0, 8)
+    .map((h) => `<div class="timeline-item"><strong>${esc(h.action)}</strong><span>${esc(fmtDate(h.created_at))}</span></div>`)
+    .join("");
+  const animalsRows = animals
+    .slice(0, 8)
+    .map((a) => `<tr><td>${esc(a.animal_code)}</td><td>${esc(a.sex)}</td><td>${esc(a.genotype || "Pending")}</td><td>${esc(a.status)}</td></tr>`)
+    .join("");
+
+  el("cageInspector").innerHTML = `
+    <div class="detail-shell">
+      <div class="detail-head">
+        <h4>${esc(cage.cageCode)}</h4>
+        <span class="detail-pill">${esc(cage.room)} / ${esc(cage.rack)}</span>
+      </div>
+      <div class="detail-grid">
+        ${chartCard(
+          "Population",
+          `${esc(cage.strain)} | ${esc(cage.genotypeSummary)}`,
+          drawDonut([
+            { label: "Male", value: toNum(cage.maleCount), color: "#3ba0d8" },
+            { label: "Female", value: toNum(cage.femaleCount), color: "#e6739f" },
+          ]),
+          `<span class="legend-item">M ${esc(cage.maleCount)}</span><span class="legend-item">F ${esc(cage.femaleCount)}</span><span class="legend-item">Status ${esc(cage.breedingStatus)}</span>`
+        )}
+        ${chartCard("Animal Status", "Composition in cage", drawBars(statusBars, { height: 120 }), statusBars.map((x) => `<span class="legend-item">${esc(x.label)} ${esc(x.value)}</span>`).join(""))}
+      </div>
+      <div class="detail-grid">
+        <article class="viz-card">
+          <h4>Recent Animals</h4>
+          <table class="table compact-table">
+            <thead><tr><th>ID</th><th>Sex</th><th>Genotype</th><th>Status</th></tr></thead>
+            <tbody>${animalsRows || `<tr><td colspan="4">No animal rows.</td></tr>`}</tbody>
+          </table>
+        </article>
+        <article class="viz-card">
+          <h4>Audit Timeline</h4>
+          <div class="timeline-list">${historyRows || `<div class="hint">No recent cage audit entries.</div>`}</div>
+        </article>
+      </div>
+    </div>
+  `;
+}
+
+function renderProjectInspector(project, cages) {
+  if (!project) {
+    el("projectInspector").innerHTML = "";
+    return;
+  }
+  const byStatus = {};
+  for (const c of cages) byStatus[c.breeding_status] = (byStatus[c.breeding_status] || 0) + 1;
+  const statusBars = Object.entries(byStatus).map(([label, value], i) => ({
+    label,
+    value,
+    color: ["#18a172", "#4f8ef7", "#eb9c44", "#ca513d", "#7c6cf2"][i % 5],
+  }));
+  const assigned = toNum(project.assigned_cages || 0);
+  const target = Math.max(0, toNum(project.target_animals || 0));
+  const progress = Math.min(100, target ? Math.round((assigned * 100) / target) : 0);
+
+  el("projectInspector").innerHTML = `
+    <div class="detail-shell">
+      <div class="detail-head">
+        <h4>${esc(project.project_code)} - ${esc(project.title)}</h4>
+        <span class="detail-pill">${esc(project.status)}</span>
+      </div>
+      <div class="detail-grid">
+        ${chartCard(
+          "Target Progress",
+          `Assigned cages vs target animals`,
+          `<div class="progress-wrap"><div class="progress-bar"><span style="width:${progress}%"></span></div><div class="viz-sub">${assigned} assigned / target ${target}</div></div>`,
+          `<span class="legend-item">${esc(project.lab_name)}</span>`
+        )}
+        ${chartCard("Cage Status Mix", "Assigned cage breeding status", drawBars(statusBars, { height: 120 }), statusBars.map((x) => `<span class="legend-item">${esc(x.label)} ${esc(x.value)}</span>`).join(""))}
+      </div>
+      <article class="viz-card">
+        <h4>Assigned Cages</h4>
+        <table class="table compact-table">
+          <thead><tr><th>Cage</th><th>Strain</th><th>Genotype</th><th>Status</th><th>M/F</th></tr></thead>
+          <tbody>
+            ${
+              cages
+                .slice(0, 18)
+                .map(
+                  (c) => `<tr>
+                    <td><button type="button" class="table-link" data-cage-id="${esc(c.id)}">${esc(c.cage_code)}</button></td>
+                    <td>${esc(c.strain)}</td>
+                    <td>${esc(c.genotype_summary)}</td>
+                    <td>${esc(c.breeding_status)}</td>
+                    <td>${esc(c.male_count)}/${esc(c.female_count)}</td>
+                  </tr>`
+                )
+                .join("") || `<tr><td colspan="5">No cages assigned.</td></tr>`
+            }
+          </tbody>
+        </table>
+      </article>
+    </div>
+  `;
+}
+
+async function openCageInspector(cageId) {
+  if (!cageId) return;
+  const detail = await api(`/api/cages/${cageId}`, { headers: headers(false) });
+  activateTab("cages");
+  renderCageInspector(detail);
+  showMessage(`Loaded cage ${detail.cage.cageCode}`, "success");
+}
+
+async function openProjectInspector(projectId) {
+  if (!projectId) return;
+  const project = state.projects.find((p) => Number(p.id) === Number(projectId));
+  const cages = await api(`/api/projects/${projectId}/cages`, { headers: headers(false) });
+  activateTab("projects");
+  renderProjectInspector(project, cages);
+  showMessage(`Loaded project ${project?.project_code || projectId}`, "success");
+}
+
 function renderPedigreeGraph(data) {
   const host = el("pedigreeViz");
   if (!data || !data.nodes?.length) {
@@ -669,7 +884,7 @@ async function renderCards(cards) {
 async function fetchCards() {
   const ids = state.cages.slice(0, 20).map((c) => c.id);
   if (!ids.length) {
-    alert("No cages available to print.");
+    showMessage("No cages available to print.", "warn");
     return [];
   }
   return api("/api/cages/cards", {
@@ -697,7 +912,7 @@ async function printCardsDirect() {
   const source = printableRoot.innerHTML;
   const win = window.open("", "_blank", "width=1100,height=800");
   if (!win) {
-    alert("Please allow popups to print cage cards.");
+    showMessage("Please allow popups to print cage cards.", "warn");
     return;
   }
   win.document.write(`
@@ -818,7 +1033,7 @@ async function printCardsDirect() {
 async function loadCages(q = "") {
   const list = await api(`/api/cages?q=${encodeURIComponent(q)}`, { headers: headers(false) });
   state.cages = list;
-  el("cageTable").innerHTML = tableFromCages(list, state.alertsByCage);
+  el("cageTable").innerHTML = list.length ? tableFromCages(list, state.alertsByCage) : `<p class="hint">No cages match this search.</p>`;
   renderCageVisuals();
 }
 
@@ -836,7 +1051,7 @@ function rebuildAlertsByCage(alerts) {
 }
 
 async function loadActiveAlertFeed() {
-  if (!state.token) return;
+  if (!state.user) return;
   const alerts = await api("/api/alerts/feed?status=active", { headers: headers(false) });
   state.alerts = alerts;
   rebuildAlertsByCage(alerts);
@@ -852,6 +1067,8 @@ async function loadActiveAlertFeed() {
   }
   if (state.cages.length) {
     el("cageTable").innerHTML = tableFromCages(state.cages, state.alertsByCage);
+  } else {
+    el("cageTable").innerHTML = `<p class="hint">No cages loaded.</p>`;
   }
   renderCageVisuals();
   renderComplianceVisuals(state.alerts, []);
@@ -860,9 +1077,13 @@ async function loadActiveAlertFeed() {
 function alertCardMarkup(alert) {
   return `<div class="cage-card">
     <strong>${esc(alert.title)}</strong> <span class="alert-pill ${esc(severityClass(alert.severity))}">${esc(alert.severity.toUpperCase())}</span><br/>
-    Cage: ${esc(alert.cage_code || "N/A")} | ${esc(alert.category)}<br/>
+    Cage: ${
+      alert.cage_id
+        ? `<button type="button" class="table-link" data-cage-id="${esc(alert.cage_id)}">${esc(alert.cage_code || `#${alert.cage_id}`)}</button>`
+        : esc(alert.cage_code || "N/A")
+    } | ${esc(alert.category)}<br/>
     ${esc(alert.message)}<br/>
-    <button data-ack-alert="${esc(alert.id)}">Acknowledge</button>
+    <button type="button" data-ack-alert="${esc(alert.id)}">Acknowledge</button>
   </div>`;
 }
 
@@ -904,10 +1125,10 @@ async function runScan() {
       try {
         await api(`/api/cages/${c.id}`, req);
         await loadCages();
-        alert("Saved with audit log.");
+        showMessage("Saved with audit log.", "success");
       } catch (err) {
         enqueueMutation(`/api/cages/${c.id}`, req);
-        alert(`Network issue: queued locally and will retry automatically. (${err.message})`);
+        showMessage(`Network issue: queued locally and will retry automatically. (${err.message})`, "warn");
       }
     });
   } catch (err) {
@@ -927,7 +1148,7 @@ function readPendingScanToken() {
 
 async function openPendingScanIfAny() {
   const token = readPendingScanToken();
-  if (!token || !state.token) return;
+  if (!token || !state.user) return;
   activateTab("scan");
   el("scanCode").value = token;
   await runScan();
@@ -969,12 +1190,52 @@ async function loadCalendar() {
 
 async function loadProjects() {
   const rows = await api("/api/projects", { headers: headers(false) });
+  state.projects = rows;
   el("projectList").innerHTML = rows.length ? tableFromProjects(rows) : `<p class="hint">No projects yet.</p>`;
 }
 
 async function loadQuotas() {
   const rows = await api("/api/facility/quotas", { headers: headers(false) });
   el("quotaList").innerHTML = rows.length ? tableFromQuotas(rows) : `<p class="hint">No quota data.</p>`;
+  return rows;
+}
+
+async function loadDashboard() {
+  const [summary, alerts, reminders] = await Promise.all([
+    api("/api/analytics/summary", { headers: headers(false) }),
+    api("/api/alerts/feed?status=active", { headers: headers(false) }),
+    api("/api/tasks/reminders?windowDays=14", { headers: headers(false) }),
+  ]);
+  let quotas = [];
+  try {
+    quotas = await api("/api/facility/quotas", { headers: headers(false) });
+  } catch {
+    quotas = [];
+  }
+
+  const highAlerts = alerts.filter((a) => a.severity === "high").length;
+  const overCapacity = quotas.filter((q) => toNum(q.utilizationPct || 0) > 100).length;
+  el("dashboardKpis").innerHTML = `
+    <div class="kpi"><div>Total Cages</div><div class="value">${esc(summary.totalCages)}</div></div>
+    <div class="kpi"><div>Active Animals</div><div class="value">${esc(summary.totalActiveAnimals)}</div></div>
+    <div class="kpi"><div>Active Alerts</div><div class="value">${esc(alerts.length)}</div></div>
+    <div class="kpi"><div>High Alerts</div><div class="value">${esc(highAlerts)}</div></div>
+    <div class="kpi"><div>Upcoming Tasks</div><div class="value">${esc(reminders.length)}</div></div>
+    <div class="kpi"><div>Pup Survival</div><div class="value">${esc(summary.pupSurvivalPct)}%</div></div>
+    <div class="kpi"><div>Sex Ratio</div><div class="value">${esc(summary.sexRatio.M)}/${esc(summary.sexRatio.F)}</div></div>
+    <div class="kpi"><div>Labs Over Capacity</div><div class="value">${esc(overCapacity)}</div></div>
+  `;
+  renderDashboardVisuals(summary, alerts, reminders, quotas);
+  el("dashboardAlerts").innerHTML =
+    alerts.slice(0, 8).map(alertCardMarkup).join("") || `<p class="hint">No active alerts.</p>`;
+  el("dashboardTasks").innerHTML =
+    reminders
+      .slice(0, 10)
+      .map(
+        (r) =>
+          `<div class="cage-card">${esc(r.event_date || r.due_on)} | <strong>${esc(r.event_type || r.task_type)}</strong> | Cage ${esc(r.cage_code || `#${r.cage_id || "N/A"}`)}</div>`
+      )
+      .join("") || `<p class="hint">No tasks due in this window.</p>`;
 }
 
 async function loadPedigreeViz() {
@@ -992,62 +1253,120 @@ async function loadPedigreeViz() {
   }
 }
 
+function roleAllows(roleList) {
+  return !!state.user && roleList.includes(state.user.role);
+}
+
+function setButtonEnabled(id, enabled, blockedMessage = "") {
+  const node = el(id);
+  if (!node) return;
+  node.disabled = !enabled;
+  node.title = enabled ? "" : blockedMessage;
+}
+
+function applyRoleAccess() {
+  const canManageProjects = roleAllows(["PI", "Admin"]);
+  const isAdminUser = roleAllows(["Admin"]);
+  setButtonEnabled("dispatchAlertsBtn", canManageProjects, "Requires PI/Admin role");
+  setButtonEnabled("loadSlaBtn", canManageProjects, "Requires PI/Admin role");
+  setButtonEnabled("loadQuotasBtn", canManageProjects, "Requires PI/Admin role");
+
+  const projectSubmit = el("projectForm")?.querySelector("button[type='submit']");
+  if (projectSubmit) {
+    projectSubmit.disabled = !canManageProjects;
+    projectSubmit.title = canManageProjects ? "" : "Requires PI/Admin role";
+  }
+
+  const genoSubmit = el("genoUploadForm")?.querySelector("button[type='submit']");
+  if (genoSubmit) {
+    genoSubmit.disabled = !canManageProjects;
+    genoSubmit.title = canManageProjects ? "" : "Requires PI/Admin role";
+  }
+
+  const excelSubmit = el("excelImportForm")?.querySelector("button[type='submit']");
+  if (excelSubmit) {
+    excelSubmit.disabled = !isAdminUser;
+    excelSubmit.title = isAdminUser ? "" : "Requires Admin role";
+  }
+}
+
+async function handleTabOpen(tab) {
+  activateTab(tab);
+  if (tab === "dashboard") await loadDashboard();
+  if (tab === "analytics") await loadAnalytics();
+  if (tab === "breeding") await loadCalendar();
+  if (tab === "scan") await loadPedigreeViz();
+  if (tab === "compliance") await loadActiveAlertFeed();
+  if (tab === "projects") {
+    await loadProjects();
+    try {
+      await loadQuotas();
+    } catch {
+      el("quotaList").innerHTML = `<p class="hint">Quota view requires PI/Admin role.</p>`;
+    }
+  }
+}
+
 async function init() {
   document.querySelectorAll(".tabs button").forEach((btn) => {
     btn.addEventListener("click", () => {
-      activateTab(btn.dataset.tab);
-      if (btn.dataset.tab === "analytics") loadAnalytics().catch(console.error);
-      if (btn.dataset.tab === "breeding") loadCalendar().catch(console.error);
-      if (btn.dataset.tab === "scan") loadPedigreeViz().catch(() => undefined);
-      if (btn.dataset.tab === "compliance") {
-        loadActiveAlertFeed().catch(() => undefined);
-      }
-      if (btn.dataset.tab === "projects") {
-        loadProjects().catch(console.error);
-        loadQuotas().catch(console.error);
-      }
+      withAction(`Load ${btn.dataset.tab} view`, () => handleTabOpen(btn.dataset.tab)).catch(() => undefined);
     });
   });
 
   el("loginForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    try {
+    await withAction("Login failed", async () => {
       const data = await api("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: el("email").value, password: el("password").value }),
       });
       setAuth(data.token, data.user);
+      applyRoleAccess();
+      activateTab("dashboard");
       await loadCages();
-      await loadActiveAlertFeed();
       await loadProjects();
+      await loadDashboard();
+      await loadActiveAlertFeed();
+      try {
+        await loadQuotas();
+      } catch {
+        el("quotaList").innerHTML = `<p class="hint">Quota view requires PI/Admin role.</p>`;
+      }
+      const flushed = await flushMutationQueue();
+      if (flushed) showMessage(`Recovered ${flushed} offline queued updates.`, "success");
       await openPendingScanIfAny();
-    } catch (err) {
-      alert(err.message);
-    }
+      showMessage(`Signed in as ${data.user.fullName}`, "success");
+    }).catch(() => undefined);
   });
 
-  el("scanBtn").addEventListener("click", runScan);
-  el("loadPedigreeBtn").addEventListener("click", loadPedigreeViz);
-  el("refreshCages").addEventListener("click", () => loadCages());
-  el("searchBtn").addEventListener("click", () => loadCages(el("searchCages").value));
+  el("scanBtn").addEventListener("click", () => withAction("Scan failed", runScan).catch(() => undefined));
+  el("loadPedigreeBtn").addEventListener("click", () => withAction("Pedigree load failed", loadPedigreeViz).catch(() => undefined));
+  el("refreshCages").addEventListener("click", () => withAction("Cage refresh failed", () => loadCages()).catch(() => undefined));
+  el("searchBtn").addEventListener("click", () => withAction("Search failed", () => loadCages(el("searchCages").value)).catch(() => undefined));
+  el("searchCages").addEventListener("keydown", (evt) => {
+    if (evt.key !== "Enter") return;
+    evt.preventDefault();
+    withAction("Search failed", () => loadCages(el("searchCages").value)).catch(() => undefined);
+  });
   el("scanBaseUrl").value = normalizedScanBase();
   el("saveScanBaseBtn").addEventListener("click", () => {
     const v = el("scanBaseUrl").value.trim().replace(/\/+$/, "");
     if (!v) {
-      alert("Enter a valid reachable base URL.");
+      showMessage("Enter a valid reachable base URL.", "error");
       return;
     }
     localStorage.setItem(SCAN_BASE_KEY, v);
     if (v.includes("localhost") || v.includes("127.0.0.1")) {
-      alert("Saved, but localhost/127.0.0.1 is not reachable from phones. Use LAN IP or public domain.");
+      showMessage("Saved, but localhost/127.0.0.1 is not reachable from phones. Use LAN IP or public domain.", "warn");
       return;
     }
-    alert(`Saved scan base URL: ${v}`);
+    showMessage(`Saved scan base URL: ${v}`, "success");
   });
 
-  el("printCardsBtn").addEventListener("click", generateCards);
-  el("quickPrintBtn").addEventListener("click", printCardsDirect);
+  el("printCardsBtn").addEventListener("click", () => withAction("Cage card generation failed", generateCards).catch(() => undefined));
+  el("quickPrintBtn").addEventListener("click", () => withAction("Print action failed", printCardsDirect).catch(() => undefined));
 
   el("breedingForm").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -1063,115 +1382,187 @@ async function init() {
     try {
       await api("/api/breeding/events", req);
       await loadCalendar();
-      alert("Breeding event scheduled.");
+      showMessage("Breeding event scheduled.", "success");
     } catch (err) {
       enqueueMutation("/api/breeding/events", req);
-      alert(`Network issue: event queued locally. (${err.message})`);
+      showMessage(`Network issue: event queued locally. (${err.message})`, "warn");
     }
   });
 
   el("projectForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    await api("/api/projects", {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify({
-        projectCode: el("projectCode").value.trim(),
-        title: el("projectTitle").value.trim(),
-        status: el("projectStatus").value,
-        targetAnimals: Number(el("projectTarget").value || 0),
-      }),
-    });
-    el("projectCode").value = "";
-    el("projectTitle").value = "";
-    el("projectTarget").value = "0";
-    await loadProjects();
-    alert("Project created.");
+    await withAction("Project creation failed", async () => {
+      await api("/api/projects", {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({
+          projectCode: el("projectCode").value.trim(),
+          title: el("projectTitle").value.trim(),
+          status: el("projectStatus").value,
+          targetAnimals: Number(el("projectTarget").value || 0),
+        }),
+      });
+      el("projectCode").value = "";
+      el("projectTitle").value = "";
+      el("projectTarget").value = "0";
+      await loadProjects();
+      showMessage("Project created.", "success");
+    }).catch(() => undefined);
   });
-  el("refreshProjectsBtn").addEventListener("click", () => loadProjects());
-  el("loadQuotasBtn").addEventListener("click", () => loadQuotas());
+  el("refreshProjectsBtn").addEventListener("click", () => withAction("Project refresh failed", loadProjects).catch(() => undefined));
+  el("loadQuotasBtn").addEventListener("click", () => withAction("Quota load failed", loadQuotas).catch(() => undefined));
 
   el("genoUploadForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const fd = new FormData();
-    fd.append("file", el("genoFile").files[0]);
-    const res = await fetch("/api/genotyping/upload", { method: "POST", credentials: "same-origin", body: fd });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Upload failed");
-    alert(`Updated ${data.updatedAnimals} animals.`);
+    await withAction("Genotyping upload failed", async () => {
+      const fd = new FormData();
+      fd.append("file", el("genoFile").files[0]);
+      const res = await fetch("/api/genotyping/upload", { method: "POST", credentials: "same-origin", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      showMessage(`Updated ${data.updatedAnimals} animals.`, "success");
+    }).catch(() => undefined);
   });
 
   el("excelImportForm").addEventListener("submit", async (e) => {
     e.preventDefault();
-    const fd = new FormData();
-    fd.append("file", el("excelFile").files[0]);
-    const res = await fetch("/api/import/excel", { method: "POST", credentials: "same-origin", body: fd });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || "Import failed");
-    alert(`Imported ${data.created} cages.`);
-    await loadCages();
+    await withAction("Excel import failed", async () => {
+      const fd = new FormData();
+      fd.append("file", el("excelFile").files[0]);
+      const res = await fetch("/api/import/excel", { method: "POST", credentials: "same-origin", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Import failed");
+      showMessage(`Imported ${data.created} cages.`, "success");
+      await loadCages();
+    }).catch(() => undefined);
   });
 
   el("loadAlertsBtn").addEventListener("click", async () => {
-    const alerts = await api("/api/compliance/protocol-alerts", { headers: headers(false) });
-    el("alerts").innerHTML = alerts
-      .map((a) => `<div class="cage-card">${esc(a.protocol_number)} | ${esc(a.title)} | Expires ${esc(a.expires_on)}</div>`)
-      .join("");
-    renderComplianceVisuals(state.alerts, alerts);
+    await withAction("Protocol alerts load failed", async () => {
+      const alerts = await api("/api/compliance/protocol-alerts", { headers: headers(false) });
+      el("alerts").innerHTML = alerts
+        .map((a) => `<div class="cage-card">${esc(a.protocol_number)} | ${esc(a.title)} | Expires ${esc(a.expires_on)}</div>`)
+        .join("");
+      renderComplianceVisuals(state.alerts, alerts);
+    }).catch(() => undefined);
   });
 
   el("loadAlertFeedBtn").addEventListener("click", async () => {
-    const alerts = await api("/api/alerts/feed?status=active", { headers: headers(false) });
-    el("activeAlerts").innerHTML = alerts.length ? alerts.map(alertCardMarkup).join("") : `<p class="hint">No active alerts.</p>`;
-    el("activeAlerts")
-      .querySelectorAll("button[data-ack-alert]")
-      .forEach((btn) => {
-        btn.addEventListener("click", async () => {
-          const id = btn.getAttribute("data-ack-alert");
-          await api(`/api/alerts/${id}/ack`, { method: "POST", headers: headers() });
-          await loadActiveAlertFeed();
-          btn.closest(".cage-card")?.remove();
-        });
-      });
+    await withAction("Active alert feed failed", async () => {
+      const alerts = await api("/api/alerts/feed?status=active", { headers: headers(false) });
+      el("activeAlerts").innerHTML = alerts.length ? alerts.map(alertCardMarkup).join("") : `<p class="hint">No active alerts.</p>`;
+    }).catch(() => undefined);
   });
 
   el("dispatchAlertsBtn").addEventListener("click", async () => {
-    const result = await api("/api/alerts/dispatch", { method: "POST", headers: headers() });
-    alert(`Dispatch complete. sent=${result.dispatched}, failed=${result.failed}, simulated=${result.simulated}`);
+    await withAction("Alert dispatch failed", async () => {
+      const result = await api("/api/alerts/dispatch", { method: "POST", headers: headers() });
+      showMessage(`Dispatch complete. sent=${result.dispatched}, failed=${result.failed}, simulated=${result.simulated}`, "success");
+    }).catch(() => undefined);
   });
 
   el("loadAuditBtn").addEventListener("click", async () => {
-    const logs = await api("/api/audit", { headers: headers(false) });
-    el("audit").innerHTML = logs
-      .slice(0, 40)
-      .map((l) => `<div class="cage-card">${esc(l.created_at)} | ${esc(l.actor || "System")} | ${esc(l.entity_type)}#${esc(l.entity_id)} | ${esc(l.action)}</div>`)
-      .join("");
+    await withAction("Audit load failed", async () => {
+      const logs = await api("/api/audit", { headers: headers(false) });
+      el("audit").innerHTML = logs
+        .slice(0, 40)
+        .map((l) => `<div class="cage-card">${esc(l.created_at)} | ${esc(l.actor || "System")} | ${esc(l.entity_type)}#${esc(l.entity_id)} | ${esc(l.action)}</div>`)
+        .join("");
+    }).catch(() => undefined);
   });
 
   el("loadRequestsBtn").addEventListener("click", async () => {
-    const rows = await api("/api/requests", { headers: headers(false) });
-    el("requests").innerHTML = rows
-      .slice(0, 40)
-      .map((r) => `<div class="cage-card">${esc(r.created_at)} | ${esc(r.request_type)} | ${esc(r.status)} | ${esc(r.lab_name)}</div>`)
-      .join("");
+    await withAction("Facility request load failed", async () => {
+      const rows = await api("/api/requests", { headers: headers(false) });
+      el("requests").innerHTML = rows
+        .slice(0, 40)
+        .map((r) => `<div class="cage-card">${esc(r.created_at)} | ${esc(r.request_type)} | ${esc(r.status)} | ${esc(r.lab_name)}</div>`)
+        .join("");
+    }).catch(() => undefined);
   });
 
   el("loadSlaBtn").addEventListener("click", async () => {
-    const rows = await api("/api/operations/sla", { headers: headers(false) });
-    el("sla").innerHTML = rows
-      .slice(0, 40)
-      .map((r) => `<div class="cage-card">${esc(r.request_type)} | ${esc(r.status)} | avg ${Number(r.avg_hours || 0).toFixed(1)}h | n=${esc(r.n)}</div>`)
-      .join("");
+    await withAction("SLA load failed", async () => {
+      const rows = await api("/api/operations/sla", { headers: headers(false) });
+      el("sla").innerHTML = rows
+        .slice(0, 40)
+        .map((r) => `<div class="cage-card">${esc(r.request_type)} | ${esc(r.status)} | avg ${Number(r.avg_hours || 0).toFixed(1)}h | n=${esc(r.n)}</div>`)
+        .join("");
+    }).catch(() => undefined);
+  });
+
+  el("cageTable").addEventListener("click", (evt) => {
+    const node = evt.target.closest("button[data-cage-id]");
+    if (!node) return;
+    withAction("Cage detail load failed", () => openCageInspector(Number(node.getAttribute("data-cage-id")))).catch(() => undefined);
+  });
+
+  el("projectList").addEventListener("click", (evt) => {
+    const projectNode = evt.target.closest("button[data-project-id]");
+    if (projectNode) {
+      withAction("Project detail load failed", () => openProjectInspector(Number(projectNode.getAttribute("data-project-id")))).catch(() => undefined);
+      return;
+    }
+    const cageNode = evt.target.closest("button[data-cage-id]");
+    if (cageNode) {
+      withAction("Cage detail load failed", () => openCageInspector(Number(cageNode.getAttribute("data-cage-id")))).catch(() => undefined);
+    }
+  });
+
+  el("projectInspector").addEventListener("click", (evt) => {
+    const cageNode = evt.target.closest("button[data-cage-id]");
+    if (!cageNode) return;
+    withAction("Cage detail load failed", () => openCageInspector(Number(cageNode.getAttribute("data-cage-id")))).catch(() => undefined);
+  });
+
+  el("dashboardAlerts").addEventListener("click", (evt) => {
+    const cageNode = evt.target.closest("button[data-cage-id]");
+    if (cageNode) {
+      withAction("Cage detail load failed", () => openCageInspector(Number(cageNode.getAttribute("data-cage-id")))).catch(() => undefined);
+      return;
+    }
+    const ackNode = evt.target.closest("button[data-ack-alert]");
+    if (!ackNode) return;
+    withAction("Alert acknowledge failed", async () => {
+      const id = ackNode.getAttribute("data-ack-alert");
+      await api(`/api/alerts/${id}/ack`, { method: "POST", headers: headers() });
+      await loadActiveAlertFeed();
+      await loadDashboard();
+    }).catch(() => undefined);
+  });
+
+  el("activeAlerts").addEventListener("click", (evt) => {
+    const cageNode = evt.target.closest("button[data-cage-id]");
+    if (cageNode) {
+      withAction("Cage detail load failed", () => openCageInspector(Number(cageNode.getAttribute("data-cage-id")))).catch(() => undefined);
+      return;
+    }
+    const ackNode = evt.target.closest("button[data-ack-alert]");
+    if (!ackNode) return;
+    withAction("Alert acknowledge failed", async () => {
+      const id = ackNode.getAttribute("data-ack-alert");
+      await api(`/api/alerts/${id}/ack`, { method: "POST", headers: headers() });
+      await loadActiveAlertFeed();
+      ackNode.closest(".cage-card")?.remove();
+    }).catch(() => undefined);
   });
 
   try {
     const me = await api("/api/auth/me", { headers: headers(false) });
     setAuth("", me);
+    applyRoleAccess();
+    activateTab("dashboard");
     await loadCages();
     await loadActiveAlertFeed();
+    await loadDashboard();
     await loadAnalytics();
     await loadCalendar();
     await loadProjects();
+    try {
+      await loadQuotas();
+    } catch {
+      el("quotaList").innerHTML = `<p class="hint">Quota view requires PI/Admin role.</p>`;
+    }
     await flushMutationQueue();
     await openPendingScanIfAny();
   } catch {
@@ -1179,10 +1570,19 @@ async function init() {
   }
 
   window.addEventListener("online", () => {
-    flushMutationQueue().catch(() => undefined);
+    flushMutationQueue()
+      .then((sent) => {
+        if (sent) showMessage(`Synced ${sent} queued offline updates.`, "success");
+      })
+      .catch(() => undefined);
   });
   setInterval(() => {
-    loadActiveAlertFeed().catch(() => undefined);
+    if (!state.user) return;
+    loadActiveAlertFeed().catch((err) => {
+      if (err && Number(err.status) === 401) {
+        handleSessionExpired();
+      }
+    });
   }, 30000);
 }
 

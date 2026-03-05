@@ -27,6 +27,14 @@
     </div>
     <script>
       async function run() {
+        const esc = (value) =>
+          String(value ?? "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#39;");
+
         const token = {{ scan_token|tojson }};
         const card = document.getElementById("card");
         try {
@@ -35,25 +43,25 @@
           if (!res.ok) throw new Error(data.error || "Scan failed");
           const c = data.cage;
           card.innerHTML = `
-            <h1>Cage ${c.cageCode}</h1>
+            <h1>Cage ${esc(c.cageCode)}</h1>
             <p class="muted">Scan successful. Cage details loaded in browser.</p>
             <div class="grid">
-              <div><span class="k">Strain:</span> <span class="v">${c.strain}</span></div>
-              <div><span class="k">Genotype:</span> <span class="v">${c.genotypeSummary}</span></div>
-              <div><span class="k">Status:</span> <span class="v">${c.breedingStatus}</span></div>
-              <div><span class="k">DOB:</span> <span class="v">${c.dob || "N/A"}</span></div>
-              <div><span class="k">Male Count:</span> <span class="v">${c.maleCount}</span></div>
-              <div><span class="k">Female Count:</span> <span class="v">${c.femaleCount}</span></div>
-              <div><span class="k">Protocol:</span> <span class="v">${c.protocol || "N/A"}</span></div>
-              <div><span class="k">Location:</span> <span class="v">${c.room} / ${c.rack}</span></div>
-              <div><span class="k">Lab:</span> <span class="v">${c.lab}</span></div>
+              <div><span class="k">Strain:</span> <span class="v">${esc(c.strain)}</span></div>
+              <div><span class="k">Genotype:</span> <span class="v">${esc(c.genotypeSummary)}</span></div>
+              <div><span class="k">Status:</span> <span class="v">${esc(c.breedingStatus)}</span></div>
+              <div><span class="k">DOB:</span> <span class="v">${esc(c.dob || "N/A")}</span></div>
+              <div><span class="k">Male Count:</span> <span class="v">${esc(c.maleCount)}</span></div>
+              <div><span class="k">Female Count:</span> <span class="v">${esc(c.femaleCount)}</span></div>
+              <div><span class="k">Protocol:</span> <span class="v">${esc(c.protocol || "N/A")}</span></div>
+              <div><span class="k">Location:</span> <span class="v">${esc(c.room)} / ${esc(c.rack)}</span></div>
+              <div><span class="k">Lab:</span> <span class="v">${esc(c.lab)}</span></div>
             </div>
             <div class="actions">
               <a class="btn" href="/?scanToken=${encodeURIComponent(token)}">Open Murisphere (login for edits)</a>
             </div>
           `;
         } catch (e) {
-          card.innerHTML = `<h1>Scan failed</h1><p class="muted">${e.message}</p>`;
+          card.innerHTML = `<h1>Scan failed</h1><p class="muted">${esc(e.message)}</p>`;
         }
       }
       run();

@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-03-05T22:18:00.014527+00:00",
+  "generatedAt": "2026-03-05T23:29:21.962990+00:00",
   "summary": {
-    "passed": 34,
+    "passed": 35,
     "failed": 0,
     "skipped": 5,
     "score": 100.0
@@ -42,6 +42,12 @@
       "item": "<button(no-id)>",
       "status": "skip",
       "detail": "no stable id; skipped explicit wiring check"
+    },
+    {
+      "category": "tab",
+      "item": "data-tab=dashboard",
+      "status": "pass",
+      "detail": "tab click delegation + section present"
     },
     {
       "category": "tab",

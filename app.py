@@ -632,6 +632,7 @@ def cage_payload(row: sqlite3.Row) -> dict[str, Any]:
         "rack": row["rack_name"],
         "lab": row["lab_name"],
         "protocol": row["protocol_number"],
+        "projectCodes": row["project_codes"] if "project_codes" in row.keys() and row["project_codes"] else "",
         "notes": row["notes"],
         "qrToken": row["qr_token"],
         "updatedAt": row["updated_at"],
@@ -900,8 +901,26 @@ def list_cages() -> Response:
     clauses = []
     params: list[Any] = []
     if q:
-        clauses.append("(c.cage_code LIKE ? OR c.strain LIKE ? OR c.genotype_summary LIKE ?)")
-        params.extend([f"%{q}%", f"%{q}%", f"%{q}%"])
+        clauses.append(
+            """
+            (
+              c.cage_code LIKE ? OR
+              c.strain LIKE ? OR
+              c.genotype_summary LIKE ? OR
+              l.name LIKE ? OR
+              l.pi_name LIKE ? OR
+              IFNULL(p.protocol_number, '') LIKE ? OR
+              EXISTS (
+                SELECT 1
+                FROM project_cages pc_q
+                JOIN projects p_q ON p_q.id = pc_q.project_id
+                WHERE pc_q.cage_id = c.id
+                  AND (p_q.project_code LIKE ? OR p_q.title LIKE ?)
+              )
+            )
+            """
+        )
+        params.extend([f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%", f"%{q}%"])
     if status:
         clauses.append("c.breeding_status = ?")
         params.append(status)
@@ -912,7 +931,18 @@ def list_cages() -> Response:
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     rows = db().execute(
         f"""
-        SELECT c.*, r.name AS room_name, k.name AS rack_name, l.name AS lab_name, p.protocol_number
+        SELECT
+            c.*,
+            r.name AS room_name,
+            k.name AS rack_name,
+            l.name AS lab_name,
+            p.protocol_number,
+            (
+              SELECT GROUP_CONCAT(pj.project_code, ', ')
+              FROM project_cages pc_j
+              JOIN projects pj ON pj.id = pc_j.project_id
+              WHERE pc_j.cage_id = c.id
+            ) AS project_codes
         FROM cages c
         LEFT JOIN rooms r ON c.room_id = r.id
         LEFT JOIN racks k ON c.rack_id = k.id
@@ -936,7 +966,18 @@ def get_cage(cage_id: int) -> Response:
         params.append(g.user.lab_id)
     row = db().execute(
         """
-        SELECT c.*, r.name AS room_name, k.name AS rack_name, l.name AS lab_name, p.protocol_number
+        SELECT
+            c.*,
+            r.name AS room_name,
+            k.name AS rack_name,
+            l.name AS lab_name,
+            p.protocol_number,
+            (
+              SELECT GROUP_CONCAT(pj.project_code, ', ')
+              FROM project_cages pc_j
+              JOIN projects pj ON pj.id = pc_j.project_id
+              WHERE pc_j.cage_id = c.id
+            ) AS project_codes
         FROM cages c
         LEFT JOIN rooms r ON c.room_id = r.id
         LEFT JOIN racks k ON c.rack_id = k.id
@@ -1116,9 +1157,12 @@ def public_scan(token: str) -> Response:
                 "id": row["id"],
                 "cageCode": row["cage_code"],
                 "strain": row["strain"],
+                "genotypeSummary": row["genotype_summary"],
                 "breedingStatus": row["breeding_status"],
+                "dob": row["dob"],
                 "maleCount": row["male_count"],
                 "femaleCount": row["female_count"],
+                "protocol": row["protocol_number"],
                 "room": row["room_name"],
                 "rack": row["rack_name"],
                 "lab": row["lab_name"],

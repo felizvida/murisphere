@@ -34,28 +34,46 @@
 
       <section id="appPanel" class="hidden">
         <nav class="tabs">
-          <button data-tab="scan" class="active">Scan/Edit</button>
-          <button data-tab="cages">Cages</button>
-          <button data-tab="projects">Projects</button>
-          <button data-tab="breeding">Breeding</button>
-          <button data-tab="analytics">Analytics</button>
-          <button data-tab="reports">Reports</button>
-          <button data-tab="compliance">Compliance</button>
+          <button type="button" data-tab="dashboard" class="active">Dashboard</button>
+          <button type="button" data-tab="scan">Scan/Edit</button>
+          <button type="button" data-tab="cages">Cages</button>
+          <button type="button" data-tab="projects">Projects</button>
+          <button type="button" data-tab="breeding">Breeding</button>
+          <button type="button" data-tab="analytics">Analytics</button>
+          <button type="button" data-tab="reports">Reports</button>
+          <button type="button" data-tab="compliance">Compliance</button>
         </nav>
 
-        <section id="tab-scan" class="tab-content active card">
+        <section id="tab-dashboard" class="tab-content active card">
+          <h3>Facility Dashboard</h3>
+          <p class="muted">Immediate operational pulse for cages, breeding, and compliance.</p>
+          <div id="dashboardKpis" class="kpis"></div>
+          <div id="dashboardVisuals" class="viz-grid"></div>
+          <div class="dashboard-columns">
+            <div>
+              <h4 class="viz-heading">Priority Alerts</h4>
+              <div id="dashboardAlerts"></div>
+            </div>
+            <div>
+              <h4 class="viz-heading">Upcoming Tasks</h4>
+              <div id="dashboardTasks"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="tab-scan" class="tab-content card">
           <h3>Scan-to-Edit</h3>
           <p class="muted">Enter cage ID or QR token from printed card.</p>
           <div class="inline-form">
             <input id="scanCode" placeholder="C-A1-001 or QR token" />
-            <button id="scanBtn">Open Cage</button>
+            <button id="scanBtn" type="button">Open Cage</button>
           </div>
           <div id="scanResult"></div>
           <h4 class="viz-heading">Pedigree Explorer</h4>
           <div class="inline-form">
             <input id="pedigreeAnimalId" type="number" placeholder="Animal ID (e.g., 1)" />
             <input id="pedigreeGenerations" type="number" min="1" max="6" value="3" placeholder="Generations" />
-            <button id="loadPedigreeBtn">Visualize Pedigree</button>
+            <button id="loadPedigreeBtn" type="button">Visualize Pedigree</button>
           </div>
           <div id="pedigreeViz" class="viz-card"></div>
         </section>
@@ -63,22 +81,23 @@
         <section id="tab-cages" class="tab-content card">
           <div class="inline-form between">
             <h3>Cage Management</h3>
-            <button id="refreshCages">Refresh</button>
+            <button id="refreshCages" type="button">Refresh</button>
           </div>
           <div id="alertBanner" class="alert-banner hidden"></div>
           <div class="inline-form">
-            <input id="searchCages" placeholder="Search cage, strain, genotype" />
-            <button id="searchBtn">Search</button>
-            <button id="printCardsBtn">Generate Cage Cards</button>
-            <button id="quickPrintBtn">Generate + Print</button>
+            <input id="searchCages" placeholder="Search cage, strain, genotype, project" />
+            <button id="searchBtn" type="button">Search</button>
+            <button id="printCardsBtn" type="button">Generate Cage Cards</button>
+            <button id="quickPrintBtn" type="button">Generate + Print</button>
           </div>
           <div class="inline-form">
             <input id="scanBaseUrl" placeholder="Scan Base URL (e.g., https://murisphere.your-org.org)" />
-            <button id="saveScanBaseBtn">Save Scan URL Base</button>
+            <button id="saveScanBaseBtn" type="button">Save Scan URL Base</button>
           </div>
           <p class="hint">Use a phone-reachable host/IP. Avoid localhost/127.0.0.1 for printed cards.</p>
           <div id="cageVisuals" class="viz-grid"></div>
           <div id="cageTable"></div>
+          <div id="cageInspector"></div>
           <div id="cardPreview"></div>
         </section>
 
@@ -98,10 +117,11 @@
             <button type="submit">Create Project</button>
           </form>
           <div class="inline-form">
-            <button id="refreshProjectsBtn">Refresh Projects</button>
-            <button id="loadQuotasBtn">Load Quotas</button>
+            <button id="refreshProjectsBtn" type="button">Refresh Projects</button>
+            <button id="loadQuotasBtn" type="button">Load Quotas</button>
           </div>
           <div id="projectList"></div>
+          <div id="projectInspector"></div>
           <div id="quotaList"></div>
         </section>
 
@@ -156,12 +176,12 @@
 
         <section id="tab-compliance" class="tab-content card">
           <h3>Compliance & Audit</h3>
-          <button id="loadAlertsBtn">Load Protocol Alerts</button>
-          <button id="loadAlertFeedBtn">Load Active Alerts</button>
-          <button id="dispatchAlertsBtn">Dispatch Alerts</button>
-          <button id="loadAuditBtn">Load Audit Trail</button>
-          <button id="loadRequestsBtn">Load Facility Requests</button>
-          <button id="loadSlaBtn">Load SLA Dashboard</button>
+          <button id="loadAlertsBtn" type="button">Load Protocol Alerts</button>
+          <button id="loadAlertFeedBtn" type="button">Load Active Alerts</button>
+          <button id="dispatchAlertsBtn" type="button">Dispatch Alerts</button>
+          <button id="loadAuditBtn" type="button">Load Audit Trail</button>
+          <button id="loadRequestsBtn" type="button">Load Facility Requests</button>
+          <button id="loadSlaBtn" type="button">Load SLA Dashboard</button>
           <div id="activeAlerts"></div>
           <div id="complianceVisuals" class="viz-grid"></div>
           <div id="alerts"></div>
@@ -172,6 +192,7 @@
       </section>
     </main>
 
+    <div id="globalMessage" class="global-message hidden"></div>
     <script src="/static/app.js"></script>
   </body>
 </html>

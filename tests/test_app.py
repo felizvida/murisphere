@@ -181,7 +181,11 @@ class AppIntegrationTests(unittest.TestCase):
 
         public_scan = self.client.get(f"/api/public/scan/{card['qrValue']}")
         self.assertEqual(public_scan.status_code, 200)
-        self.assertEqual(public_scan.get_json()["cage"]["cageCode"], card["cageCode"])
+        public_cage = public_scan.get_json()["cage"]
+        self.assertEqual(public_cage["cageCode"], card["cageCode"])
+        self.assertIn("genotypeSummary", public_cage)
+        self.assertIn("dob", public_cage)
+        self.assertIn("protocol", public_cage)
 
         scan_page = self.client.get(card["scanUrl"])
         self.assertEqual(scan_page.status_code, 200)
@@ -204,6 +208,22 @@ class AppIntegrationTests(unittest.TestCase):
         body = page.data.decode("utf-8")
         self.assertNotIn("cdn.jsdelivr.net/npm/qrcode", body)
         self.assertNotIn("cdn.jsdelivr.net/npm/jsbarcode", body)
+
+    def test_scan_template_escapes_public_fields(self) -> None:
+        page = self.client.get("/scan/test-token-123")
+        self.assertEqual(page.status_code, 200)
+        body = page.data.decode("utf-8")
+        self.assertIn("const esc = (value)", body)
+        self.assertIn("${esc(c.strain)}", body)
+        self.assertIn("${esc(c.genotypeSummary)}", body)
+        self.assertIn("${esc(c.protocol || \"N/A\")}", body)
+        self.assertIn("${esc(e.message)}", body)
+
+    def test_frontend_handles_session_expiry_contract(self) -> None:
+        js = Path("static/app.js").read_text(encoding="utf-8")
+        self.assertIn("function handleSessionExpired(", js)
+        self.assertIn("err.status = res.status", js)
+        self.assertIn("if (err && Number(err.status) === 401)", js)
 
     def test_breeding_calendar_forecast_and_analytics(self) -> None:
         token = self.login("admin@murisphere.local", "admin1234")
@@ -330,6 +350,15 @@ class AppIntegrationTests(unittest.TestCase):
         pcages = self.client.get(f"/api/projects/{project_id}/cages", headers=self.auth_headers(admin))
         self.assertEqual(pcages.status_code, 200)
         self.assertEqual(len(pcages.get_json()), 2)
+
+        search_by_project_code = self.client.get("/api/cages?q=PRJ-NG-001", headers=self.auth_headers(admin))
+        self.assertEqual(search_by_project_code.status_code, 200)
+        self.assertGreaterEqual(len(search_by_project_code.get_json()), 2)
+        self.assertTrue(all("projectCodes" in c for c in search_by_project_code.get_json()))
+
+        search_by_project_title = self.client.get("/api/cages?q=Neuro Cohort", headers=self.auth_headers(admin))
+        self.assertEqual(search_by_project_title.status_code, 200)
+        self.assertGreaterEqual(len(search_by_project_title.get_json()), 2)
 
         forbidden = self.client.post(
             "/api/projects",

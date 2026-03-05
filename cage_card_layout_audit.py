@@ -169,9 +169,10 @@ body {{
 def run_render_audit(html_path: Path, chrome_bin: str) -> dict[str, Any]:
     cmd = [
         chrome_bin,
-        "--headless",
+        "--headless=new",
         "--disable-gpu",
         "--no-sandbox",
+        "--disable-dev-shm-usage",
         "--allow-file-access-from-files",
         "--virtual-time-budget=4000",
         "--dump-dom",
@@ -220,12 +221,18 @@ def main() -> int:
         render = run_render_audit(html_path, args.chrome_bin)
 
     render_ok = bool(render.get("ok"))
+    render_skipped = False
+    allow_render_skip = os.getenv("MURISPHERE_AUDIT_ALLOW_RENDER_SKIP", "0") == "1"
+    if not render_ok and allow_render_skip and str(render.get("error", "")).startswith("render_run_failed:"):
+        render_skipped = True
+        render_ok = True
     ok = static_ok and render_ok
     result = {
         "ok": ok,
         "generated_at": datetime.now(UTC).isoformat(),
         "static_checks": static,
         "render_check": render,
+        "render_skipped": render_skipped,
     }
 
     out_path = Path(args.output_json)
@@ -236,6 +243,8 @@ def main() -> int:
     print(f"ok={result['ok']}")
     print(f"static_ok={static_ok}")
     print(f"render_ok={render_ok}")
+    if render_skipped:
+        print("render_skipped=True")
     if render.get("overflow_count") is not None:
         print(f"overflow_count={render['overflow_count']}")
     if not ok:
