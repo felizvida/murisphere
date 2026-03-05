@@ -4,6 +4,7 @@ import io
 import sqlite3
 import tempfile
 import unittest
+from pathlib import Path
 from datetime import UTC, date, datetime, timedelta
 
 from openpyxl import Workbook
@@ -508,6 +509,128 @@ class AppIntegrationTests(unittest.TestCase):
         jobs = self.client.get("/api/integrations/export-jobs", headers=self.auth_headers(admin))
         self.assertEqual(jobs.status_code, 200)
         self.assertTrue(any(j["id"] == job_id for j in jobs.get_json()))
+
+    def test_export_job_scope_isolation_for_pi(self) -> None:
+        admin = self.login("admin@murisphere.local", "admin1234")
+        pi_lab1 = self.login("pi@murisphere.local", "pi1234")
+
+        with sqlite3.connect(appmod.DB_PATH) as conn:
+            now = datetime.now(UTC).isoformat()
+            conn.execute(
+                "INSERT INTO labs (name, pi_name, facility_id, created_at) VALUES (?, ?, ?, ?)",
+                ("Lab Two", "Dr. Two", 1, now),
+            )
+            lab2 = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute(
+                "INSERT INTO users (email, full_name, role, lab_id, password_hash, is_active, created_at) VALUES (?, ?, 'PI', ?, ?, 1, ?)",
+                ("pi2@murisphere.local", "PI Two", lab2, appmod.generate_password_hash("pi2pass"), now),
+            )
+            conn.commit()
+        pi_lab2 = self.login("pi2@murisphere.local", "pi2pass")
+
+        j1 = self.client.post(
+            "/api/integrations/export-jobs",
+            headers=self.auth_headers(pi_lab1),
+            json={"jobType": "lab1_job", "payload": {}},
+        )
+        self.assertEqual(j1.status_code, 201)
+        j2 = self.client.post(
+            "/api/integrations/export-jobs",
+            headers=self.auth_headers(pi_lab2),
+            json={"jobType": "lab2_job", "payload": {}},
+        )
+        self.assertEqual(j2.status_code, 201)
+        lab2_job_id = j2.get_json()["id"]
+
+        listed = self.client.get("/api/integrations/export-jobs", headers=self.auth_headers(pi_lab1))
+        self.assertEqual(listed.status_code, 200)
+        job_types = {row["job_type"] for row in listed.get_json()}
+        self.assertIn("lab1_job", job_types)
+        self.assertNotIn("lab2_job", job_types)
+
+        forbidden_run = self.client.post(f"/api/integrations/export-jobs/{lab2_job_id}/run", headers=self.auth_headers(pi_lab1))
+        self.assertIn(forbidden_run.status_code, (403, 404))
+
+        # Admin can still see all
+        listed_admin = self.client.get("/api/integrations/export-jobs", headers=self.auth_headers(admin))
+        self.assertEqual(listed_admin.status_code, 200)
+        admin_types = {row["job_type"] for row in listed_admin.get_json()}
+        self.assertIn("lab1_job", admin_types)
+        self.assertIn("lab2_job", admin_types)
+
+    def test_pedigree_does_not_leak_cross_lab_ancestors(self) -> None:
+        tech = self.login("tech@murisphere.local", "tech1234")
+
+        with sqlite3.connect(appmod.DB_PATH) as conn:
+            now = datetime.now(UTC).isoformat()
+            conn.execute(
+                "INSERT INTO labs (name, pi_name, facility_id, created_at) VALUES (?, ?, ?, ?)",
+                ("Hidden Lab", "Dr. Hidden", 1, now),
+            )
+            hidden_lab = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute(
+                """
+                INSERT INTO cages (
+                    cage_code, strain, genotype_summary, breeding_status, dob, male_count, female_count,
+                    room_id, rack_id, lab_id, protocol_id, qr_token, notes, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    "C-HIDDEN-001",
+                    "BALB/c",
+                    "WT/WT",
+                    "Holding",
+                    date.today().isoformat(),
+                    1,
+                    1,
+                    1,
+                    1,
+                    hidden_lab,
+                    1,
+                    "tok_hidden_001",
+                    "",
+                    now,
+                    now,
+                ),
+            )
+            hidden_cage = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute(
+                "INSERT INTO animals (animal_code, sex, dob, strain, genotype, status, cage_id, litter_id, sire_id, dam_id, created_at, updated_at) VALUES (?, 'M', ?, 'BALB/c', 'WT/WT', 'Active', ?, NULL, NULL, NULL, ?, ?)",
+                ("A-HIDDEN-SIRE", date.today().isoformat(), hidden_cage, now, now),
+            )
+            hidden_sire = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute(
+                "INSERT INTO animals (animal_code, sex, dob, strain, genotype, status, cage_id, litter_id, sire_id, dam_id, created_at, updated_at) VALUES (?, 'F', ?, 'C57BL/6J', 'WT/WT', 'Active', 1, NULL, NULL, NULL, ?, ?)",
+                ("A-LAB1-DAM", date.today().isoformat(), now, now),
+            )
+            dam_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute(
+                "INSERT INTO animals (animal_code, sex, dob, strain, genotype, status, cage_id, litter_id, sire_id, dam_id, created_at, updated_at) VALUES (?, 'M', ?, 'C57BL/6J', 'WT/WT', 'Active', 1, NULL, ?, ?, ?, ?)",
+                ("A-LAB1-CHILD", date.today().isoformat(), hidden_sire, dam_id, now, now),
+            )
+            child_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.commit()
+
+        pedigree = self.client.get(f"/api/animals/{child_id}/pedigree?generations=3", headers=self.auth_headers(tech))
+        self.assertEqual(pedigree.status_code, 200)
+        node_codes = {n["animal_code"] for n in pedigree.get_json()["nodes"]}
+        self.assertIn("A-LAB1-CHILD", node_codes)
+        self.assertIn("A-LAB1-DAM", node_codes)
+        self.assertNotIn("A-HIDDEN-SIRE", node_codes)
+
+    def test_billing_run_rejects_invalid_dates(self) -> None:
+        admin = self.login("admin@murisphere.local", "admin1234")
+        bad = self.client.post(
+            "/api/billing/run",
+            headers=self.auth_headers(admin),
+            json={"periodStart": "not-a-date", "periodEnd": "2026-03-31"},
+        )
+        self.assertEqual(bad.status_code, 400)
+
+    def test_offline_queue_storage_is_user_scoped(self) -> None:
+        src = Path("static/app.js").read_text(encoding="utf-8")
+        self.assertIn("function mutationQueueKey()", src)
+        self.assertIn("state.user?.id", src)
 
     def test_technician_cannot_access_other_lab_cage(self) -> None:
         tech_token = self.login("tech@murisphere.local", "tech1234")

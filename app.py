@@ -1143,8 +1143,14 @@ def animal_pedigree(animal_id: int) -> Response:
             continue
         seen.add(aid)
         row = db().execute(
-            "SELECT id, animal_code, sex, dob, strain, genotype, status, sire_id, dam_id FROM animals WHERE id = ?",
-            (aid,),
+            """
+            SELECT a.id, a.animal_code, a.sex, a.dob, a.strain, a.genotype, a.status, a.sire_id, a.dam_id
+            FROM animals a
+            LEFT JOIN cages c ON c.id = a.cage_id
+            WHERE a.id = ?
+            """
+            + ("" if is_admin(g.user) else " AND c.lab_id = ? "),
+            (aid,) if is_admin(g.user) else (aid, g.user.lab_id),
         ).fetchone()
         if not row:
             continue
@@ -2055,7 +2061,10 @@ def billing_run() -> Response:
         () if is_admin(g.user) else (g.user.lab_id,),
     ).fetchall()
 
-    days = (datetime.fromisoformat(period_end) - datetime.fromisoformat(period_start)).days + 1
+    try:
+        days = (datetime.fromisoformat(period_end) - datetime.fromisoformat(period_start)).days + 1
+    except ValueError:
+        return jsonify({"error": "Invalid date format; use YYYY-MM-DD"}), 400
     days = max(days, 1)
     created = 0
     for c in cages:
@@ -2280,8 +2289,18 @@ def create_export_job() -> Response:
 @app.post("/api/integrations/export-jobs/<int:job_id>/run")
 @require_auth(("PI", "Admin"))
 def run_export_job(job_id: int) -> Response:
-    row = db().execute("SELECT * FROM export_jobs WHERE id = ?", (job_id,)).fetchone()
+    row = db().execute(
+        """
+        SELECT ej.*, u.lab_id AS creator_lab_id
+        FROM export_jobs ej
+        LEFT JOIN users u ON u.id = ej.created_by
+        WHERE ej.id = ?
+        """,
+        (job_id,),
+    ).fetchone()
     if not row:
+        return jsonify({"error": "Not found"}), 404
+    if not is_admin(g.user) and int(row["creator_lab_id"] or -1) != int(g.user.lab_id or -1):
         return jsonify({"error": "Not found"}), 404
     # Simulated dispatch; external webhook delivery can be added in worker.
     db().execute("UPDATE export_jobs SET status = 'sent', sent_at = ? WHERE id = ?", (now_iso(), job_id))
@@ -2293,7 +2312,19 @@ def run_export_job(job_id: int) -> Response:
 @app.get("/api/integrations/export-jobs")
 @require_auth(("PI", "Admin"))
 def list_export_jobs() -> Response:
-    rows = db().execute("SELECT id, job_type, target_url, status, created_at, sent_at FROM export_jobs ORDER BY id DESC LIMIT 500").fetchall()
+    rows = db().execute(
+        """
+        SELECT ej.id, ej.job_type, ej.target_url, ej.status, ej.created_at, ej.sent_at
+        FROM export_jobs ej
+        LEFT JOIN users u ON u.id = ej.created_by
+        """
+        + ("" if is_admin(g.user) else " WHERE u.lab_id = ? ")
+        + """
+        ORDER BY ej.id DESC
+        LIMIT 500
+        """,
+        () if is_admin(g.user) else (g.user.lab_id,),
+    ).fetchall()
     return jsonify([dict(r) for r in rows])
 
 

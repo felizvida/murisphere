@@ -48,16 +48,20 @@ async function api(path, opts = {}) {
   return res.json();
 }
 
+function mutationQueueKey() {
+  return `${MUTATION_QUEUE_KEY}:${state.user?.id || "anon"}`;
+}
+
 function readMutationQueue() {
   try {
-    return JSON.parse(localStorage.getItem(MUTATION_QUEUE_KEY) || "[]");
+    return JSON.parse(localStorage.getItem(mutationQueueKey()) || "[]");
   } catch {
     return [];
   }
 }
 
 function writeMutationQueue(items) {
-  localStorage.setItem(MUTATION_QUEUE_KEY, JSON.stringify(items));
+  localStorage.setItem(mutationQueueKey(), JSON.stringify(items));
 }
 
 function enqueueMutation(path, opts) {
