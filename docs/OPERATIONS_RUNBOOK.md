@@ -12,6 +12,9 @@ Track:
 - Weekly: audit log review for abnormal edits
 - Weekly: protocol expiration alert checks
 - Monthly: user/role review and stale session cleanup
+- Monthly: billing period run, statement export, and period close
+- Daily: review facility request queue and SLA summary
+- Weekly: review pending export jobs and delivery status
 
 ## Incident Response
 1. Identify impacted endpoint and users.
@@ -27,3 +30,6 @@ Track:
   - cage search
   - scan lookup
   - audit endpoint
+  - billing statement export
+  - request list/status update
+  - export-job run path

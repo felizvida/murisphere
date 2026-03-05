@@ -114,7 +114,17 @@
           <li>Open the phone camera and point it at the printed QR code.</li>
           <li>Tap the detected link banner to open cage info in browser.</li>
           <li>Tap <strong>Open Murisphere (login for edits)</strong>, verify cage ID, then save updates.</li>
+          <li>If Wi-Fi drops, save actions are queued and auto-retried on reconnect. Confirm retry sync before ending rounds.</li>
         </ol>
+      </section>
+
+      <section class="card">
+        <h2>Critical Safety Checks</h2>
+        <ul class="steps">
+          <li><strong>ID first</strong>: never edit unless scanned cage ID matches printed card.</li>
+          <li><strong>Protocol hard stop</strong>: if protocol is expired, editing is blocked until protocol assignment is corrected.</li>
+          <li><strong>Queue awareness</strong>: if you see a queued-save message, reconnect and verify data synced before leaving the room.</li>
+        </ul>
       </section>
 
       <section class="card">
@@ -123,8 +133,19 @@
           <li><strong>No scan prompt</strong>: improve lighting and flatten the printed card.</li>
           <li><strong>Wrong page opens</strong>: correct <code>Scan Base URL</code> (never use localhost for printed cards).</li>
           <li><strong>Broken/blank QR</strong>: verify server endpoint <code>/api/assets/qrcode.png?v=test</code> loads.</li>
+          <li><strong>Save blocked by protocol</strong>: check protocol expiry in Compliance tab and reassign valid protocol.</li>
+          <li><strong>Queued save message</strong>: verify network, wait for auto-retry, then reload cage to confirm persisted values.</li>
           <li><strong>Slow open</strong>: retest on stronger room Wi-Fi.</li>
         </ul>
+      </section>
+
+      <section class="card">
+        <h2>Trainer Sign-Off</h2>
+        <ol class="steps">
+          <li>Technician demonstrates full scan -> verify -> edit -> save flow on two cages.</li>
+          <li>Technician demonstrates handling of one queued-save scenario (network drop simulation).</li>
+          <li>Technician identifies and escalates a protocol-expired block correctly.</li>
+        </ol>
       </section>
     </div>
   </body>

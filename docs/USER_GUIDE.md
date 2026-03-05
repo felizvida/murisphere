@@ -17,6 +17,7 @@
 - Update M/F counts.
 - Update breeding status.
 - Add notes and event records.
+- If offline queue warning appears, reconnect and verify queued updates synced.
 
 ## PI/Admin Tasks
 - Schedule breeding events and monitor calendar.
@@ -29,3 +30,5 @@
 - Report export fails: re-login and retry endpoint.
 - Card images missing: ensure server is running and reload cards.
 - Pop-up blocked during print: allow pop-ups and use `Generate + Print`.
+- Edit blocked by protocol: cage protocol is expired; reassign valid protocol before editing.
+- Queued update warning: restore network and verify sync by reloading the cage.

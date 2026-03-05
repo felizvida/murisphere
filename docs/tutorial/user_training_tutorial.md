@@ -2,7 +2,7 @@
 title: "Murisphere Mobile Scan Tutorial"
 subtitle: "Professional Step-by-Step Guide for Printed Cage Cards"
 author: "Murisphere Operations"
-date: "2026-03-05"
+date: "2026-03-06"
 geometry: margin=0.8in
 fontsize: 11pt
 colorlinks: true
@@ -84,11 +84,13 @@ Slow open                    Weak room network            Retest on strong Wi-Fi
 1. Update counts/status/notes.
 2. Save changes.
 3. Confirm save acknowledgement and audit trail entry.
+4. If network is unstable and update is queued, reconnect and confirm retry sync before ending rounds.
 
 # Required Quality Checks
 - Do not update if cage ID mismatch.
 - Do not use `localhost` for printed scan URLs.
 - Reprint cards after base URL changes.
+- If protocol is expired, stop edits and escalate protocol reassignment.
 
 # High-Value Troubleshooting
 ## If camera does not detect code
@@ -105,11 +107,21 @@ Slow open                    Weak room network            Retest on strong Wi-Fi
 - Open `/api/assets/qrcode.png?v=test` in browser and verify PNG loads.
 - Regenerate cards and retry scan.
 
+## If save is queued (network interruption)
+- Keep device online and wait for auto-retry.
+- Reload cage and verify latest values persisted.
+- Do not assume update was applied until verified.
+
+## If protocol blocks editing
+- Open Compliance tab and check protocol expiry.
+- Reassign valid protocol before retrying edit.
+
 # Trainer Checklist
 1. Demonstrate one complete scan -> edit -> save cycle.
 2. Have trainee repeat with a second cage.
 3. Verify trainee can troubleshoot URL and scan issues.
 4. Confirm trainee understands ID verification before edits.
+5. Confirm trainee can respond correctly to queued-save and protocol-expired scenarios.
 
 # Daily Room SOP (Quick)
 1. Check scan URL base setting.
