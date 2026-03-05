@@ -17,6 +17,7 @@
 - `docs/tutorial/user_training_tutorial.pdf` - tutorial PDF for distribution/training
 - `docs/releases/v0.2.0.md` - release notes for QR/barcode server-side rendering fix
 - `docs/releases/v0.3.0.md` - release notes for workflow/compliance/visualization expansion
+- `docs/releases/v0.3.1.md` - release notes for cage-card refinement and LaTeX tutorial PDF pipeline
 - `docs/test_reports/UI_CLICKABILITY_REPORT.html` - visual UI clickability contract report
 - `docs/test_reports/UI_CLICKABILITY_RESULT.json` - machine-readable UI clickability audit result
 - `docs/test_reports/ALERT_COVERAGE_RESULT.json` - synthesized-data alert coverage verification result

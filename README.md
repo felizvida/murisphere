@@ -2,7 +2,7 @@
 
 Murisphere is a browser-based mouse colony and vivarium management SaaS optimized for cage-level speed, data accuracy, and operational simplicity.
 
-Current release: `v0.3.0` (2026-03-05)
+Current release: `v0.3.1` (2026-03-05)
 
 ## Product Name
 `Murisphere`
@@ -61,12 +61,14 @@ python3 -m unittest discover -s tests -v
 python3 qrcode_diagnostic.py
 python3 ui_clickability_audit.py
 python3 alert_coverage_verifier.py --db murisphere.db --ensure-schema
+python3 cage_card_layout_audit.py
 ```
 
 Generated artifacts:
 - `docs/test_reports/UI_CLICKABILITY_REPORT.html`
 - `docs/test_reports/UI_CLICKABILITY_RESULT.json`
 - `docs/test_reports/ALERT_COVERAGE_RESULT.json`
+- `docs/test_reports/CAGE_CARD_LAYOUT_RESULT.json`
 
 ## CI/CD
 - `./.github/workflows/ci.yml`
@@ -107,6 +109,7 @@ Seed profile:
 - Release notes:
   - [v0.2.0](docs/releases/v0.2.0.md)
   - [v0.3.0](docs/releases/v0.3.0.md)
+  - [v0.3.1](docs/releases/v0.3.1.md)
 
 ## Notes
 - QR/barcode card assets are rendered server-side to avoid client CDN failures in restricted networks.
