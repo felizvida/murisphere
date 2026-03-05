@@ -98,7 +98,7 @@ This tutorial is organized by **typical vivarium workflows** so teams can execut
 
 # 6. Visual Walkthrough References
 - `assets/screenshot_login.svg`
-- `assets/screenshot_cards.svg`
+- `assets/cage_card_complete.svg`
 - `assets/screenshot_scan.svg`
 - `assets/screenshot_cages_alerts.svg`
 - `assets/screenshot_breeding_pairs.svg`
