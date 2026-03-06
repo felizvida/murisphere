@@ -254,8 +254,10 @@ class AppIntegrationTests(unittest.TestCase):
     def test_frontend_handles_session_expiry_contract(self) -> None:
         js = Path("static/app.js").read_text(encoding="utf-8")
         self.assertIn("function handleSessionExpired(", js)
+        self.assertIn("function handleBackgroundError(", js)
         self.assertIn("err.status = res.status", js)
         self.assertIn("if (err && Number(err.status) === 401)", js)
+        self.assertIn("loadActiveAlertFeed().catch((err) => handleBackgroundError(err", js)
 
     def test_breeding_calendar_forecast_and_analytics(self) -> None:
         token = self.login("admin@murisphere.local", "admin1234")

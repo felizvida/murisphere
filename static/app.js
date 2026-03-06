@@ -40,6 +40,15 @@ function handleSessionExpired(message = "Session expired. Please sign in again."
   showMessage(message, "warn");
 }
 
+function handleBackgroundError(err, context = "Background refresh failed") {
+  if (err && Number(err.status) === 401) {
+    handleSessionExpired();
+    return;
+  }
+  const message = err?.message || "Unexpected background error";
+  console.warn(`${context}: ${message}`, err);
+}
+
 async function withAction(label, fn) {
   try {
     await fn();
@@ -138,7 +147,10 @@ async function flushMutationQueue() {
       if (item.opts.body != null) opts.body = item.opts.body;
       await api(item.path, opts);
       sent += 1;
-    } catch {
+    } catch (err) {
+      if (err && Number(err.status) === 401) {
+        throw err;
+      }
       remaining.push(item);
     }
   }
@@ -1586,15 +1598,11 @@ async function init() {
       .then((sent) => {
         if (sent) showMessage(`Synced ${sent} queued offline updates.`, "success");
       })
-      .catch(() => undefined);
+      .catch((err) => handleBackgroundError(err, "Queued update sync failed"));
   });
   setInterval(() => {
     if (!state.user) return;
-    loadActiveAlertFeed().catch((err) => {
-      if (err && Number(err.status) === 401) {
-        handleSessionExpired();
-      }
-    });
+    loadActiveAlertFeed().catch((err) => handleBackgroundError(err, "Background alert refresh failed"));
   }, 30000);
 }
 
