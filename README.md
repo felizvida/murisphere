@@ -20,6 +20,7 @@ Current release: `v0.3.1` (2026-03-05)
 
 ## Cage Card Showcase
 ![Murisphere complete cage card preview](docs/tutorial/assets/cage_card_complete.svg)
+Population shows full cage totals (M/F/T). `Tracked IDs Listed` indicates how many individual records are printed. Litter rows include `DoW` (date of weaning).
 
 Card content includes:
 - Cage code and room/rack location.

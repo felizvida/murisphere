@@ -103,6 +103,7 @@ This tutorial is organized by **typical vivarium workflows** so teams can execut
 
 ## 6.2 Complete Cage Card (Print + Scan)
 ![Complete cage card with owner, protocol, animal table, litter table, QR and barcode](assets/cage_card_complete.svg){ width=95% }
+Population is the full cage total (M/F/T). `Tracked IDs Listed` shows how many individual records are printed. Litters include `DoW` (date of weaning).
 
 ## 6.3 Phone Scan and Quick Edit
 ![Phone scan flow from printed QR to cage browser view](assets/screenshot_scan.svg){ width=95% }

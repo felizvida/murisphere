@@ -178,6 +178,8 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertIsInstance(card["projects"], list)
         self.assertIsInstance(card["animals"], list)
         self.assertIsInstance(card["litters"], list)
+        if card["litters"]:
+            self.assertIn("dow", card["litters"][0])
 
         public_scan = self.client.get(f"/api/public/scan/{card['qrValue']}")
         self.assertEqual(public_scan.status_code, 200)
@@ -201,6 +203,36 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertEqual(barcode.status_code, 200)
         self.assertIn("image/svg+xml", barcode.content_type)
         self.assertIn(b"<svg", barcode.data)
+
+    def test_litter_dow_is_exposed_on_cage_card_and_set_by_wean(self) -> None:
+        token = self.login("admin@murisphere.local", "admin1234")
+        litter_birth = (date.today() - timedelta(days=21)).isoformat()
+        created = self.client.post(
+            "/api/litters",
+            headers=self.auth_headers(token),
+            json={"cageId": 1, "birthDate": litter_birth, "size": 4, "survived": 3, "male": 1, "female": 2},
+        )
+        self.assertEqual(created.status_code, 200)
+        litter_id = created.get_json()["id"]
+
+        cards_before = self.client.post("/api/cages/cards", headers=self.auth_headers(token), json={"ids": [1]}).get_json()
+        litter_before = next((l for l in cards_before[0]["litters"] if l["litterId"] == litter_id), None)
+        self.assertIsNotNone(litter_before)
+        self.assertIn("dow", litter_before)
+        self.assertIsNone(litter_before["dow"])
+
+        dow_date = date.today().isoformat()
+        wean = self.client.post(
+            "/api/cages/1/wean",
+            headers=self.auth_headers(token),
+            json={"male": 0, "female": 0, "litterId": litter_id, "date": dow_date},
+        )
+        self.assertEqual(wean.status_code, 200)
+
+        cards_after = self.client.post("/api/cages/cards", headers=self.auth_headers(token), json={"ids": [1]}).get_json()
+        litter_after = next((l for l in cards_after[0]["litters"] if l["litterId"] == litter_id), None)
+        self.assertIsNotNone(litter_after)
+        self.assertEqual(litter_after["dow"], dow_date)
 
     def test_index_uses_local_card_rendering_assets(self) -> None:
         page = self.client.get("/")

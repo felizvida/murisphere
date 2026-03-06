@@ -149,6 +149,7 @@ def init_db() -> None:
     with closing(sqlite3.connect(DB_PATH)) as conn:
         with open("schema.sql", "r", encoding="utf-8") as f:
             conn.executescript(f.read())
+        _apply_schema_migrations(conn)
         conn.commit()
 
     conn = sqlite3.connect(DB_PATH)
@@ -222,6 +223,12 @@ def init_db() -> None:
 
     conn.commit()
     conn.close()
+
+
+def _apply_schema_migrations(conn: sqlite3.Connection) -> None:
+    litter_cols = {row[1] for row in conn.execute("PRAGMA table_info(litters)").fetchall()}
+    if "weaned_on" not in litter_cols:
+        conn.execute("ALTER TABLE litters ADD COLUMN weaned_on TEXT")
 
 
 def audit_log(actor_id: int | None, entity_type: str, entity_id: int | str, action: str, before: Any, after: Any) -> None:
@@ -1223,7 +1230,8 @@ def wean(cage_id: int) -> Response:
     payload = request.get_json(force=True)
     male = int(payload.get("male", 0))
     female = int(payload.get("female", 0))
-    date = payload.get("date", datetime.now(UTC).date().isoformat())
+    event_date = payload.get("date", datetime.now(UTC).date().isoformat())
+    litter_id = payload.get("litterId")
     if male < 0 or female < 0:
         return jsonify({"error": "Counts cannot be negative"}), 400
     if not ensure_cage_scope(cage_id, g.user):
@@ -1232,16 +1240,35 @@ def wean(cage_id: int) -> Response:
     if blocked:
         return blocked
 
+    litter_row = None
+    if litter_id is not None:
+        try:
+            litter_id = int(litter_id)
+        except (TypeError, ValueError):
+            return jsonify({"error": "litterId must be an integer"}), 400
+        litter_row = db().execute("SELECT id FROM litters WHERE id = ? AND cage_id = ?", (litter_id, cage_id)).fetchone()
+        if not litter_row:
+            return jsonify({"error": "Litter not found for cage"}), 404
+
     cur = db().execute(
         "INSERT INTO lifecycle_events (cage_id, event_type, details_json, event_date, created_by, created_at) VALUES (?, 'weaning', ?, ?, ?, ?)",
-        (cage_id, json.dumps({"male": male, "female": female}), date, g.user.user_id, now_iso()),
+        (cage_id, json.dumps({"male": male, "female": female, "litterId": litter_id}), event_date, g.user.user_id, now_iso()),
     )
+    if litter_row:
+        db().execute("UPDATE litters SET weaned_on = ? WHERE id = ?", (event_date, litter_id))
     db().execute(
         "UPDATE cages SET male_count = male_count + ?, female_count = female_count + ?, updated_at = ? WHERE id = ?",
         (male, female, now_iso(), cage_id),
     )
     db().commit()
-    audit_log(g.user.user_id, "lifecycle_event", cur.lastrowid, "wean", None, {"cage_id": cage_id, "male": male, "female": female})
+    audit_log(
+        g.user.user_id,
+        "lifecycle_event",
+        cur.lastrowid,
+        "wean",
+        None,
+        {"cage_id": cage_id, "male": male, "female": female, "litterId": litter_id, "date": event_date},
+    )
     return jsonify({"ok": True})
 
 
@@ -1373,10 +1400,20 @@ def create_litter() -> Response:
     payload = request.get_json(force=True)
     cage_id = int(payload["cageId"])
     birth_date = payload["birthDate"]
+    weaned_on = payload.get("weanedOn") or payload.get("dow")
     size = int(payload.get("size", 0))
     survived = int(payload.get("survived", size))
     if size < 0 or survived < 0:
         return jsonify({"error": "Litter counts cannot be negative"}), 400
+    try:
+        date.fromisoformat(str(birth_date))
+    except ValueError:
+        return jsonify({"error": "birthDate must be ISO date format YYYY-MM-DD"}), 400
+    if weaned_on:
+        try:
+            date.fromisoformat(str(weaned_on))
+        except ValueError:
+            return jsonify({"error": "weanedOn/dow must be ISO date format YYYY-MM-DD"}), 400
     if not ensure_cage_scope(cage_id, g.user):
         return jsonify({"error": "Not found"}), 404
     blocked = require_nonexpired_protocol(cage_id)
@@ -1384,8 +1421,8 @@ def create_litter() -> Response:
         return blocked
 
     cur = db().execute(
-        "INSERT INTO litters (cage_id, birth_date, litter_size, survived_count, created_at) VALUES (?, ?, ?, ?, ?)",
-        (cage_id, birth_date, size, survived, now_iso()),
+        "INSERT INTO litters (cage_id, birth_date, litter_size, survived_count, weaned_on, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (cage_id, birth_date, size, survived, weaned_on, now_iso()),
     )
     litter_id = cur.lastrowid
     count_m = int(payload.get("male", 0))
@@ -2184,13 +2221,13 @@ def cage_cards() -> Response:
 
         litter_rows = db().execute(
             f"""
-            SELECT l.id, l.cage_id, l.birth_date, l.litter_size, l.survived_count,
+            SELECT l.id, l.cage_id, l.birth_date, l.litter_size, l.survived_count, l.weaned_on,
                    COALESCE(SUM(CASE WHEN a.sex = 'M' THEN 1 ELSE 0 END), 0) AS male_count,
                    COALESCE(SUM(CASE WHEN a.sex = 'F' THEN 1 ELSE 0 END), 0) AS female_count
             FROM litters l
             LEFT JOIN animals a ON a.litter_id = l.id
             WHERE l.cage_id IN ({animal_placeholders})
-            GROUP BY l.id, l.cage_id, l.birth_date, l.litter_size, l.survived_count
+            GROUP BY l.id, l.cage_id, l.birth_date, l.litter_size, l.survived_count, l.weaned_on
             ORDER BY l.cage_id, l.birth_date DESC, l.id DESC
             """,
             cage_ids,
@@ -2204,6 +2241,7 @@ def cage_cards() -> Response:
                     "survived": l["survived_count"],
                     "maleCount": l["male_count"],
                     "femaleCount": l["female_count"],
+                    "dow": l["weaned_on"],
                 }
             )
 

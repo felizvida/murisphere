@@ -755,6 +755,7 @@ function cardMarkup(c) {
   const location = [c.roomName, c.rackName].filter(Boolean).join(", ") || c.location || "N/A";
   const animals = (c.animals || []).slice(0, 5);
   const litters = (c.litters || []).slice(0, 4);
+  const trackedAnimals = (c.animals || []).length;
 
   const animalRows = animals
     .map(
@@ -786,6 +787,7 @@ function cardMarkup(c) {
         <td class="center">${esc(l.born)}</td>
         <td class="center">${esc(l.survived)}</td>
         <td class="center">${esc(`${toNum(l.maleCount)}/${toNum(l.femaleCount)}`)}</td>
+        <td class="center">${esc(fmtDate(l.dow))}</td>
       </tr>`
     )
     .join("");
@@ -793,7 +795,7 @@ function cardMarkup(c) {
     .map(
       () => `
       <tr class="empty">
-        <td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>
+        <td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td>
       </tr>`
     )
     .join("");
@@ -823,13 +825,15 @@ function cardMarkup(c) {
         <div class="card-fact"><span>Cage DOB</span><strong>${esc(fmtDate(c.dob))}</strong></div>
         <div class="card-fact"><span>Strain</span><strong>${esc(c.strain)}</strong></div>
         <div class="card-fact"><span>Genotype</span><strong>${esc(c.genotype)}</strong></div>
-        <div class="card-fact"><span>Population</span><strong>${esc(`M${male} / F${female} / T${total}`)}</strong></div>
+        <div class="card-fact"><span>Population (Cage Total)</span><strong>${esc(`M${male} / F${female} / T${total}`)}</strong></div>
+        <div class="card-fact"><span>Tracked IDs Listed</span><strong>${esc(`${Math.min(trackedAnimals, 5)} shown of ${trackedAnimals}`)}</strong></div>
         <div class="card-fact"><span>Room / Rack</span><strong>${esc(location)}</strong></div>
       </div>
 
       <div class="card-panels">
         <div class="card-panel">
           <div class="panel-title">Animals</div>
+          <div class="panel-subtitle">Rows list tracked IDs; cage population may include untagged pups.</div>
           <table class="card-table animals-table">
             <colgroup>
               <col style="width:18%" />
@@ -850,14 +854,15 @@ function cardMarkup(c) {
           <div class="panel-title">Litters</div>
           <table class="card-table litters-table">
             <colgroup>
-              <col style="width:10%" />
-              <col style="width:35%" />
-              <col style="width:16%" />
-              <col style="width:20%" />
-              <col style="width:19%" />
+              <col style="width:9%" />
+              <col style="width:25%" />
+              <col style="width:13%" />
+              <col style="width:15%" />
+              <col style="width:15%" />
+              <col style="width:23%" />
             </colgroup>
             <thead>
-              <tr><th>#</th><th>DOB</th><th>Born</th><th>Survived</th><th>M/F</th></tr>
+              <tr><th>#</th><th>DOB</th><th>Born</th><th>Survived</th><th>M/F</th><th>DoW</th></tr>
             </thead>
             <tbody>
               ${litterRows}${litterFill}
@@ -990,6 +995,13 @@ async function printCardsDirect() {
             color: #123844;
             background: linear-gradient(180deg, #edf7f3, #e6f1ec);
             border-bottom: 1px solid #9dbbb0;
+          }
+          .panel-subtitle {
+            padding: 2px 6px 4px;
+            font-size: 8.5px;
+            color: #48616c;
+            border-bottom: 1px solid #d4e6dd;
+            background: #f8fcfa;
           }
           .card-table { width: 100%; border-collapse: collapse; font-size: 9.5px; table-layout: fixed; }
           .card-table th, .card-table td {

@@ -88,13 +88,15 @@ body {{
             <div class="card-fact"><span>Cage DOB</span><strong>10/10/2024</strong></div>
             <div class="card-fact"><span>Strain</span><strong>C57BL/6J</strong></div>
             <div class="card-fact"><span>Genotype</span><strong>PdxCre Tg/Azelia SuperLongAlleleStringWithNoSpaces</strong></div>
-            <div class="card-fact"><span>Population</span><strong>M2 / F3 / T5</strong></div>
+            <div class="card-fact"><span>Population (Cage Total)</span><strong>M1 / F2 / T3</strong></div>
+            <div class="card-fact"><span>Tracked IDs Listed</span><strong>3 shown of 3</strong></div>
             <div class="card-fact"><span>Room / Rack</span><strong>Room 1 / Breeding Rack 1</strong></div>
           </div>
 
           <div class="card-panels">
             <div class="card-panel">
               <div class="panel-title">Animals</div>
+              <div class="panel-subtitle">Rows list tracked IDs; cage population may include untagged pups.</div>
               <table class="card-table animals-table">
                 <colgroup>
                   <col style="width:18%" />
@@ -118,18 +120,19 @@ body {{
               <div class="panel-title">Litters</div>
               <table class="card-table litters-table">
                 <colgroup>
-                  <col style="width:10%" />
-                  <col style="width:35%" />
-                  <col style="width:16%" />
-                  <col style="width:20%" />
-                  <col style="width:19%" />
+                  <col style="width:9%" />
+                  <col style="width:25%" />
+                  <col style="width:13%" />
+                  <col style="width:15%" />
+                  <col style="width:15%" />
+                  <col style="width:23%" />
                 </colgroup>
                 <thead>
-                  <tr><th>#</th><th>DOB</th><th>Born</th><th>Survived</th><th>M/F</th></tr>
+                  <tr><th>#</th><th>DOB</th><th>Born</th><th>Survived</th><th>M/F</th><th>DoW</th></tr>
                 </thead>
                 <tbody>
-                  <tr><td class="center">1</td><td class="center">11/12/2024</td><td class="center">3</td><td class="center">3</td><td class="center">2/1</td></tr>
-                  <tr><td class="center">2</td><td class="center">01/08/2025</td><td class="center">5</td><td class="center">5</td><td class="center">1/4</td></tr>
+                  <tr><td class="center">1</td><td class="center">11/12/2024</td><td class="center">3</td><td class="center">3</td><td class="center">2/1</td><td class="center">01/15/2025</td></tr>
+                  <tr><td class="center">2</td><td class="center">01/08/2025</td><td class="center">5</td><td class="center">5</td><td class="center">1/4</td><td class="center">02/05/2025</td></tr>
                 </tbody>
               </table>
             </div>

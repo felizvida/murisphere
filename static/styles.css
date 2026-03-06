@@ -583,6 +583,14 @@ button:disabled,
   border-bottom: 1px solid #9dbbb0;
 }
 
+.panel-subtitle {
+  padding: 0.16rem 0.36rem 0.24rem;
+  font-size: 0.56rem;
+  color: #49606a;
+  border-bottom: 1px solid #d4e6dd;
+  background: #f8fcfa;
+}
+
 .card-table {
   width: 100%;
   table-layout: fixed;

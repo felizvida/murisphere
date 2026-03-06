@@ -125,6 +125,7 @@ CREATE TABLE IF NOT EXISTS litters (
     birth_date TEXT NOT NULL,
     litter_size INTEGER NOT NULL,
     survived_count INTEGER NOT NULL,
+    weaned_on TEXT,
     created_at TEXT NOT NULL,
     FOREIGN KEY(cage_id) REFERENCES cages(id)
 );
