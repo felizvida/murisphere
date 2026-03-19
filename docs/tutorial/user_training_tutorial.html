@@ -28,7 +28,7 @@
           linear-gradient(155deg, #f4faf7, #e6f1ec);
       }
       .wrap {
-        max-width: 1100px;
+        max-width: 1120px;
         margin: 0 auto;
         padding: 24px;
       }
@@ -76,6 +76,9 @@
         grid-template-columns: 1fr;
         gap: 12px;
       }
+      .grid.two {
+        grid-template-columns: 1fr;
+      }
       .pill {
         display: inline-block;
         border-radius: 999px;
@@ -85,6 +88,7 @@
         color: #1f555f;
         padding: 4px 10px;
         margin-right: 6px;
+        margin-bottom: 6px;
       }
       .workflow {
         border: 1px solid #d6e7df;
@@ -103,6 +107,23 @@
       .steps li {
         margin-bottom: 8px;
         line-height: 1.48;
+      }
+      .facts {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 12px;
+      }
+      .fact {
+        border-radius: 12px;
+        border: 1px solid #d7e7df;
+        background: linear-gradient(180deg, #ffffff, #f5fbf8);
+        padding: 12px;
+      }
+      .fact strong {
+        display: block;
+        font-size: 1.3rem;
+        margin-bottom: 4px;
       }
       .shot {
         margin-top: 10px;
@@ -129,10 +150,6 @@
         color: var(--high);
         font-weight: 700;
       }
-      .state-warn {
-        color: #9a5b12;
-        font-weight: 700;
-      }
       code {
         background: #edf5f2;
         border-radius: 6px;
@@ -141,6 +158,9 @@
       @media (min-width: 860px) {
         .grid.two {
           grid-template-columns: 1fr 1fr;
+        }
+        .facts {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
         }
       }
       @page {
@@ -152,7 +172,8 @@
           background: #fff;
         }
         .card,
-        .workflow {
+        .workflow,
+        .fact {
           box-shadow: none;
           break-inside: avoid;
         }
@@ -162,91 +183,155 @@
   <body>
     <div class="wrap">
       <span class="kicker">Murisphere SOP Tutorial</span>
-      <h1>Workflow Training Guide: Technician + Facility Manager</h1>
-      <p class="sub">This tutorial is organized by real routine workflows in a research vivarium. Follow sections in order for onboarding, or jump by role and task.</p>
+      <h1>Workflow Training Guide: Technician, Facility Manager, and Admin</h1>
+      <p class="sub">Updated for the current Murisphere workflow: landing dashboard first, QR cage cards for phone scanning in-room, and optional desktop companion support for print-heavy office work.</p>
+
+      <section class="card">
+        <h2>Training Environment</h2>
+        <p class="sub">The sample walkthrough uses a realistic demo vivarium so the screenshots reflect real operating pressure instead of toy data.</p>
+        <div class="facts">
+          <div class="fact"><strong>20</strong>labs</div>
+          <div class="fact"><strong>3,000</strong>cages</div>
+          <div class="fact"><strong>Multi-project</strong>labs with variable size</div>
+          <div class="fact"><strong>Live alerts</strong>breeding, compliance, planner, and welfare</div>
+        </div>
+      </section>
 
       <section class="card toc" id="toc">
         <h2>Table of Contents</h2>
         <ol class="steps">
-          <li><a href="#quick-start">Quick Start and Prerequisites</a></li>
+          <li><a href="#quick-start">Quick Start and Required Setup</a></li>
           <li><a href="#tech-daily">Mouse Technician Daily Workflows</a></li>
           <li><a href="#manager-daily">Facility Manager Daily Workflows</a></li>
           <li><a href="#compliance">Regulatory and Compliance Workflows</a></li>
           <li><a href="#research">Research Support Workflows</a></li>
+          <li><a href="#visuals">Visual Walkthrough</a></li>
           <li><a href="#checklists">End-of-Shift / End-of-Day Checklists</a></li>
           <li><a href="#troubleshooting">Troubleshooting and Escalation</a></li>
         </ol>
       </section>
 
       <section class="card" id="quick-start">
-        <h2>1) Quick Start and Prerequisites</h2>
-        <p class="sub">Core principle: <strong>cage-level speed and accuracy first</strong>. Use phone scan workflows in the room, then manager workflows for oversight and planning.</p>
+        <h2>1) Quick Start and Required Setup</h2>
+        <p class="sub">Core rule: <strong>print the cage card, scan the QR with a phone, open the cage in the browser, and complete the task immediately.</strong></p>
         <p>
           <span class="pill">Technician</span>
-          <span class="pill">PI/Manager</span>
+          <span class="pill">PI / Manager</span>
           <span class="pill">Admin</span>
+          <span class="pill">Optional Desktop Companion</span>
         </p>
-        <ol class="steps">
-          <li>Sign in from phone or tablet.</li>
-          <li>Set <code>Scan Base URL</code> to a phone-reachable host (LAN IP or domain).</li>
-          <li>Print cage cards at 100% scale.</li>
-          <li>Verify one sample scan before starting room rounds.</li>
-        </ol>
+        <div class="grid two">
+          <article class="workflow">
+            <h3>1.1 First Login and Dashboard Review</h3>
+            <ol class="steps">
+              <li>Log in from phone, tablet, browser, or desktop companion.</li>
+              <li>Review the landing dashboard before entering rooms.</li>
+              <li>Check alert severity, overdue work, room pressure, and planner risk.</li>
+              <li>Use clickable cage, project, and lab names to drill in directly.</li>
+            </ol>
+          </article>
+          <article class="workflow">
+            <h3>1.2 Card Printing and Scan Preflight</h3>
+            <ol class="steps">
+              <li>Open the cage card center.</li>
+              <li>Set <code>Scan Base URL</code> to a phone-reachable host or domain.</li>
+              <li>Print at <strong>100% scale</strong>.</li>
+              <li>Use the QR square for phone scans.</li>
+              <li>Treat the 1D barcode as optional hardware-scanner support only.</li>
+            </ol>
+          </article>
+          <article class="workflow">
+            <h3>1.3 Validate a Real Phone Scan</h3>
+            <ol class="steps">
+              <li>Use the phone camera, not a separate mobile app.</li>
+              <li>Scan a printed QR card.</li>
+              <li>Tap the browser prompt.</li>
+              <li>Verify cage ID and location before saving any edit.</li>
+            </ol>
+          </article>
+          <article class="workflow">
+            <h3>1.4 Optional Desktop Companion</h3>
+            <ol class="steps">
+              <li>Use desktop mode for batch printing and exports.</li>
+              <li>Keep phone and tablet workflows for in-room work.</li>
+              <li>Do not replace the phone-scan workflow with desktop-only steps.</li>
+            </ol>
+          </article>
+        </div>
       </section>
 
       <section class="card" id="tech-daily">
         <h2>2) Mouse Technician Daily Workflows</h2>
         <div class="grid two">
           <article class="workflow">
-            <h3>2.1 Start-of-Shift Room Entry</h3>
+            <h3>2.1 Start-of-Shift Dashboard Triage</h3>
             <ol class="steps">
-              <li>Open active alerts; identify <span class="state-high">high-severity</span> cages first.</li>
-              <li>Review due/overdue tasks for assigned rooms.</li>
-              <li>Confirm protocol blocks are cleared before edits.</li>
+              <li>Open the dashboard.</li>
+              <li>Review <span class="state-high">high-severity</span> alerts first.</li>
+              <li>Review overdue tasks and protocol blocks.</li>
+              <li>Prioritize rooms with dense alert clusters.</li>
             </ol>
           </article>
           <article class="workflow">
-            <h3>2.2 Phone Scan of Printed Card (Required)</h3>
+            <h3>2.2 Print or Reprint Cage Cards</h3>
             <ol class="steps">
-              <li>Open phone camera and scan printed QR (not the 1D barcode strip).</li>
-              <li>Tap link banner to open cage page in browser.</li>
-              <li>Verify cage ID and location before edits.</li>
-              <li>Save count/status/note updates.</li>
-            </ol>
-            <p>Never edit unless scanned cage ID matches printed card.</p>
-          </article>
-          <article class="workflow">
-            <h3>2.3 Cage Census and Reconciliation</h3>
-            <ol class="steps">
-              <li>Start census session for room.</li>
-              <li>Scan each cage and confirm observed M/F counts.</li>
-              <li>Complete session and record mismatch notes.</li>
+              <li>Search for target cages.</li>
+              <li>Batch-print cards from the card center.</li>
+              <li>Inspect print quality before using the cards in the room.</li>
+              <li>Confirm the QR is sharp and fully visible.</li>
             </ol>
           </article>
           <article class="workflow">
-            <h3>2.4 Breeding Operations</h3>
+            <h3>2.3 Scan Printed Card and Quick-Edit</h3>
             <ol class="steps">
-              <li>Create/manage breeding pairs (sire + dam + cage).</li>
-              <li>Record timed mating / plug check / weaning events.</li>
-              <li>Review pair productivity and retire non-productive pairs.</li>
+              <li>Scan the printed QR with the phone camera.</li>
+              <li>Open the cage in the browser.</li>
+              <li>Verify cage code, room, rack, and breeding status.</li>
+              <li>Update counts, notes, litter events, or status.</li>
             </ol>
           </article>
           <article class="workflow">
-            <h3>2.5 Health, Vet, Mortality, and Euthanasia</h3>
+            <h3>2.4 Census and Reconciliation</h3>
             <ol class="steps">
-              <li>Run health rounds and log findings.</li>
-              <li>Open vet case and treatment plan as needed.</li>
-              <li>Record mortality and flag necropsy if required.</li>
-              <li>Record euthanasia events with method/reason/disposition.</li>
+              <li>Start a census session for the room.</li>
+              <li>Scan each cage in sequence.</li>
+              <li>Reconcile observed M/F counts with system totals.</li>
+              <li>Record mismatch notes before leaving the room.</li>
             </ol>
           </article>
           <article class="workflow">
-            <h3>2.6 Tagging and Sample Handling</h3>
+            <h3>2.5 Breeding Operations</h3>
             <ol class="steps">
-              <li>Apply animal tags (ear tag/chip/tube/well).</li>
-              <li>Create sample record and sample code.</li>
-              <li>Advance status: collected → shipped → received → resulted.</li>
-              <li>Confirm chain-of-custody events are logged.</li>
+              <li>Create or review breeding pairs.</li>
+              <li>Record timed mating, plug check, litter, weaning, and transfer events.</li>
+              <li>Review pair productivity before continuing older breeders.</li>
+              <li>Retire non-productive pairs when criteria are met.</li>
+            </ol>
+          </article>
+          <article class="workflow">
+            <h3>2.6 Health, Welfare, Mortality, and Euthanasia</h3>
+            <ol class="steps">
+              <li>Log welfare concerns during rounds.</li>
+              <li>Open vet cases and treatment schedules.</li>
+              <li>Record mortality and necropsy requirements.</li>
+              <li>Record euthanasia method, reason, and disposition.</li>
+            </ol>
+          </article>
+          <article class="workflow">
+            <h3>2.7 Tagging, Samples, and Genotyping Logistics</h3>
+            <ol class="steps">
+              <li>Add ear tag, chip, tube, or well identifiers.</li>
+              <li>Create sample records with unique sample codes.</li>
+              <li>Advance sample status through collection, shipment, receipt, and result.</li>
+              <li>Verify chain-of-custody history before handoff.</li>
+            </ol>
+          </article>
+          <article class="workflow">
+            <h3>2.8 End-of-Shift Sync Discipline</h3>
+            <ol class="steps">
+              <li>Confirm queued writes are fully synced.</li>
+              <li>Close open census sessions and unfinished notes.</li>
+              <li>Escalate unresolved urgent issues before leaving.</li>
             </ol>
           </article>
         </div>
@@ -256,35 +341,55 @@
         <h2>3) Facility Manager Daily Workflows</h2>
         <div class="grid two">
           <article class="workflow">
-            <h3>3.1 Morning Command Review</h3>
+            <h3>3.1 Morning Operations Dashboard Review</h3>
             <ol class="steps">
-              <li>Review alert feed and category distribution.</li>
-              <li>Acknowledge or escalate unresolved alerts.</li>
-              <li>Dispatch notifications for urgent items.</li>
+              <li>Review alert counts by severity and category.</li>
+              <li>Review room density, cage pressure, and open task volume.</li>
+              <li>Open high-risk cages directly from dashboard links.</li>
             </ol>
           </article>
           <article class="workflow">
-            <h3>3.2 Capacity and Room Operations</h3>
+            <h3>3.2 Capacity, Quota, and Chargeback Review</h3>
             <ol class="steps">
-              <li>Check room/rack capacity and quota utilization.</li>
-              <li>Review cage-space projection and consolidation suggestions.</li>
-              <li>Prioritize cage wash and room transfer actions.</li>
+              <li>Review facility capacity and room/rack utilization.</li>
+              <li>Review lab quotas and projected cage load.</li>
+              <li>Review chargeback and per-diem outputs.</li>
+              <li>Investigate overloaded rooms or underused allocations.</li>
             </ol>
           </article>
           <article class="workflow">
-            <h3>3.3 Recommendation Decisions</h3>
+            <h3>3.3 Alert Ownership and Dispatch</h3>
             <ol class="steps">
-              <li>Generate recommendations (e.g., consolidation, supply gap).</li>
-              <li>Decision each item: accept, adjust, ignore, complete.</li>
-              <li>Track decision outcomes for continuous improvement.</li>
+              <li>Review active alerts.</li>
+              <li>Acknowledge known items with owners.</li>
+              <li>Dispatch notifications for unresolved urgent work.</li>
+              <li>Confirm escalation channels are correct.</li>
             </ol>
           </article>
           <article class="workflow">
-            <h3>3.4 Planner Scenario Management</h3>
+            <h3>3.4 Recommendation and Consolidation Workflow</h3>
             <ol class="steps">
-              <li>Create scenario (target animals, needed-by date, cage constraints).</li>
-              <li>Attach projects and required animal counts.</li>
-              <li>Evaluate deficit/risk and review generated plan snapshots.</li>
+              <li>Generate recommendations.</li>
+              <li>Review each item with cage, lab, and risk context.</li>
+              <li>Decide: accept, adjust, ignore, or complete.</li>
+              <li>Track outcomes for operational improvement.</li>
+            </ol>
+          </article>
+          <article class="workflow">
+            <h3>3.5 Planner Scenarios and Supply Risk</h3>
+            <ol class="steps">
+              <li>Create demand scenarios with constraints.</li>
+              <li>Attach project-level demand where needed.</li>
+              <li>Evaluate projected deficits, cage demand, and risk.</li>
+              <li>Assign action owners for high-risk scenarios.</li>
+            </ol>
+          </article>
+          <article class="workflow">
+            <h3>3.6 Desktop Companion and Office Workflows</h3>
+            <ol class="steps">
+              <li>Use desktop mode for batch card printing.</li>
+              <li>Use it for long report reviews and exports.</li>
+              <li>Keep phone and tablet use for room-floor tasks.</li>
             </ol>
           </article>
         </div>
@@ -293,79 +398,99 @@
       <section class="card" id="compliance">
         <h2>4) Regulatory and Compliance Workflows</h2>
         <ul class="steps">
-          <li>Protocol expiration monitoring and hard-stop edit enforcement.</li>
-          <li>Deviation logging with CAPA and closure status.</li>
-          <li>Quarantine intake, release, and overdue monitoring.</li>
-          <li>Qualification-expiry monitoring for assigned procedures.</li>
-          <li>E-signature capture and attachment evidence for inspections.</li>
-          <li>Audit trail review for who/what/when changes.</li>
+          <li>Monitor protocol expiration and hard-stop blocked edits.</li>
+          <li>Record deviations, CAPA items, and closure state.</li>
+          <li>Track quarantine intake, hold, release, and overdue cases.</li>
+          <li>Track qualification requirements for assigned procedures.</li>
+          <li>Capture attachments and e-signature evidence where required.</li>
+          <li>Use audit history to answer who changed what and when.</li>
         </ul>
       </section>
 
       <section class="card" id="research">
         <h2>5) Research Support Workflows</h2>
         <ul class="steps">
-          <li>Pedigree exploration for multi-generation lineage decisions.</li>
-          <li>Genotyping order submission and callback result ingestion.</li>
-          <li>Mendelian ratio and genotype-deviation alert review.</li>
-          <li>Project-specific demand planning and supply-gap detection.</li>
-          <li>Cross-system exports (CSV/Excel/PDF/API jobs).</li>
+          <li>Explore pedigree trees for breeding decisions.</li>
+          <li>Submit genotyping orders and receive provider callbacks.</li>
+          <li>Review Mendelian ratio and genotype-deviation alerts.</li>
+          <li>Review planner scenarios tied to project demand.</li>
+          <li>Export CSV, PDF, and workflow job outputs for downstream systems.</li>
         </ul>
       </section>
 
-      <section class="card">
+      <section class="card" id="visuals">
         <h2>6) Visual Walkthrough</h2>
-        <p class="sub">All screenshots below use representative sample data to illustrate expected enterprise workflows.</p>
+        <p class="sub">All screenshots below use representative sample data to illustrate current Murisphere workflows.</p>
         <div class="grid two">
           <div>
-            <h3>Login and Session</h3>
+            <h3>6.1 Login Screen</h3>
             <div class="shot"><img src="assets/screenshot_login.svg" alt="Vectorized screenshot of login screen" /></div>
-            <p class="caption">Role-aware login gates technician vs PI/admin actions.</p>
+            <p class="caption">Role-aware access begins here.</p>
           </div>
           <div>
-            <h3>Generate + Print Cards (Complete Card)</h3>
-            <div class="shot"><img src="assets/cage_card_complete.svg" alt="Vectorized complete cage card with owner, protocol, animal and litter tables, QR and barcode" /></div>
-            <p class="caption">Population shows total cage counts; tracked-ID rows show individually recorded animals. Litter table includes DoW (date of weaning).</p>
+            <h3>6.2 Landing Dashboard, Cage Alerts, and Density View</h3>
+            <div class="shot"><img src="assets/screenshot_cages_alerts.svg" alt="Dashboard with cage alerts and density visualization" /></div>
+            <p class="caption">Use this immediately after login to prioritize high-risk work.</p>
           </div>
           <div>
-            <h3>Phone Scan and Quick Edit</h3>
-            <div class="shot"><img src="assets/screenshot_scan.svg" alt="Vectorized screenshot of scan edit workflow" /></div>
-            <p class="caption">Browser opens cage record directly after phone camera scan.</p>
+            <h3>6.3 Cage Card Center and Batch Printing</h3>
+            <div class="shot"><img src="assets/screenshot_cards.svg" alt="Card center and printing workflow" /></div>
+            <p class="caption">Generate or reprint cards before rounds and inspections.</p>
           </div>
           <div>
-            <h3>Cage Alerts and Density View (Sample)</h3>
-            <div class="shot"><img src="assets/screenshot_cages_alerts.svg" alt="Screenshot with sample cage alerts and room density charts" /></div>
-            <p class="caption">Alert-colored cages and density visuals prioritize technician route order.</p>
+            <h3>6.4 Complete Cage Card</h3>
+            <div class="shot"><img src="assets/cage_card_complete.svg" alt="Complete cage card with owner, protocol, animal and litter tables, QR and barcode" /></div>
+            <p class="caption">Population shows full cage totals; tracked ID rows show individually recorded animals; litters include DoW.</p>
           </div>
           <div>
-            <h3>Breeding Pair Management (Sample)</h3>
-            <div class="shot"><img src="assets/screenshot_breeding_pairs.svg" alt="Screenshot with sample breeding pair creation and productivity" /></div>
-            <p class="caption">Pair lifecycle actions and productivity trend for breeding decisions.</p>
+            <h3>6.5 Scan Base URL Setup</h3>
+            <div class="shot"><img src="assets/scan_base_url.svg" alt="Scan Base URL configuration view" /></div>
+            <p class="caption">Never print with <code>localhost</code> or another non-phone-reachable address.</p>
           </div>
           <div>
-            <h3>Samples and Genotyping Orders (Sample)</h3>
-            <div class="shot"><img src="assets/screenshot_samples_genotyping.svg" alt="Screenshot with sample chain-of-custody and genotyping results" /></div>
-            <p class="caption">Chain-of-custody plus provider callback result ingestion.</p>
+            <h3>6.6 Phone Camera Scan of Printed QR</h3>
+            <div class="shot"><img src="assets/scan_phone.svg" alt="Phone scanning a printed QR cage card" /></div>
+            <p class="caption">Use the QR square for phone scanning, not the 1D barcode strip.</p>
           </div>
           <div>
-            <h3>Recommendation Decisions (Sample)</h3>
-            <div class="shot"><img src="assets/screenshot_recommendations.svg" alt="Screenshot with sample recommendation decisions and outcomes" /></div>
-            <p class="caption">Accept/adjust/ignore/complete workflow with measurable outcomes.</p>
+            <h3>6.7 Scan-to-Edit Cage Workflow</h3>
+            <div class="shot"><img src="assets/screenshot_scan.svg" alt="Scan-to-edit cage browser workflow" /></div>
+            <p class="caption">The browser opens the cage directly after scan for low-friction room edits.</p>
           </div>
           <div>
-            <h3>Planner Scenario Evaluation (Sample)</h3>
-            <div class="shot"><img src="assets/screenshot_planner.svg" alt="Screenshot with sample planner scenario and risk output" /></div>
-            <p class="caption">Demand vs supply gap, projected deficit, and risk level by scenario.</p>
+            <h3>6.8 Breeding Pair Productivity</h3>
+            <div class="shot"><img src="assets/screenshot_breeding_pairs.svg" alt="Breeding pair management and productivity" /></div>
+            <p class="caption">Review productivity before extending or retiring breeders.</p>
           </div>
           <div>
-            <h3>Compliance Dashboard (Sample)</h3>
-            <div class="shot"><img src="assets/screenshot_compliance.svg" alt="Screenshot with sample compliance dashboard and open actions" /></div>
-            <p class="caption">Regulatory risk summary with owner, due date, and evidence traceability.</p>
+            <h3>6.9 Samples and Genotyping Workflow</h3>
+            <div class="shot"><img src="assets/screenshot_samples_genotyping.svg" alt="Sample chain-of-custody and genotyping results workflow" /></div>
+            <p class="caption">Chain-of-custody plus callback results should remain traceable end to end.</p>
           </div>
           <div>
-            <h3>Pedigree Explorer (Sample)</h3>
-            <div class="shot"><img src="assets/screenshot_pedigree.svg" alt="Screenshot with sample multi-generation pedigree graph" /></div>
-            <p class="caption">Multi-generation lineage view for breeder planning and genotype interpretation.</p>
+            <h3>6.10 Recommendations and Outcomes</h3>
+            <div class="shot"><img src="assets/screenshot_recommendations.svg" alt="Recommendation lifecycle and decision outcomes" /></div>
+            <p class="caption">Turn recommendations into assigned operational decisions.</p>
+          </div>
+          <div>
+            <h3>6.11 Planner Scenario Evaluation</h3>
+            <div class="shot"><img src="assets/screenshot_planner.svg" alt="Planner scenario risk and deficit evaluation" /></div>
+            <p class="caption">Use planner output before supply gaps become room-floor problems.</p>
+          </div>
+          <div>
+            <h3>6.12 Compliance Dashboard</h3>
+            <div class="shot"><img src="assets/screenshot_compliance.svg" alt="Compliance dashboard and open actions" /></div>
+            <p class="caption">Review protocol, deviation, qualification, and evidence status here.</p>
+          </div>
+          <div>
+            <h3>6.13 Pedigree Explorer</h3>
+            <div class="shot"><img src="assets/screenshot_pedigree.svg" alt="Multi-generation pedigree explorer" /></div>
+            <p class="caption">Pedigree visualization helps breeding and genotype interpretation.</p>
+          </div>
+          <div>
+            <h3>6.14 Scan Troubleshooting Reference</h3>
+            <div class="shot"><img src="assets/scan_troubleshooting.svg" alt="Scan troubleshooting reference" /></div>
+            <p class="caption">Keep this guidance near print stations and onboarding materials.</p>
           </div>
         </div>
       </section>
@@ -376,28 +501,29 @@
         <ol class="steps">
           <li>Ensure queued offline writes are fully synced.</li>
           <li>Confirm all health findings and treatments are documented.</li>
-          <li>Verify mortality/necropsy and euthanasia entries are complete.</li>
-          <li>Close open census/round sessions.</li>
+          <li>Verify mortality, necropsy, and euthanasia entries are complete.</li>
+          <li>Close open census or round sessions.</li>
         </ol>
-        <h3>Manager End-of-Day</h3>
+        <h3>Manager / Admin End-of-Day</h3>
         <ol class="steps">
           <li>Clear or assign owners for all <span class="state-high">high-severity</span> alerts.</li>
-          <li>Review unresolved deviations and quarantine blocks.</li>
-          <li>Approve/adjust recommendations and planner risk items.</li>
-          <li>Export daily summary for audit and project stakeholders.</li>
+          <li>Review unresolved deviations and quarantine holds.</li>
+          <li>Review planner and recommendation items that remain high risk.</li>
+          <li>Export required summaries for audit or stakeholder handoff.</li>
         </ol>
       </section>
 
       <section class="card" id="troubleshooting">
         <h2>8) Troubleshooting and Escalation</h2>
         <ul class="steps">
-          <li><strong>No camera scan prompt:</strong> improve lighting and flatten printed card.</li>
-          <li><strong>Camera reads barcode value only:</strong> scan the QR square, not the CODE128 bar pattern.</li>
-          <li><strong>Wrong page opens:</strong> correct <code>Scan Base URL</code>; never use localhost for printed cards.</li>
-          <li><strong>QR blank or broken:</strong> verify endpoint <code>/api/assets/qrcode.png?v=test</code>.</li>
-          <li><strong>Protocol hard-stop:</strong> reassign valid protocol before edits.</li>
-          <li><strong>Sample or callback mismatch:</strong> validate sample code uniqueness and provider callback token.</li>
-          <li><strong>Planner risk high:</strong> open recommendation workflow and assign corrective action owner.</li>
+          <li><strong>No scan prompt appears:</strong> improve lighting, flatten the card, and try the QR square again.</li>
+          <li><strong>The phone reads only the barcode strip:</strong> scan the QR square, not the 1D barcode.</li>
+          <li><strong>Wrong page opens:</strong> correct <code>Scan Base URL</code> and reprint the card.</li>
+          <li><strong>QR appears blank or broken:</strong> verify the QR asset endpoint and regenerate the card.</li>
+          <li><strong>Save appears queued:</strong> reconnect and confirm sync before leaving the room.</li>
+          <li><strong>Protocol hard-stop blocks editing:</strong> assign a valid protocol before retrying.</li>
+          <li><strong>Callback or sample mismatch:</strong> validate callback token, sample code, and animal mapping.</li>
+          <li><strong>Planner risk remains high:</strong> assign an owner and create a corrective action immediately.</li>
         </ul>
       </section>
     </div>
