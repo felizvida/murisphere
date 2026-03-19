@@ -99,7 +99,7 @@ class PostgresIntegrationTests(unittest.TestCase):
         self.assertEqual(cards.status_code, 200)
         card = cards.get_json()[0]
         self.assertIn("qrValue", card)
-        self.assertIn("projectCodes", card)
+        self.assertIn("projects", card)
 
     def test_billing_and_chargeback_workflow_on_postgres(self) -> None:
         self.appmod.init_db()
