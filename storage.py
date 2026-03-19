@@ -18,8 +18,6 @@ SQLITE_DIALECTS = {"sqlite", "sqlite3"}
 POSTGRES_DIALECTS = {"postgres", "postgresql", "psql"}
 POSTGRES_TABLES_WITHOUT_ID = {"lab_profiles"}
 INSERT_TABLE_RE = re.compile(r"^\s*INSERT\s+INTO\s+([A-Za-z_][A-Za-z0-9_]*)", re.IGNORECASE)
-AUTOINCREMENT_RE = re.compile(r"\bINTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT\b", re.IGNORECASE)
-REAL_RE = re.compile(r"\bREAL\b", re.IGNORECASE)
 
 
 def _resolve_dialect() -> str:
@@ -105,19 +103,6 @@ def _translate_qmark_sql(sql: str) -> str:
     return "".join(out)
 
 
-def _translate_schema_sql_to_postgres(script: str) -> str:
-    lines: list[str] = []
-    for line in script.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.upper().startswith("PRAGMA "):
-            continue
-        lines.append(line)
-    text = "\n".join(lines)
-    text = AUTOINCREMENT_RE.sub("BIGSERIAL PRIMARY KEY", text)
-    text = REAL_RE.sub("DOUBLE PRECISION", text)
-    return text
-
-
 def _split_sql_statements(script: str) -> list[str]:
     statements: list[str] = []
     current: list[str] = []
@@ -200,8 +185,7 @@ class PostgresConnectionWrapper:
         self._conn.close()
 
     def executescript(self, script: str) -> None:
-        translated = _translate_schema_sql_to_postgres(script)
-        for statement in _split_sql_statements(translated):
+        for statement in _split_sql_statements(script):
             self.execute(statement)
 
     def __getattr__(self, name: str) -> Any:

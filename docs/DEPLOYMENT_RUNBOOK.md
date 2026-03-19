@@ -98,7 +98,7 @@ Expected outputs:
 
 Current adapter note:
 - The app can now open a PostgreSQL connection and translate SQLite-style parameterized queries through `storage.py`.
-- The current schema bootstrap path is intended for development and migration rehearsal.
+- The current schema bootstrap path uses the checked-in `schema_postgres.sql`.
 - Production rollout should still use an explicit Postgres-native schema/migration set before cutover.
 
 ## 5) Upgrade Procedure

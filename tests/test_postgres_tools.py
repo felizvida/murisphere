@@ -8,6 +8,7 @@ from unittest import mock
 from pathlib import Path
 
 import app as appmod
+import generate_postgres_schema
 import postgres_export_bundle
 import postgres_readiness_audit
 import storage
@@ -51,7 +52,8 @@ class PostgresToolingTests(unittest.TestCase):
         self.assertFalse(report["ok"])
         findings = {item["id"]: item for item in report["findings"]}
         self.assertGreater(findings["sqlite_driver"]["count"], 0)
-        self.assertGreater(findings["autoincrement"]["count"], 0)
+        self.assertEqual(findings["autoincrement"]["count"], 0)
+        self.assertEqual(findings["sqlite_schema_pragma"]["count"], 0)
         self.assertEqual(findings["insert_or_replace"]["count"], 0)
 
     def test_storage_helpers_generate_portable_sql_shapes(self) -> None:
@@ -69,11 +71,14 @@ class PostgresToolingTests(unittest.TestCase):
         translated = storage._translate_qmark_sql("SELECT * FROM cages WHERE cage_code = ? AND notes <> '?'")
         self.assertEqual(translated, "SELECT * FROM cages WHERE cage_code = %s AND notes <> '?'")
 
-    def test_storage_translates_schema_for_postgres(self) -> None:
-        translated = storage._translate_schema_sql_to_postgres("PRAGMA foreign_keys = ON;\nCREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT, rate REAL);\n")
-        self.assertNotIn("PRAGMA", translated)
-        self.assertIn("BIGSERIAL PRIMARY KEY", translated)
-        self.assertIn("DOUBLE PRECISION", translated)
+    def test_postgres_schema_generation_matches_committed_schema(self) -> None:
+        source = Path("schema.sql").read_text(encoding="utf-8")
+        committed = Path("schema_postgres.sql").read_text(encoding="utf-8")
+        generated = generate_postgres_schema.translate_schema(source)
+        self.assertEqual(committed, generated)
+        self.assertNotIn("PRAGMA", committed)
+        self.assertNotIn("AUTOINCREMENT", committed)
+        self.assertIn("SERIAL PRIMARY KEY", committed)
 
     def test_postgres_connect_uses_psycopg_when_dialect_is_postgres(self) -> None:
         fake_cursor = mock.Mock()
@@ -93,3 +98,7 @@ class PostgresToolingTests(unittest.TestCase):
         fake_psycopg.connect.assert_called_once()
         fake_cursor.execute.assert_called_once_with("INSERT INTO cages (cage_code) VALUES (%s) RETURNING id", ("C-1",))
         self.assertEqual(cur.lastrowid, 41)
+
+    def test_app_selects_postgres_schema_when_postgres_dialect_is_active(self) -> None:
+        with mock.patch.object(storage, "DATABASE_DIALECT", "postgres"):
+            self.assertEqual(appmod.schema_path(), "schema_postgres.sql")

@@ -13,8 +13,8 @@ CHECKS = [
     ("insert_or_replace", [Path("app.py"), Path("storage.py")], re.compile(r"INSERT OR REPLACE")),
     ("julianday", [Path("app.py"), Path("storage.py")], re.compile(r"julianday")),
     ("pragma_usage", [Path("app.py"), Path("storage.py")], re.compile(r"PRAGMA")),
-    ("sqlite_schema_pragma", [Path("schema.sql")], re.compile(r"^PRAGMA ", re.MULTILINE)),
-    ("autoincrement", [Path("schema.sql")], re.compile(r"AUTOINCREMENT")),
+    ("sqlite_schema_pragma", [Path("schema_postgres.sql")], re.compile(r"^PRAGMA ", re.MULTILINE)),
+    ("autoincrement", [Path("schema_postgres.sql")], re.compile(r"AUTOINCREMENT")),
 ]
 
 

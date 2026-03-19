@@ -72,6 +72,10 @@ def db_target() -> str:
     return os.getenv("MURISPHERE_DATABASE_URL", DB_PATH)
 
 
+def schema_path() -> str:
+    return "schema_postgres.sql" if storage.is_postgres() else "schema.sql"
+
+
 def token_digest(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
@@ -158,7 +162,7 @@ def close_db(_exc: BaseException | None) -> None:
 
 def init_db() -> None:
     with closing(storage.connect(db_target())) as conn:
-        with open("schema.sql", "r", encoding="utf-8") as f:
+        with open(schema_path(), "r", encoding="utf-8") as f:
             conn.executescript(f.read())
         _apply_schema_migrations(conn)
         conn.commit()

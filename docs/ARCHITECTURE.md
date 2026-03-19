@@ -14,7 +14,8 @@
 - Frontend logic: `static/app.js`
 - Desktop companion scaffold: `desktop/`
 - Card media rendering: server-side QR/Barcode asset endpoints
-- Data model: `schema.sql`
+- Data model: `schema.sql` and `schema_postgres.sql`
+- Postgres schema generator: `generate_postgres_schema.py`
 - Demo scale seeding: `seed_large_demo.py`
 - Validation tools: `qrcode_diagnostic.py`, `ui_clickability_audit.py`, `alert_coverage_verifier.py`
 - Migration tools: `postgres_readiness_audit.py`, `postgres_export_bundle.py`

@@ -36,6 +36,11 @@ There is also an initial runtime abstraction layer:
    - Supports `MURISPHERE_DB_DIALECT=postgres` and `MURISPHERE_DATABASE_URL=...`
    - Translates SQLite-style `?` parameters for the PostgreSQL driver during the transition period
 
+4. `schema_postgres.sql`
+   - Explicit checked-in PostgreSQL bootstrap schema
+   - Generated from `schema.sql` via `generate_postgres_schema.py`
+   - Removes SQLite-only DDL such as `PRAGMA` and `AUTOINCREMENT`
+
 ## Recommended Migration Sequence
 1. Run the readiness audit.
 2. Remove SQLite-specific SQL and driver assumptions from runtime code.
@@ -79,8 +84,8 @@ The readiness audit intentionally flags SQLite-specific constructs that still ne
 - SQLite-only SQL functions or expressions
 
 This is expected. The current tooling is for migration preparation, not a claim that PostgreSQL runtime support is already complete.
-The important improvement is that those blockers are now concentrated in `storage.py` and `schema.sql`, rather than being distributed throughout `app.py`.
-The current PostgreSQL bootstrap translates the SQLite schema for development use; a production cutover should still move to explicit Postgres-native migrations.
+The important improvement is that those blockers are now concentrated in `storage.py`, while the checked-in PostgreSQL schema no longer carries the old SQLite-only DDL markers.
+The current PostgreSQL bootstrap is explicit and versioned, but a production cutover should still move to first-class Postgres-native migrations.
 
 ## Target Architecture
 - Flask API stays the single business-rules layer

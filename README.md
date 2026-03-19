@@ -118,6 +118,7 @@ Outputs:
 Current state:
 - application endpoints now route dialect-specific SQL through [storage.py](/Users/liux17/Documents/colony/storage.py)
 - the runtime accepts `MURISPHERE_DB_DIALECT=postgres` plus `MURISPHERE_DATABASE_URL=<dsn>` for the PostgreSQL adapter path
+- PostgreSQL bootstrap now uses the explicit checked-in [schema_postgres.sql](/Users/liux17/Documents/colony/schema_postgres.sql)
 - remaining SQLite-only runtime blockers are isolated to the storage layer and schema rather than scattered across `app.py`
 - current PostgreSQL schema bootstrap is a development bridge, not the final production migration plan
 
