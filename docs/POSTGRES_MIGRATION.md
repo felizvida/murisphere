@@ -33,6 +33,8 @@ There is also an initial runtime abstraction layer:
    - Centralizes connection setup and dialect-specific SQL helpers
    - Replaces scattered endpoint-local SQLite constructs with a single adapter surface
    - Keeps current SQLite behavior intact while reducing the eventual PostgreSQL porting footprint
+   - Supports `MURISPHERE_DB_DIALECT=postgres` and `MURISPHERE_DATABASE_URL=...`
+   - Translates SQLite-style `?` parameters for the PostgreSQL driver during the transition period
 
 ## Recommended Migration Sequence
 1. Run the readiness audit.
@@ -56,6 +58,13 @@ Logical export:
 python3 postgres_export_bundle.py --db murisphere.db --out dist/postgres-bundle
 ```
 
+Runtime configuration bridge:
+```bash
+export MURISPHERE_DB_DIALECT=postgres
+export MURISPHERE_DATABASE_URL=postgresql://user:pass@host:5432/murisphere
+python3 app.py
+```
+
 ## Export Bundle Contents
 - `manifest.json` - export metadata, table counts, dependency-aware load order
 - `schema-sqlite.sql` - reference snapshot of the current SQLite schema
@@ -71,6 +80,7 @@ The readiness audit intentionally flags SQLite-specific constructs that still ne
 
 This is expected. The current tooling is for migration preparation, not a claim that PostgreSQL runtime support is already complete.
 The important improvement is that those blockers are now concentrated in `storage.py` and `schema.sql`, rather than being distributed throughout `app.py`.
+The current PostgreSQL bootstrap translates the SQLite schema for development use; a production cutover should still move to explicit Postgres-native migrations.
 
 ## Target Architecture
 - Flask API stays the single business-rules layer

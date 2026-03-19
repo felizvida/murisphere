@@ -71,6 +71,12 @@ npm run build
 - Set `MURISPHERE_ATTACHMENT_DIR` to persistent storage.
 - Back up DB file daily with retention policy.
 
+PostgreSQL runtime path:
+- Set `MURISPHERE_DB_DIALECT=postgres`
+- Set `MURISPHERE_DATABASE_URL=postgresql://...`
+- Keep `MURISPHERE_ATTACHMENT_DIR` on persistent storage
+- `requirements.txt` now includes `psycopg[binary]`
+
 ## 4a) PostgreSQL Migration Preparation
 Murisphere is still SQLite-backed today. Use the migration-prep tools to stage a centralized database transition without guessing at the current blockers.
 
@@ -89,6 +95,11 @@ Expected outputs:
 - `dist/postgres-bundle/manifest.json`
 - `dist/postgres-bundle/schema-sqlite.sql`
 - `dist/postgres-bundle/tables/*.jsonl`
+
+Current adapter note:
+- The app can now open a PostgreSQL connection and translate SQLite-style parameterized queries through `storage.py`.
+- The current schema bootstrap path is intended for development and migration rehearsal.
+- Production rollout should still use an explicit Postgres-native schema/migration set before cutover.
 
 ## 5) Upgrade Procedure
 1. Back up DB and attachments.

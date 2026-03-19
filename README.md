@@ -32,7 +32,7 @@ Card content includes:
 - QR code for direct phone-browser scan and barcode for optional scanner workflows.
 
 ## Technology
-- Backend: Flask + SQLite
+- Backend: Flask + SQLite, with PostgreSQL adapter path via `storage.py`
 - Frontend: responsive HTML/CSS/JS (desktop/tablet/phone)
 - Desktop companion: Tauri shell for centralized Murisphere deployments
 - Automation: GitHub Actions CI + CD (GHCR Docker publish)
@@ -117,7 +117,9 @@ Outputs:
 
 Current state:
 - application endpoints now route dialect-specific SQL through [storage.py](/Users/liux17/Documents/colony/storage.py)
+- the runtime accepts `MURISPHERE_DB_DIALECT=postgres` plus `MURISPHERE_DATABASE_URL=<dsn>` for the PostgreSQL adapter path
 - remaining SQLite-only runtime blockers are isolated to the storage layer and schema rather than scattered across `app.py`
+- current PostgreSQL schema bootstrap is a development bridge, not the final production migration plan
 
 ## CI/CD
 - `./.github/workflows/ci.yml`

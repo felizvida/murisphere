@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 import app as appmod
@@ -62,3 +64,32 @@ class PostgresToolingTests(unittest.TestCase):
         self.assertIn("ON CONFLICT", upsert_sql)
         self.assertNotIn("INSERT OR REPLACE", upsert_sql)
         self.assertIn("GROUP_CONCAT", storage.sql_list_agg("pj.project_code"))
+
+    def test_storage_translates_qmark_placeholders_for_postgres(self) -> None:
+        translated = storage._translate_qmark_sql("SELECT * FROM cages WHERE cage_code = ? AND notes <> '?'")
+        self.assertEqual(translated, "SELECT * FROM cages WHERE cage_code = %s AND notes <> '?'")
+
+    def test_storage_translates_schema_for_postgres(self) -> None:
+        translated = storage._translate_schema_sql_to_postgres("PRAGMA foreign_keys = ON;\nCREATE TABLE t (id INTEGER PRIMARY KEY AUTOINCREMENT, rate REAL);\n")
+        self.assertNotIn("PRAGMA", translated)
+        self.assertIn("BIGSERIAL PRIMARY KEY", translated)
+        self.assertIn("DOUBLE PRECISION", translated)
+
+    def test_postgres_connect_uses_psycopg_when_dialect_is_postgres(self) -> None:
+        fake_cursor = mock.Mock()
+        fake_cursor.fetchone.return_value = {"id": 41}
+        fake_conn = mock.Mock()
+        fake_conn.cursor.return_value = fake_cursor
+        fake_psycopg = mock.Mock()
+        fake_psycopg.connect.return_value = fake_conn
+
+        with mock.patch.dict(os.environ, {"MURISPHERE_DB_DIALECT": "postgres"}, clear=False):
+            with mock.patch.object(storage, "DATABASE_DIALECT", "postgres"):
+                with mock.patch.object(storage, "psycopg", fake_psycopg):
+                    with mock.patch.object(storage, "dict_row", object()):
+                        conn = storage.connect("postgresql://demo")
+                        cur = conn.execute("INSERT INTO cages (cage_code) VALUES (?)", ("C-1",))
+
+        fake_psycopg.connect.assert_called_once()
+        fake_cursor.execute.assert_called_once_with("INSERT INTO cages (cage_code) VALUES (%s) RETURNING id", ("C-1",))
+        self.assertEqual(cur.lastrowid, 41)

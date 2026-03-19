@@ -68,6 +68,10 @@ def now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def db_target() -> str:
+    return os.getenv("MURISPHERE_DATABASE_URL", DB_PATH)
+
+
 def token_digest(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
@@ -140,7 +144,7 @@ def reset_rate_limit_state() -> None:
 
 def db() -> storage.Connection:
     if "db" not in g:
-        conn = storage.connect(DB_PATH)
+        conn = storage.connect(db_target())
         g.db = conn
     return g.db
 
@@ -153,13 +157,13 @@ def close_db(_exc: BaseException | None) -> None:
 
 
 def init_db() -> None:
-    with closing(storage.connect(DB_PATH)) as conn:
+    with closing(storage.connect(db_target())) as conn:
         with open("schema.sql", "r", encoding="utf-8") as f:
             conn.executescript(f.read())
         _apply_schema_migrations(conn)
         conn.commit()
 
-    conn = storage.connect(DB_PATH)
+    conn = storage.connect(db_target())
     existing = conn.execute("SELECT id FROM users LIMIT 1").fetchone()
     if existing:
         conn.close()
@@ -936,7 +940,7 @@ def list_cages() -> Response:
               c.genotype_summary LIKE ? OR
               l.name LIKE ? OR
               l.pi_name LIKE ? OR
-              IFNULL(p.protocol_number, '') LIKE ? OR
+              COALESCE(p.protocol_number, '') LIKE ? OR
               EXISTS (
                 SELECT 1
                 FROM project_cages pc_q
