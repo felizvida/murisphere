@@ -1,0 +1,6 @@
+{
+  "identifier": "default",
+  "description": "Default desktop capability for Murisphere companion shell.",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

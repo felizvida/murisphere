@@ -8,6 +8,7 @@
 - `docs/API_REFERENCE.md` - API endpoint catalog
 - `docs/WORKFLOW_COVERAGE_MATRIX.md` - technician and manager routine workflow mapping
 - `docs/DEPLOYMENT_RUNBOOK.md` - deployment, upgrade, and rollback procedures
+- `desktop/README.md` - Tauri desktop companion setup and operating modes
 - `docs/OPERATIONS_RUNBOOK.md` - monitoring, incident, and routine operations playbook
 - `docs/SECURITY_COMPLIANCE.md` - implemented controls, residual risks, governance practices
 - `docs/TESTING_STRATEGY.md` - automated, diagnostic, and release-gate testing strategy

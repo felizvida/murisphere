@@ -30,6 +30,10 @@ from barcode.writer import SVGWriter
 APP_NAME = "Murisphere"
 DB_PATH = os.getenv("MURISPHERE_DB", "murisphere.db")
 ATTACHMENT_DIR = Path(os.getenv("MURISPHERE_ATTACHMENT_DIR", "uploads"))
+APP_VERSION = Path("VERSION").read_text(encoding="utf-8").strip() if Path("VERSION").exists() else "dev"
+DEFAULT_BIND_HOST = os.getenv("MURISPHERE_HOST", "0.0.0.0")
+DEFAULT_BIND_PORT = int(os.getenv("MURISPHERE_PORT", "8000"))
+RUNTIME_MODE = os.getenv("MURISPHERE_RUNTIME_MODE", "web")
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("MURISPHERE_MAX_UPLOAD_BYTES", "5242880"))
@@ -690,6 +694,20 @@ def index() -> str:
 @app.route("/scan/<token>")
 def scan_page(token: str) -> str:
     return render_template("scan.html", app_name=APP_NAME, scan_token=token)
+
+
+@app.get("/api/system/health")
+def system_health() -> Response:
+    return jsonify(
+        {
+            "ok": True,
+            "app": APP_NAME,
+            "version": APP_VERSION,
+            "runtimeMode": RUNTIME_MODE,
+            "storage": "sqlite",
+            "timestamp": now_iso(),
+        }
+    )
 
 
 @app.post("/api/auth/login")
@@ -5090,6 +5108,14 @@ def audit_list() -> Response:
     return jsonify([dict(r) for r in rows])
 
 
-if __name__ == "__main__":
+def serve(host: str | None = None, port: int | None = None) -> None:
     init_db()
-    app.run(host="0.0.0.0", port=8000, debug=os.getenv("FLASK_DEBUG", "0") == "1")
+    app.run(
+        host=host or DEFAULT_BIND_HOST,
+        port=port or DEFAULT_BIND_PORT,
+        debug=os.getenv("FLASK_DEBUG", "0") == "1",
+    )
+
+
+if __name__ == "__main__":
+    serve()

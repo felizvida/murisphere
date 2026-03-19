@@ -2,6 +2,7 @@
 
 ## System Shape
 - Web app architecture: Flask backend + SQLite database + static browser frontend.
+- Hybrid client direction: browser/phone primary plus optional Tauri desktop companion.
 - Browser-only operation on desktop/tablet/phone.
 - Primary workflow: cage-card scan -> cage lookup -> in-room edit.
 - Design priority: cage-level speed -> data accuracy -> operational simplicity -> analytics.
@@ -10,6 +11,7 @@
 - API server: `app.py`
 - UI templates: `templates/index.html`, `templates/scan.html`
 - Frontend logic: `static/app.js`
+- Desktop companion scaffold: `desktop/`
 - Card media rendering: server-side QR/Barcode asset endpoints
 - Data model: `schema.sql`
 - Demo scale seeding: `seed_large_demo.py`
@@ -41,6 +43,7 @@
 ## Runtime and Deployment
 - Local: `python app.py`
 - Container: `Dockerfile`
+- Desktop companion: Tauri shell in `desktop/`, targeting a centralized backend or source-local Flask runtime
 - CI: `.github/workflows/ci.yml`
 - CD image publish: `.github/workflows/cd.yml`
 - No CDN dependency for cage-card QR/barcode rendering
@@ -50,3 +53,8 @@
 - Bulk reporting endpoints for CSV/XLSX/PDF.
 - Demo scaling validated at 20 labs and 3,000 cages.
 - Alert/analytics layers are additive and do not block cage update paths.
+
+## Enterprise Direction
+- Recommended deployment remains centralized backend plus shared database.
+- Web stays primary for phone and tablet cage workflows.
+- Tauri is positioned as a desktop companion for reporting, printing, local desktop integrations, and future workstation/offline flows.

@@ -34,6 +34,7 @@ Card content includes:
 ## Technology
 - Backend: Flask + SQLite
 - Frontend: responsive HTML/CSS/JS (desktop/tablet/phone)
+- Desktop companion: Tauri shell for centralized Murisphere deployments
 - Automation: GitHub Actions CI + CD (GHCR Docker publish)
 
 ## Quick Start
@@ -54,6 +55,25 @@ python3 app.py
 ```
 
 Open [http://localhost:8000](http://localhost:8000).
+
+## Desktop Companion
+Murisphere now includes a Tauri desktop companion scaffold in [desktop/README.md](/Users/liux17/Documents/colony/desktop/README.md).
+
+Centralized desktop mode:
+```bash
+cd desktop
+npm install
+npm run dev
+```
+
+Local source-backed desktop mode:
+```bash
+cd desktop
+npm install
+npm run dev
+```
+
+The desktop shell is designed to share the same centralized backend as the browser and phone workflows. On first launch, you can save the Murisphere base URL in the desktop setup screen; when run from source, it can also auto-start the local Flask backend for development.
 
 ## Release Validation Commands
 ```bash

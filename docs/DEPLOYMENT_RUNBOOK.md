@@ -5,6 +5,7 @@
 - Linux/macOS host or container runtime
 - HTTPS reverse proxy for production
 - Writable persistent storage for DB and uploaded attachments
+- Optional desktop companion toolchain: Node.js, Rust, and Tauri CLI dependencies
 
 ## 2) Local Deployment
 ```bash
@@ -18,6 +19,36 @@ python app.py
 ```bash
 docker build -t murisphere:latest .
 docker run -p 8000:8000 murisphere:latest
+```
+
+## 3a) Centralized Desktop Companion
+The recommended desktop pattern is a Tauri shell pointed at the same centralized Murisphere backend used by browsers and phones.
+
+```bash
+cd desktop
+npm install
+npm run dev
+```
+
+Desktop onboarding flow:
+1. Launch the app.
+2. Enter the centralized Murisphere base URL in the setup screen.
+3. Click `Save And Connect`.
+4. The desktop shell stores the URL in its app config directory for future launches.
+
+Optional environment override:
+```bash
+cd desktop
+export MURISPHERE_DESKTOP_REMOTE_URL=https://murisphere.example.org
+npm run dev
+```
+
+For development from source, the desktop shell can auto-start the local Flask backend on a loopback port:
+
+```bash
+cd desktop
+npm install
+npm run dev
 ```
 
 ## 4) Persistent Data
@@ -41,6 +72,7 @@ docker run -p 8000:8000 murisphere:latest
 - Add rate limiting and request size limits.
 - Rotate credentials and secrets.
 - Enforce row-level lab/facility authorization.
+- For desktop rollout, distribute only shells pointed at centralized backends or a managed sidecar package.
 
 ## 7) Rollback
 - Keep previous container tag.

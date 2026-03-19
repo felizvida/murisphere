@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Murisphere Desktop icon">
+  <defs>
+    <linearGradient id="bg" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#10232b" />
+      <stop offset="55%" stop-color="#18353e" />
+      <stop offset="100%" stop-color="#2b5a56" />
+    </linearGradient>
+    <linearGradient id="flare" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#f8f5ee" stop-opacity="0.98" />
+      <stop offset="100%" stop-color="#d8ece5" stop-opacity="0.78" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffbe79" />
+      <stop offset="100%" stop-color="#ca513d" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="118" fill="url(#bg)" />
+  <circle cx="392" cy="122" r="82" fill="#ffffff" fill-opacity="0.08" />
+  <circle cx="116" cy="414" r="108" fill="#ffffff" fill-opacity="0.05" />
+  <path
+    d="M112 168c0-28 22-50 50-50h188c28 0 50 22 50 50v180c0 28-22 50-50 50H162c-28 0-50-22-50-50V168Z"
+    fill="url(#flare)"
+  />
+  <path
+    d="M160 160h192c17 0 30 13 30 30v140c0 17-13 30-30 30H160c-17 0-30-13-30-30V190c0-17 13-30 30-30Z"
+    fill="#0f2027"
+    fill-opacity="0.96"
+  />
+  <path
+    d="M164 212h184M164 258h184M164 304h116"
+    stroke="#d9ebe6"
+    stroke-linecap="round"
+    stroke-width="18"
+  />
+  <path
+    d="M309 308c0-34 27-61 61-61 8 0 16 2 24 5"
+    fill="none"
+    stroke="url(#accent)"
+    stroke-linecap="round"
+    stroke-width="20"
+  />
+  <path
+    d="M348 197c0-31 24-55 55-55 16 0 30 6 40 16"
+    fill="none"
+    stroke="#f8f5ee"
+    stroke-linecap="round"
+    stroke-width="16"
+  />
+  <circle cx="390" cy="310" r="60" fill="none" stroke="url(#accent)" stroke-width="22" />
+  <path
+    d="M387 276v39l29 19"
+    fill="none"
+    stroke="#f8f5ee"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    stroke-width="18"
+  />
+  <path
+    d="M138 404c27-29 60-45 99-45h137"
+    fill="none"
+    stroke="#ca513d"
+    stroke-linecap="round"
+    stroke-width="15"
+  />
+</svg>

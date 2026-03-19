@@ -4,3 +4,5 @@ __pycache__/
 *.pyo
 *.db
 .DS_Store
+desktop/node_modules/
+desktop/src-tauri/target/

@@ -50,6 +50,16 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertEqual(payload["email"], "admin@murisphere.local")
         self.assertEqual(payload["role"], "Admin")
 
+    def test_system_health_reports_runtime_contract(self) -> None:
+        res = self.client.get("/api/system/health")
+        self.assertEqual(res.status_code, 200)
+        payload = res.get_json()
+        self.assertTrue(payload["ok"])
+        self.assertEqual(payload["app"], "Murisphere")
+        self.assertIn("version", payload)
+        self.assertIn("runtimeMode", payload)
+        self.assertEqual(payload["storage"], "sqlite")
+
     def test_login_rate_limit_blocks_repeated_failures(self) -> None:
         old_cfg = (
             appmod.LOGIN_RATE_LIMIT_MAX_FAILURES,
