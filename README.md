@@ -169,3 +169,6 @@ Seed profile:
 ## Notes
 - QR/barcode card assets are rendered server-side to avoid client CDN failures in restricted networks.
 - For enterprise deployment, move from SQLite to PostgreSQL and add SSO/OIDC, rate limiting, and security header policy at ingress.
+
+## License
+Murisphere is licensed under the Apache License 2.0. See [LICENSE](/Users/liux17/Documents/colony/LICENSE) and [NOTICE](/Users/liux17/Documents/colony/NOTICE).
