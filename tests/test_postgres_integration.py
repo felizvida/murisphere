@@ -37,6 +37,14 @@ class PostgresIntegrationTests(unittest.TestCase):
                     raise
                 time.sleep(0.5)
 
+    def auth_headers(self, token: str) -> dict[str, str]:
+        return {"Authorization": f"Bearer {token}"}
+
+    def login(self, client, email: str, password: str) -> str:
+        response = client.post("/api/auth/login", json={"email": email, "password": password})
+        self.assertEqual(response.status_code, 200)
+        return response.get_json()["token"]
+
     def test_init_db_bootstraps_seed_data_on_postgres(self) -> None:
         self.appmod.init_db()
         with psycopg.connect(DB_URL, row_factory=dict_row) as conn:
@@ -75,10 +83,8 @@ class PostgresIntegrationTests(unittest.TestCase):
         self.appmod.app.config.update(TESTING=True)
         client = self.appmod.app.test_client()
 
-        login = client.post("/api/auth/login", json={"email": "admin@murisphere.local", "password": "admin1234"})
-        self.assertEqual(login.status_code, 200)
-        token = login.get_json()["token"]
-        headers = {"Authorization": f"Bearer {token}"}
+        token = self.login(client, "admin@murisphere.local", "admin1234")
+        headers = self.auth_headers(token)
 
         health = client.get("/api/system/health")
         self.assertEqual(health.status_code, 200)
@@ -94,3 +100,166 @@ class PostgresIntegrationTests(unittest.TestCase):
         card = cards.get_json()[0]
         self.assertIn("qrValue", card)
         self.assertIn("projectCodes", card)
+
+    def test_billing_and_chargeback_workflow_on_postgres(self) -> None:
+        self.appmod.init_db()
+        self.appmod.app.config.update(TESTING=True)
+        client = self.appmod.app.test_client()
+
+        admin = self.login(client, "admin@murisphere.local", "admin1234")
+        pi = self.login(client, "pi@murisphere.local", "pi1234")
+
+        create_rule = client.post(
+            "/api/billing/rules",
+            headers=self.auth_headers(admin),
+            json={"labId": 1, "lineType": "per_diem", "rate": 1.35},
+        )
+        self.assertEqual(create_rule.status_code, 201)
+        self.assertGreater(create_rule.get_json()["id"], 0)
+
+        rules = client.get("/api/billing/rules", headers=self.auth_headers(pi))
+        self.assertEqual(rules.status_code, 200)
+        self.assertTrue(rules.get_json())
+
+        chargeback = client.get(
+            "/api/facility/chargeback?periodDays=30&ratePerCageDay=1.0",
+            headers=self.auth_headers(admin),
+        )
+        self.assertEqual(chargeback.status_code, 200)
+        self.assertTrue(any(row["estimatedCharge"] > 0 for row in chargeback.get_json()))
+
+        run = client.post(
+            "/api/billing/run",
+            headers=self.auth_headers(admin),
+            json={"periodStart": "2026-03-01", "periodEnd": "2026-03-31"},
+        )
+        self.assertEqual(run.status_code, 200)
+        self.assertGreater(run.get_json()["entriesUpserted"], 0)
+
+        statements = client.get(
+            "/api/billing/statements.csv?periodStart=2026-03-01&periodEnd=2026-03-31",
+            headers=self.auth_headers(admin),
+        )
+        self.assertEqual(statements.status_code, 200)
+        self.assertIn("text/csv", statements.content_type)
+        self.assertIn("period_start", statements.get_data(as_text=True))
+
+        close = client.post(
+            "/api/billing/close-period",
+            headers=self.auth_headers(admin),
+            json={"periodStart": "2026-03-01", "periodEnd": "2026-03-31"},
+        )
+        self.assertEqual(close.status_code, 200)
+        self.assertEqual(close.get_json()["status"], "closed")
+
+        rerun = client.post(
+            "/api/billing/run",
+            headers=self.auth_headers(admin),
+            json={"periodStart": "2026-03-01", "periodEnd": "2026-03-31"},
+        )
+        self.assertEqual(rerun.status_code, 409)
+
+    def test_alert_dispatch_and_stream_workflow_on_postgres(self) -> None:
+        self.appmod.init_db()
+        self.appmod.app.config.update(TESTING=True)
+        client = self.appmod.app.test_client()
+
+        admin = self.login(client, "admin@murisphere.local", "admin1234")
+        headers = self.auth_headers(admin)
+
+        overdue_task = client.post(
+            "/api/tasks/assign",
+            headers=headers,
+            json={"taskType": "plug_check", "cageId": 1, "dueOn": "2020-01-01", "assignedTo": 2},
+        )
+        self.assertEqual(overdue_task.status_code, 201)
+
+        feed = client.get("/api/alerts/feed?status=active", headers=headers)
+        self.assertEqual(feed.status_code, 200)
+        alerts = feed.get_json()
+        self.assertTrue(alerts)
+        alert_id = alerts[0]["id"]
+
+        ack = client.post(f"/api/alerts/{alert_id}/ack", headers=headers)
+        self.assertEqual(ack.status_code, 200)
+
+        acked = client.get("/api/alerts/feed?status=acknowledged", headers=headers)
+        self.assertEqual(acked.status_code, 200)
+        self.assertTrue(any(row["id"] == alert_id for row in acked.get_json()))
+
+        channel = client.post(
+            "/api/notifications/channels",
+            headers=headers,
+            json={"channelType": "in_app", "labId": 1, "minSeverity": "low"},
+        )
+        self.assertEqual(channel.status_code, 201)
+
+        mortality = client.post(
+            "/api/cages/1/mortality",
+            headers=headers,
+            json={"male": 1, "cause": "found dead", "necropsyRequired": True},
+        )
+        self.assertEqual(mortality.status_code, 201)
+
+        dispatch = client.post("/api/alerts/dispatch", headers=headers)
+        self.assertEqual(dispatch.status_code, 200)
+        payload = dispatch.get_json()
+        self.assertGreaterEqual(payload["alerts"], 1)
+        self.assertGreaterEqual(payload["simulated"], 1)
+
+        stream = client.get("/api/alerts/stream?once=1", headers=headers)
+        self.assertEqual(stream.status_code, 200)
+        self.assertIn("text/event-stream", stream.content_type)
+        self.assertIn(b"event: alerts", stream.data)
+
+    def test_planner_scenario_project_evaluation_workflow_on_postgres(self) -> None:
+        self.appmod.init_db()
+        self.appmod.app.config.update(TESTING=True)
+        client = self.appmod.app.test_client()
+
+        admin = self.login(client, "admin@murisphere.local", "admin1234")
+        headers = self.auth_headers(admin)
+
+        projects = client.get("/api/projects", headers=headers)
+        self.assertEqual(projects.status_code, 200)
+        project_rows = projects.get_json()
+        self.assertTrue(project_rows)
+        project = project_rows[0]
+
+        scenario = client.post(
+            "/api/planner/scenarios",
+            headers=headers,
+            json={
+                "name": "Postgres demand plan",
+                "labId": project["lab_id"],
+                "targetAnimals": 300,
+                "maxNewCages": 20,
+                "neededBy": "2026-09-01",
+            },
+        )
+        self.assertEqual(scenario.status_code, 201)
+        scenario_id = scenario.get_json()["id"]
+
+        add_projects = client.post(
+            f"/api/planner/scenarios/{scenario_id}/projects",
+            headers=headers,
+            json={"projects": [{"projectId": project["id"], "animalsNeeded": 320, "priority": 1}]},
+        )
+        self.assertEqual(add_projects.status_code, 200)
+        self.assertGreaterEqual(add_projects.get_json()["upserted"], 1)
+
+        scenario_list = client.get("/api/planner/scenarios", headers=headers)
+        self.assertEqual(scenario_list.status_code, 200)
+        self.assertTrue(any(row["id"] == scenario_id for row in scenario_list.get_json()))
+
+        evaluate = client.post(f"/api/planner/scenarios/{scenario_id}/evaluate", headers=headers)
+        self.assertEqual(evaluate.status_code, 200)
+        evaluation = evaluate.get_json()
+        self.assertIn("projectedDeficit", evaluation)
+        self.assertIn(evaluation["riskLevel"], {"low", "medium", "high"})
+
+        plans = client.get(f"/api/planner/scenarios/{scenario_id}/plans", headers=headers)
+        self.assertEqual(plans.status_code, 200)
+        plan_rows = plans.get_json()
+        self.assertTrue(plan_rows)
+        self.assertEqual(plan_rows[0]["projected_deficit"], evaluation["projectedDeficit"])
