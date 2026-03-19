@@ -220,11 +220,25 @@ class PostgresIntegrationTests(unittest.TestCase):
         admin = self.login(client, "admin@murisphere.local", "admin1234")
         headers = self.auth_headers(admin)
 
+        create_project = client.post(
+            "/api/projects",
+            headers=headers,
+            json={
+                "projectCode": f"PG-PLAN-{int(time.time() * 1000)}",
+                "title": "Postgres Planner Validation Project",
+                "labId": 1,
+                "status": "Active",
+                "targetAnimals": 320,
+            },
+        )
+        self.assertEqual(create_project.status_code, 201)
+        project_id = create_project.get_json()["id"]
+
         projects = client.get("/api/projects", headers=headers)
         self.assertEqual(projects.status_code, 200)
         project_rows = projects.get_json()
-        self.assertTrue(project_rows)
-        project = project_rows[0]
+        self.assertTrue(any(row["id"] == project_id for row in project_rows))
+        project = next(row for row in project_rows if row["id"] == project_id)
 
         scenario = client.post(
             "/api/planner/scenarios",
