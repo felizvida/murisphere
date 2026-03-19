@@ -809,7 +809,7 @@ def list_projects() -> Response:
     if not is_admin(g.user):
         query += " WHERE p.lab_id = ? "
         params = (g.user.lab_id,)
-    query += " GROUP BY p.id ORDER BY p.created_at DESC LIMIT 500"
+    query += " GROUP BY p.id, l.name ORDER BY p.created_at DESC LIMIT 500"
     rows = db().execute(query, params).fetchall()
     return jsonify([dict(r) for r in rows])
 
@@ -2396,7 +2396,7 @@ def facility_quotas() -> Response:
             LEFT JOIN lab_profiles lp ON lp.lab_id = l.id
             LEFT JOIN cages c ON c.lab_id = l.id
             LEFT JOIN projects p ON p.lab_id = l.id
-            GROUP BY l.id
+            GROUP BY l.id, l.name, lp.size_tier, lp.expected_cage_load, lp.active_project_count
             ORDER BY current_cages DESC
             """
         ).fetchall()
@@ -2415,7 +2415,7 @@ def facility_quotas() -> Response:
             LEFT JOIN cages c ON c.lab_id = l.id
             LEFT JOIN projects p ON p.lab_id = l.id
             WHERE l.id = ?
-            GROUP BY l.id
+            GROUP BY l.id, l.name, lp.size_tier, lp.expected_cage_load, lp.active_project_count
             """,
             (g.user.lab_id,),
         ).fetchall()
@@ -2453,7 +2453,7 @@ def facility_chargeback() -> Response:
             SELECT l.id AS lab_id, l.name AS lab_name, COUNT(c.id) AS cage_count
             FROM labs l
             LEFT JOIN cages c ON c.lab_id = l.id
-            GROUP BY l.id
+            GROUP BY l.id, l.name
             ORDER BY cage_count DESC
             """
         ).fetchall()
@@ -2464,7 +2464,7 @@ def facility_chargeback() -> Response:
             FROM labs l
             LEFT JOIN cages c ON c.lab_id = l.id
             WHERE l.id = ?
-            GROUP BY l.id
+            GROUP BY l.id, l.name
             """,
             (g.user.lab_id,),
         ).fetchall()
@@ -2531,7 +2531,7 @@ def report_protocol_usage() -> Response:
     if not is_admin(g.user):
         query += " WHERE p.lab_id = ? "
         params = (g.user.lab_id,)
-    query += " GROUP BY p.id ORDER BY cages DESC"
+    query += " GROUP BY p.id, l.name ORDER BY cages DESC"
     rows = db().execute(query, params).fetchall()
     output = io.StringIO()
     writer = csv.writer(output)
@@ -2731,7 +2731,7 @@ def billing_statements_csv() -> Response:
         FROM billing_entries be
         JOIN labs l ON l.id = be.lab_id
         {where}
-        GROUP BY be.period_start, be.period_end, be.lab_id, be.line_type
+        GROUP BY be.period_start, be.period_end, be.lab_id, l.name, be.line_type
         ORDER BY be.period_start DESC, lab_name
         """,
         params,
@@ -3710,8 +3710,14 @@ def record_euthanasia(cage_id: int) -> Response:
         male = int(payload.get("male", 0))
         female = int(payload.get("female", 0))
         db().execute(
-            "UPDATE cages SET male_count = MAX(male_count - ?, 0), female_count = MAX(female_count - ?, 0), updated_at = ? WHERE id = ?",
-            (male, female, now_iso(), cage_id),
+            """
+            UPDATE cages
+            SET male_count = CASE WHEN male_count - ? > 0 THEN male_count - ? ELSE 0 END,
+                female_count = CASE WHEN female_count - ? > 0 THEN female_count - ? ELSE 0 END,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (male, male, female, female, now_iso(), cage_id),
         )
     cur = db().execute(
         """
@@ -3979,8 +3985,14 @@ def record_mortality(cage_id: int) -> Response:
         db().execute("UPDATE animals SET status = 'Dead', updated_at = ? WHERE id = ?", (now_iso(), animal_id))
     else:
         db().execute(
-            "UPDATE cages SET male_count = MAX(male_count - ?, 0), female_count = MAX(female_count - ?, 0), updated_at = ? WHERE id = ?",
-            (male, female, now_iso(), cage_id),
+            """
+            UPDATE cages
+            SET male_count = CASE WHEN male_count - ? > 0 THEN male_count - ? ELSE 0 END,
+                female_count = CASE WHEN female_count - ? > 0 THEN female_count - ? ELSE 0 END,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            (male, male, female, female, now_iso(), cage_id),
         )
     cur = db().execute(
         """
