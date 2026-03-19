@@ -34,7 +34,8 @@ def discover_tables(conn: sqlite3.Connection) -> list[str]:
 
 
 def quote_ident(value: str) -> str:
-    return f'"{value.replace("\"", "\"\"")}"'
+    escaped = value.replace('"', '""')
+    return f'"{escaped}"'
 
 
 def foreign_key_map(conn: sqlite3.Connection, tables: Iterable[str]) -> dict[str, set[str]]:
