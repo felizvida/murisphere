@@ -37,7 +37,7 @@ jobs:
 
       - name: Python syntax check
         run: |
-          python -m py_compile app.py seed_large_demo.py alert_coverage_verifier.py cage_card_layout_audit.py docs/tutorial/build_tutorial_pdf.py postgres_export_bundle.py postgres_readiness_audit.py
+          python -m py_compile app.py storage.py generate_postgres_schema.py seed_large_demo.py alert_coverage_verifier.py cage_card_layout_audit.py docs/tutorial/build_tutorial_pdf.py postgres_export_bundle.py postgres_readiness_audit.py
 
       - name: Run tests
         run: |
@@ -64,6 +64,65 @@ jobs:
       - name: Frontend syntax check
         run: |
           node --check static/app.js
+
+  postgres-integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: murisphere_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d murisphere_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      MURISPHERE_DB_DIALECT: postgres
+      MURISPHERE_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/murisphere_test
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Wait for PostgreSQL
+        run: |
+          python - <<'PY'
+          import os
+          import time
+          import psycopg
+
+          dsn = os.environ["MURISPHERE_DATABASE_URL"]
+          deadline = time.time() + 30
+          while True:
+              try:
+                  with psycopg.connect(dsn):
+                      print("PostgreSQL ready")
+                      raise SystemExit(0)
+              except psycopg.OperationalError:
+                  if time.time() >= deadline:
+                      raise
+                  time.sleep(1)
+          PY
+
+      - name: Run PostgreSQL integration tests
+        run: |
+          python -m unittest tests.test_postgres_integration -v
 
   desktop-check:
     runs-on: macos-latest

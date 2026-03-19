@@ -96,6 +96,7 @@ The current PostgreSQL bootstrap is explicit and versioned, but a production cut
 ## Validation Expectations
 Before cutting over to PostgreSQL:
 - unit tests pass
+- dedicated PostgreSQL integration tests pass against a live service
 - workflow/integration tests pass
 - cage card rendering remains unchanged
 - QR phone scan workflow still resolves in under facility expectations

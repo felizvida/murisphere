@@ -125,6 +125,7 @@ Current state:
 ## CI/CD
 - `./.github/workflows/ci.yml`
   - Python matrix tests (`3.11`, `3.12`)
+  - Live PostgreSQL bootstrap/adapter integration job
   - Backend compile checks
   - Frontend JS syntax checks
 - `./.github/workflows/cd.yml`
