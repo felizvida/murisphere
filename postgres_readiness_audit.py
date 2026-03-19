@@ -8,27 +8,38 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 CHECKS = [
-    ("sqlite_driver", Path("app.py"), re.compile(r"\bsqlite3\b")),
-    ("group_concat", Path("app.py"), re.compile(r"GROUP_CONCAT")),
-    ("insert_or_replace", Path("app.py"), re.compile(r"INSERT OR REPLACE")),
-    ("julianday", Path("app.py"), re.compile(r"julianday")),
-    ("pragma_usage", Path("app.py"), re.compile(r"PRAGMA")),
-    ("sqlite_schema_pragma", Path("schema.sql"), re.compile(r"^PRAGMA ", re.MULTILINE)),
-    ("autoincrement", Path("schema.sql"), re.compile(r"AUTOINCREMENT")),
+    ("sqlite_driver", [Path("app.py"), Path("storage.py")], re.compile(r"\bsqlite3\b")),
+    ("group_concat", [Path("app.py"), Path("storage.py")], re.compile(r"GROUP_CONCAT")),
+    ("insert_or_replace", [Path("app.py"), Path("storage.py")], re.compile(r"INSERT OR REPLACE")),
+    ("julianday", [Path("app.py"), Path("storage.py")], re.compile(r"julianday")),
+    ("pragma_usage", [Path("app.py"), Path("storage.py")], re.compile(r"PRAGMA")),
+    ("sqlite_schema_pragma", [Path("schema.sql")], re.compile(r"^PRAGMA ", re.MULTILINE)),
+    ("autoincrement", [Path("schema.sql")], re.compile(r"AUTOINCREMENT")),
 ]
 
 
 def build_report() -> dict[str, object]:
     findings: list[dict[str, object]] = []
-    for check_id, rel_path, pattern in CHECKS:
-        text = (ROOT / rel_path).read_text(encoding="utf-8")
-        matches = list(pattern.finditer(text))
+    for check_id, rel_paths, pattern in CHECKS:
+        per_file: list[dict[str, object]] = []
+        total_count = 0
+        for rel_path in rel_paths:
+            text = (ROOT / rel_path).read_text(encoding="utf-8")
+            matches = list(pattern.finditer(text))
+            total_count += len(matches)
+            per_file.append(
+                {
+                    "file": str(rel_path),
+                    "count": len(matches),
+                    "lines": sorted({text[: match.start()].count("\n") + 1 for match in matches}),
+                }
+            )
         findings.append(
             {
                 "id": check_id,
-                "file": str(rel_path),
-                "count": len(matches),
-                "lines": sorted({text[: match.start()].count("\n") + 1 for match in matches}),
+                "file": ", ".join(str(path) for path in rel_paths),
+                "count": total_count,
+                "matchesByFile": per_file,
             }
         )
 

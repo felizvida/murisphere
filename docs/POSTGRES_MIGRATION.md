@@ -27,6 +27,13 @@ Two migration-prep tools are now in the repo:
    - Exports table data to dependency-aware `JSONL` files
    - Writes a manifest and copies the current SQLite schema for reference
 
+There is also an initial runtime abstraction layer:
+
+3. `storage.py`
+   - Centralizes connection setup and dialect-specific SQL helpers
+   - Replaces scattered endpoint-local SQLite constructs with a single adapter surface
+   - Keeps current SQLite behavior intact while reducing the eventual PostgreSQL porting footprint
+
 ## Recommended Migration Sequence
 1. Run the readiness audit.
 2. Remove SQLite-specific SQL and driver assumptions from runtime code.
@@ -63,6 +70,7 @@ The readiness audit intentionally flags SQLite-specific constructs that still ne
 - SQLite-only SQL functions or expressions
 
 This is expected. The current tooling is for migration preparation, not a claim that PostgreSQL runtime support is already complete.
+The important improvement is that those blockers are now concentrated in `storage.py` and `schema.sql`, rather than being distributed throughout `app.py`.
 
 ## Target Architecture
 - Flask API stays the single business-rules layer

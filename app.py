@@ -8,7 +8,6 @@ import json
 import mimetypes
 import os
 import secrets
-import sqlite3
 import threading
 import time
 from contextlib import closing
@@ -26,6 +25,8 @@ from werkzeug.security import check_password_hash, generate_password_hash
 import qrcode
 from barcode import Code128
 from barcode.writer import SVGWriter
+
+import storage
 
 APP_NAME = "Murisphere"
 DB_PATH = os.getenv("MURISPHERE_DB", "murisphere.db")
@@ -57,6 +58,10 @@ class AuthContext:
     full_name: str
     role: str
     lab_id: int | None
+
+
+PROJECT_CODE_LIST_SQL = storage.sql_list_agg("pj.project_code", ", ")
+REQUEST_SLA_HOURS_SQL = storage.sql_hours_between("updated_at", "created_at")
 
 
 def now_iso() -> str:
@@ -133,11 +138,9 @@ def reset_rate_limit_state() -> None:
         _public_scan_hits.clear()
 
 
-def db() -> sqlite3.Connection:
+def db() -> storage.Connection:
     if "db" not in g:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
+        conn = storage.connect(DB_PATH)
         g.db = conn
     return g.db
 
@@ -150,14 +153,13 @@ def close_db(_exc: BaseException | None) -> None:
 
 
 def init_db() -> None:
-    with closing(sqlite3.connect(DB_PATH)) as conn:
+    with closing(storage.connect(DB_PATH)) as conn:
         with open("schema.sql", "r", encoding="utf-8") as f:
             conn.executescript(f.read())
         _apply_schema_migrations(conn)
         conn.commit()
 
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = storage.connect(DB_PATH)
     existing = conn.execute("SELECT id FROM users LIMIT 1").fetchone()
     if existing:
         conn.close()
@@ -229,8 +231,8 @@ def init_db() -> None:
     conn.close()
 
 
-def _apply_schema_migrations(conn: sqlite3.Connection) -> None:
-    litter_cols = {row[1] for row in conn.execute("PRAGMA table_info(litters)").fetchall()}
+def _apply_schema_migrations(conn: storage.Connection) -> None:
+    litter_cols = set(storage.table_columns(conn, "litters"))
     if "weaned_on" not in litter_cols:
         conn.execute("ALTER TABLE litters ADD COLUMN weaned_on TEXT")
 
@@ -301,7 +303,7 @@ def is_admin(user: AuthContext) -> bool:
     return user.role == "Admin"
 
 
-def ensure_cage_scope(cage_id: int, user: AuthContext) -> sqlite3.Row | None:
+def ensure_cage_scope(cage_id: int, user: AuthContext) -> storage.Row | None:
     if is_admin(user):
         return db().execute("SELECT * FROM cages WHERE id = ?", (cage_id,)).fetchone()
     if user.lab_id is None:
@@ -309,7 +311,7 @@ def ensure_cage_scope(cage_id: int, user: AuthContext) -> sqlite3.Row | None:
     return db().execute("SELECT * FROM cages WHERE id = ? AND lab_id = ?", (cage_id, user.lab_id)).fetchone()
 
 
-def ensure_project_scope(project_id: int, user: AuthContext) -> sqlite3.Row | None:
+def ensure_project_scope(project_id: int, user: AuthContext) -> storage.Row | None:
     if is_admin(user):
         return db().execute("SELECT * FROM projects WHERE id = ?", (project_id,)).fetchone()
     if user.lab_id is None:
@@ -317,7 +319,7 @@ def ensure_project_scope(project_id: int, user: AuthContext) -> sqlite3.Row | No
     return db().execute("SELECT * FROM projects WHERE id = ? AND lab_id = ?", (project_id, user.lab_id)).fetchone()
 
 
-def ensure_order_scope(order_id: int, user: AuthContext) -> sqlite3.Row | None:
+def ensure_order_scope(order_id: int, user: AuthContext) -> storage.Row | None:
     if is_admin(user):
         return db().execute("SELECT * FROM animal_orders WHERE id = ?", (order_id,)).fetchone()
     if user.lab_id is None:
@@ -325,7 +327,7 @@ def ensure_order_scope(order_id: int, user: AuthContext) -> sqlite3.Row | None:
     return db().execute("SELECT * FROM animal_orders WHERE id = ? AND lab_id = ?", (order_id, user.lab_id)).fetchone()
 
 
-def ensure_request_scope(request_id: int, user: AuthContext) -> sqlite3.Row | None:
+def ensure_request_scope(request_id: int, user: AuthContext) -> storage.Row | None:
     if is_admin(user):
         return db().execute("SELECT * FROM facility_requests WHERE id = ?", (request_id,)).fetchone()
     if user.lab_id is None:
@@ -333,7 +335,7 @@ def ensure_request_scope(request_id: int, user: AuthContext) -> sqlite3.Row | No
     return db().execute("SELECT * FROM facility_requests WHERE id = ? AND lab_id = ?", (request_id, user.lab_id)).fetchone()
 
 
-def ensure_vet_case_scope(case_id: int, user: AuthContext) -> sqlite3.Row | None:
+def ensure_vet_case_scope(case_id: int, user: AuthContext) -> storage.Row | None:
     if is_admin(user):
         return db().execute("SELECT * FROM vet_cases WHERE id = ?", (case_id,)).fetchone()
     if user.lab_id is None:
@@ -341,7 +343,7 @@ def ensure_vet_case_scope(case_id: int, user: AuthContext) -> sqlite3.Row | None
     return db().execute("SELECT * FROM vet_cases WHERE id = ? AND lab_id = ?", (case_id, user.lab_id)).fetchone()
 
 
-def ensure_animal_scope(animal_id: int, user: AuthContext) -> sqlite3.Row | None:
+def ensure_animal_scope(animal_id: int, user: AuthContext) -> storage.Row | None:
     if is_admin(user):
         return db().execute("SELECT * FROM animals WHERE id = ?", (animal_id,)).fetchone()
     if user.lab_id is None:
@@ -357,7 +359,7 @@ def ensure_animal_scope(animal_id: int, user: AuthContext) -> sqlite3.Row | None
     ).fetchone()
 
 
-def ensure_recommendation_scope(recommendation_id: int, user: AuthContext) -> sqlite3.Row | None:
+def ensure_recommendation_scope(recommendation_id: int, user: AuthContext) -> storage.Row | None:
     if is_admin(user):
         return db().execute("SELECT * FROM workflow_recommendations WHERE id = ?", (recommendation_id,)).fetchone()
     if user.lab_id is None:
@@ -368,7 +370,7 @@ def ensure_recommendation_scope(recommendation_id: int, user: AuthContext) -> sq
     ).fetchone()
 
 
-def ensure_planner_scenario_scope(scenario_id: int, user: AuthContext) -> sqlite3.Row | None:
+def ensure_planner_scenario_scope(scenario_id: int, user: AuthContext) -> storage.Row | None:
     if is_admin(user):
         return db().execute("SELECT * FROM planner_scenarios WHERE id = ?", (scenario_id,)).fetchone()
     if user.lab_id is None:
@@ -629,7 +631,7 @@ def upsert_active_alerts(user: AuthContext) -> None:
         )
     db().commit()
 
-def cage_payload(row: sqlite3.Row) -> dict[str, Any]:
+def cage_payload(row: storage.Row) -> dict[str, Any]:
     return {
         "id": row["id"],
         "cageCode": row["cage_code"],
@@ -827,7 +829,7 @@ def create_project() -> Response:
             (lab_id, project_code, title, status, target_animals, now_iso()),
         )
         db().commit()
-    except sqlite3.IntegrityError:
+    except storage.IntegrityError:
         return jsonify({"error": "projectCode must be unique"}), 409
 
     project_id = cur.lastrowid
@@ -911,7 +913,7 @@ def assign_project_cages(project_id: int) -> Response:
                 (project_id, cage_id, now_iso()),
             )
             assigned += 1
-        except sqlite3.IntegrityError:
+        except storage.IntegrityError:
             continue
     db().commit()
     audit_log(g.user.user_id, "project", project_id, "assign_cages", None, {"cageIds": cage_ids, "assigned": assigned})
@@ -963,7 +965,7 @@ def list_cages() -> Response:
             l.name AS lab_name,
             p.protocol_number,
             (
-              SELECT GROUP_CONCAT(pj.project_code, ', ')
+              SELECT {PROJECT_CODE_LIST_SQL}
               FROM project_cages pc_j
               JOIN projects pj ON pj.id = pc_j.project_id
               WHERE pc_j.cage_id = c.id
@@ -990,7 +992,7 @@ def get_cage(cage_id: int) -> Response:
     if not is_admin(g.user):
         params.append(g.user.lab_id)
     row = db().execute(
-        """
+        f"""
         SELECT
             c.*,
             r.name AS room_name,
@@ -998,7 +1000,7 @@ def get_cage(cage_id: int) -> Response:
             l.name AS lab_name,
             p.protocol_number,
             (
-              SELECT GROUP_CONCAT(pj.project_code, ', ')
+              SELECT {PROJECT_CODE_LIST_SQL}
               FROM project_cages pc_j
               JOIN projects pj ON pj.id = pc_j.project_id
               WHERE pc_j.cage_id = c.id
@@ -1908,7 +1910,7 @@ def forecast_consolidation() -> Response:
         params,
     ).fetchall()
 
-    grouped: dict[tuple[Any, ...], list[sqlite3.Row]] = {}
+    grouped: dict[tuple[Any, ...], list[storage.Row]] = {}
     for r in rows:
         key = (r["room_id"], r["strain"], r["genotype_summary"])
         grouped.setdefault(key, []).append(r)
@@ -2106,7 +2108,7 @@ def import_excel() -> Response:
                 ),
             )
             created += 1
-        except sqlite3.IntegrityError:
+        except storage.IntegrityError:
             app.logger.warning("Skipping duplicate cage code row %s", idx)
     db().commit()
     audit_log(g.user.user_id, "import", "excel", "bulk_import", None, {"created": created})
@@ -2197,7 +2199,7 @@ def cage_cards() -> Response:
                p.protocol_number, p.title AS protocol_title, p.expires_on AS protocol_expires_on,
                r.name AS room_name, k.name AS rack_name, c.qr_token,
                (
-                   SELECT GROUP_CONCAT(pj.project_code, ', ')
+                   SELECT {PROJECT_CODE_LIST_SQL}
                    FROM project_cages pc
                    JOIN projects pj ON pj.id = pc.project_id
                    WHERE pc.cage_id = c.id
@@ -2638,12 +2640,35 @@ def billing_run() -> Response:
         qty = float(days)
         amount = round(qty * rate, 2)
         db().execute(
-            """
-            INSERT OR REPLACE INTO billing_entries
-            (period_start, period_end, lab_id, cage_id, line_type, quantity, rate, amount, description, created_at)
-            VALUES (?, ?, ?, ?, 'per_diem', ?, ?, ?, ?, ?)
-            """,
-            (period_start, period_end, c["lab_id"], c["id"], qty, rate, amount, f"Cage {c['cage_code']} per-diem", now_iso()),
+            storage.sql_upsert(
+                "billing_entries",
+                [
+                    "period_start",
+                    "period_end",
+                    "lab_id",
+                    "cage_id",
+                    "line_type",
+                    "quantity",
+                    "rate",
+                    "amount",
+                    "description",
+                    "created_at",
+                ],
+                ["period_start", "period_end", "lab_id", "cage_id", "line_type", "description"],
+                ["quantity", "rate", "amount", "created_at"],
+            ),
+            (
+                period_start,
+                period_end,
+                c["lab_id"],
+                c["id"],
+                "per_diem",
+                qty,
+                rate,
+                amount,
+                f"Cage {c['cage_code']} per-diem",
+                now_iso(),
+            ),
         )
         created += 1
     db().commit()
@@ -2789,8 +2814,8 @@ def facility_request_status(request_id: int) -> Response:
 @require_auth(("PI", "Admin"))
 def operations_sla() -> Response:
     rows = db().execute(
-        """
-        SELECT request_type, status, AVG((julianday(updated_at) - julianday(created_at)) * 24.0) AS avg_hours, COUNT(*) AS n
+        f"""
+        SELECT request_type, status, AVG({REQUEST_SLA_HOURS_SQL}) AS avg_hours, COUNT(*) AS n
         FROM facility_requests
         """
         + ("" if is_admin(g.user) else " WHERE lab_id = ? ")
@@ -2935,11 +2960,26 @@ def census_scan(session_id: int) -> Response:
         return jsonify({"error": "Not found"}), 404
 
     db().execute(
-        """
-        INSERT OR REPLACE INTO cage_census_scans
-        (session_id, cage_id, scanned_at, scanned_by, observed_male_count, observed_female_count, observed_status)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
+        storage.sql_upsert(
+            "cage_census_scans",
+            [
+                "session_id",
+                "cage_id",
+                "scanned_at",
+                "scanned_by",
+                "observed_male_count",
+                "observed_female_count",
+                "observed_status",
+            ],
+            ["session_id", "cage_id"],
+            [
+                "scanned_at",
+                "scanned_by",
+                "observed_male_count",
+                "observed_female_count",
+                "observed_status",
+            ],
+        ),
         (
             session_id,
             cage["id"],
@@ -3156,10 +3196,12 @@ def billing_review() -> Response:
     if status not in {"draft", "approved", "rejected"}:
         return jsonify({"error": "Invalid reviewStatus"}), 400
     db().execute(
-        """
-        INSERT OR REPLACE INTO billing_reviews (period_start, period_end, lab_id, review_status, note, reviewed_by, reviewed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """,
+        storage.sql_upsert(
+            "billing_reviews",
+            ["period_start", "period_end", "lab_id", "review_status", "note", "reviewed_by", "reviewed_at"],
+            ["period_start", "period_end", "lab_id"],
+            ["review_status", "note", "reviewed_by", "reviewed_at"],
+        ),
         (
             payload["periodStart"],
             payload["periodEnd"],
@@ -3303,10 +3345,12 @@ def assign_task() -> Response:
 def add_staff_qualification() -> Response:
     payload = request.get_json(force=True)
     db().execute(
-        """
-        INSERT OR REPLACE INTO staff_qualifications (user_id, qualification_code, granted_on, expires_on)
-        VALUES (?, ?, ?, ?)
-        """,
+        storage.sql_upsert(
+            "staff_qualifications",
+            ["user_id", "qualification_code", "granted_on", "expires_on"],
+            ["user_id", "qualification_code"],
+            ["granted_on", "expires_on"],
+        ),
         (
             int(payload["userId"]),
             str(payload["qualificationCode"]),
@@ -4440,7 +4484,7 @@ def create_animal_tag(animal_id: int) -> Response:
             ),
         )
         db().commit()
-    except sqlite3.IntegrityError:
+    except storage.IntegrityError:
         return jsonify({"error": "Tag already in use"}), 409
     audit_log(g.user.user_id, "animal_tag", cur.lastrowid, "create", None, payload)
     return jsonify({"id": cur.lastrowid}), 201
@@ -4504,7 +4548,7 @@ def create_sample_record() -> Response:
             (sample_id, status, now_iso(), g.user.user_id, json.dumps(payload.get("eventDetails", {}))),
         )
         db().commit()
-    except sqlite3.IntegrityError:
+    except storage.IntegrityError:
         return jsonify({"error": "sampleCode already exists"}), 409
     audit_log(g.user.user_id, "sample_record", sample_id, "create", None, payload)
     return jsonify({"id": sample_id, "sampleCode": sample_code}), 201
@@ -4631,7 +4675,7 @@ def create_genotyping_order() -> Response:
             """,
             (lab_id, project_id, provider, order_ref, g.user.user_id, now, now, json.dumps(payload, default=str)),
         )
-    except sqlite3.IntegrityError:
+    except storage.IntegrityError:
         return jsonify({"error": "orderRef already exists"}), 409
     order_id = cur.lastrowid
     inserted_items = 0
@@ -4977,7 +5021,7 @@ def add_planner_scenario_projects(scenario_id: int) -> Response:
                 (scenario_id, project_id, int(p.get("animalsNeeded", 0)), int(p.get("priority", 3))),
             )
             inserted += 1
-        except sqlite3.IntegrityError:
+        except storage.IntegrityError:
             db().execute(
                 "UPDATE planner_scenario_projects SET animals_needed = ?, priority = ? WHERE scenario_id = ? AND project_id = ?",
                 (int(p.get("animalsNeeded", 0)), int(p.get("priority", 3)), scenario_id, project_id),

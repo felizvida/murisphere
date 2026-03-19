@@ -9,6 +9,7 @@
 
 ## Core Components
 - API server: `app.py`
+- Storage/dialect adapter: `storage.py`
 - UI templates: `templates/index.html`, `templates/scan.html`
 - Frontend logic: `static/app.js`
 - Desktop companion scaffold: `desktop/`
@@ -61,3 +62,4 @@
 - Web stays primary for phone and tablet cage workflows.
 - Tauri is positioned as a desktop companion for reporting, printing, local desktop integrations, and future workstation/offline flows.
 - PostgreSQL remains the target shared database for enterprise rollout; the repo now includes a readiness audit and logical export bundle generator to support that transition.
+- The storage layer now centralizes dialect-specific connection and SQL helpers so runtime migration work can proceed without rewriting every endpoint.

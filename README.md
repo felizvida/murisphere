@@ -115,6 +115,10 @@ Outputs:
 - `dist/postgres-bundle/manifest.json` - logical export manifest with dependency-aware table order
 - `dist/postgres-bundle/tables/*.jsonl` - table data export for ETL into PostgreSQL
 
+Current state:
+- application endpoints now route dialect-specific SQL through [storage.py](/Users/liux17/Documents/colony/storage.py)
+- remaining SQLite-only runtime blockers are isolated to the storage layer and schema rather than scattered across `app.py`
+
 ## CI/CD
 - `./.github/workflows/ci.yml`
   - Python matrix tests (`3.11`, `3.12`)

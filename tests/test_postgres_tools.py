@@ -8,6 +8,7 @@ from pathlib import Path
 import app as appmod
 import postgres_export_bundle
 import postgres_readiness_audit
+import storage
 
 
 class PostgresToolingTests(unittest.TestCase):
@@ -49,3 +50,15 @@ class PostgresToolingTests(unittest.TestCase):
         findings = {item["id"]: item for item in report["findings"]}
         self.assertGreater(findings["sqlite_driver"]["count"], 0)
         self.assertGreater(findings["autoincrement"]["count"], 0)
+        self.assertEqual(findings["insert_or_replace"]["count"], 0)
+
+    def test_storage_helpers_generate_portable_sql_shapes(self) -> None:
+        upsert_sql = storage.sql_upsert(
+            "billing_reviews",
+            ["period_start", "period_end", "lab_id", "review_status"],
+            ["period_start", "period_end", "lab_id"],
+            ["review_status"],
+        )
+        self.assertIn("ON CONFLICT", upsert_sql)
+        self.assertNotIn("INSERT OR REPLACE", upsert_sql)
+        self.assertIn("GROUP_CONCAT", storage.sql_list_agg("pj.project_code"))
