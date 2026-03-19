@@ -5,6 +5,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   publish-image:
     runs-on: ubuntu-latest
@@ -35,6 +39,29 @@ jobs:
             type=raw,value=latest
             type=sha
 
+      - name: Build smoke image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          tags: murisphere:smoke
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Smoke test container
+        run: |
+          cid=$(docker run -d -p 18000:8000 murisphere:smoke)
+          trap 'docker logs "$cid"; docker rm -f "$cid"' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18000/api/system/health >/tmp/murisphere-health.json; then
+              cat /tmp/murisphere-health.json
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Container health check failed"
+          exit 1
+
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
@@ -42,3 +69,5 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

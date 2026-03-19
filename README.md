@@ -89,18 +89,33 @@ GitHub desktop bundle workflow:
 ## Release Validation Commands
 ```bash
 pip install -r requirements-dev.txt
-python3 -m unittest discover -s tests -v
-python3 qrcode_diagnostic.py
-python3 ui_clickability_audit.py
-python3 alert_coverage_verifier.py --db murisphere.db --ensure-schema
+python -m py_compile app.py storage.py storage_sqlite.py storage_postgres.py generate_postgres_schema.py seed_large_demo.py seed_alert_conditions.py alert_coverage_verifier.py qrcode_diagnostic.py ui_clickability_audit.py cage_card_layout_audit.py docs/tutorial/build_tutorial_pdf.py postgres_export_bundle.py postgres_readiness_audit.py
+python -m coverage erase
+python -m coverage run -m unittest discover -s tests -v
+python -m coverage run --append qrcode_diagnostic.py
+python -m coverage run --append ui_clickability_audit.py
+db="$(mktemp -t murisphere-alerts.XXXXXX.db)"
+: > "$db"
+MURISPHERE_DB="$db" python -m coverage run --append seed_large_demo.py
+python -m coverage run --append seed_alert_conditions.py --db "$db"
+python -m coverage run --append alert_coverage_verifier.py --db "$db"
+python -m coverage report
+python -m coverage xml -o docs/test_reports/coverage.xml
+python -m coverage json -o docs/test_reports/coverage.json
+node --check static/app.js
 python3 cage_card_layout_audit.py
+python3 docs/tutorial/build_tutorial_pdf.py
 ```
 
 Generated artifacts:
+- `docs/test_reports/coverage.xml`
+- `docs/test_reports/coverage.json`
 - `docs/test_reports/UI_CLICKABILITY_REPORT.html`
 - `docs/test_reports/UI_CLICKABILITY_RESULT.json`
+- `docs/test_reports/ALERT_FIXTURE_RESULT.json`
 - `docs/test_reports/ALERT_COVERAGE_RESULT.json`
 - `docs/test_reports/CAGE_CARD_LAYOUT_RESULT.json`
+- `docs/tutorial/user_training_tutorial.pdf`
 
 ## PostgreSQL Migration Prep
 Murisphere still runs on SQLite today, but the repo now includes migration-prep tooling for a centralized shared database rollout:
@@ -126,10 +141,10 @@ Current state:
 - `./.github/workflows/ci.yml`
   - Python matrix tests (`3.11`, `3.12`)
   - Live PostgreSQL bootstrap/adapter integration job
-  - Backend compile checks
-  - Frontend JS syntax checks
+  - Dedicated quality-gates job with coverage enforcement (`>=72%` branch-aware source coverage), QR diagnostic, UI clickability audit, seeded alert coverage audit, cage-card layout audit, tutorial PDF build, and artifact upload
+  - Backend compile checks and frontend JS syntax checks
 - `./.github/workflows/cd.yml`
-  - Builds and publishes `ghcr.io/<owner>/murisphere` on `main`
+  - Builds a smoke-test container, verifies `/api/system/health`, then publishes `ghcr.io/<owner>/murisphere` on `main`
 
 ## Demo Data and Scale
 Seed a realistic environment:

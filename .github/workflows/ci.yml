@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -21,49 +25,21 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
-      - name: Install system dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pandoc librsvg2-bin texlive-xetex
-          if ! command -v chromium >/dev/null 2>&1 && ! command -v chromium-browser >/dev/null 2>&1 && ! command -v google-chrome >/dev/null 2>&1; then
-            sudo apt-get install -y chromium || sudo apt-get install -y chromium-browser || true
-          fi
-
       - name: Python syntax check
         run: |
-          python -m py_compile app.py storage.py generate_postgres_schema.py seed_large_demo.py alert_coverage_verifier.py cage_card_layout_audit.py docs/tutorial/build_tutorial_pdf.py postgres_export_bundle.py postgres_readiness_audit.py
+          python -m py_compile app.py storage.py storage_sqlite.py storage_postgres.py generate_postgres_schema.py seed_large_demo.py seed_alert_conditions.py alert_coverage_verifier.py qrcode_diagnostic.py ui_clickability_audit.py cage_card_layout_audit.py docs/tutorial/build_tutorial_pdf.py postgres_export_bundle.py postgres_readiness_audit.py
 
       - name: Run tests
         run: |
           python -m unittest discover -s tests -v
-
-      - name: Cage card layout audit
-        run: |
-          CHROME_BIN=$(command -v chromium || command -v chromium-browser || command -v google-chrome || true)
-          if [ -z "$CHROME_BIN" ]; then
-            echo "Chrome/Chromium binary not found on runner; skipping render audit."
-            exit 0
-          fi
-          MURISPHERE_AUDIT_ALLOW_RENDER_SKIP=1 python cage_card_layout_audit.py --chrome-bin "$CHROME_BIN"
-
-      - name: Build tutorial PDF (LaTeX)
-        run: |
-          python docs/tutorial/build_tutorial_pdf.py
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: "20"
-
-      - name: Frontend syntax check
-        run: |
-          node --check static/app.js
 
   postgres-integration:
     runs-on: ubuntu-latest
@@ -94,6 +70,8 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
 
       - name: Install dependencies
         run: |
@@ -124,6 +102,98 @@ jobs:
         run: |
           python -m unittest tests.test_postgres_integration -v
 
+  quality-gates:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pandoc librsvg2-bin texlive-xetex
+          if ! command -v chromium >/dev/null 2>&1 && ! command -v chromium-browser >/dev/null 2>&1 && ! command -v google-chrome >/dev/null 2>&1; then
+            sudo apt-get install -y chromium || sudo apt-get install -y chromium-browser || true
+          fi
+
+      - name: Coverage baseline from test suite
+        run: |
+          python -m coverage erase
+          python -m coverage run -m unittest discover -s tests -v
+
+      - name: QR diagnostic
+        run: |
+          python -m coverage run --append qrcode_diagnostic.py
+
+      - name: UI clickability audit
+        run: |
+          python -m coverage run --append ui_clickability_audit.py
+
+      - name: Seeded alert coverage audit
+        run: |
+          db="$RUNNER_TEMP/murisphere-alerts.db"
+          : > "$db"
+          MURISPHERE_DB="$db" python -m coverage run --append seed_large_demo.py
+          python -m coverage run --append seed_alert_conditions.py --db "$db"
+          python -m coverage run --append alert_coverage_verifier.py --db "$db"
+
+      - name: Enforce coverage and export reports
+        run: |
+          python -m coverage report
+          python -m coverage xml -o docs/test_reports/coverage.xml
+          python -m coverage json -o docs/test_reports/coverage.json
+
+      - name: Cage card layout audit
+        run: |
+          CHROME_BIN=$(command -v chromium || command -v chromium-browser || command -v google-chrome || true)
+          if [ -z "$CHROME_BIN" ]; then
+            echo "Chrome/Chromium binary not found on runner; skipping render audit."
+            exit 0
+          fi
+          MURISPHERE_AUDIT_ALLOW_RENDER_SKIP=1 python cage_card_layout_audit.py --chrome-bin "$CHROME_BIN"
+
+      - name: Build tutorial PDF (LaTeX)
+        run: |
+          python docs/tutorial/build_tutorial_pdf.py
+
+      - name: Frontend syntax check
+        run: |
+          node --check static/app.js
+
+      - name: Upload quality artifacts
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: murisphere-quality-artifacts
+          if-no-files-found: error
+          path: |
+            docs/test_reports/coverage.xml
+            docs/test_reports/coverage.json
+            docs/test_reports/UI_CLICKABILITY_RESULT.json
+            docs/test_reports/UI_CLICKABILITY_REPORT.html
+            docs/test_reports/ALERT_FIXTURE_RESULT.json
+            docs/test_reports/ALERT_COVERAGE_RESULT.json
+            docs/test_reports/CAGE_CARD_LAYOUT_RESULT.json
+            docs/tutorial/user_training_tutorial.pdf
+
   desktop-check:
     runs-on: macos-latest
 
@@ -135,11 +205,13 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: "20"
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
 
       - name: Install desktop dependencies
         working-directory: desktop
         run: |
-          npm install
+          npm ci
 
       - name: Sync desktop version
         working-directory: desktop

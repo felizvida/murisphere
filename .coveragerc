@@ -1,0 +1,29 @@
+[run]
+branch = True
+disable_warnings =
+    module-not-imported
+source =
+    app
+    storage
+    storage_sqlite
+    storage_postgres
+    seed_large_demo
+    seed_alert_conditions
+    alert_coverage_verifier
+    generate_postgres_schema
+    postgres_export_bundle
+    postgres_readiness_audit
+omit =
+    tests/*
+    desktop/*
+    docs/*
+
+[report]
+fail_under = 72
+show_missing = True
+skip_covered = True
+precision = 1
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    raise NotImplementedError
