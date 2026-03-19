@@ -32,7 +32,7 @@ Card content includes:
 - QR code for direct phone-browser scan and barcode for optional scanner workflows.
 
 ## Technology
-- Backend: Flask + SQLite, with PostgreSQL adapter path via `storage.py`
+- Backend: Flask + SQLite, with explicit PostgreSQL runtime support through `storage.py`, `storage_sqlite.py`, and `storage_postgres.py`
 - Frontend: responsive HTML/CSS/JS (desktop/tablet/phone)
 - Desktop companion: Tauri shell for centralized Murisphere deployments
 - Automation: GitHub Actions CI + CD (GHCR Docker publish)
@@ -116,10 +116,10 @@ Outputs:
 - `dist/postgres-bundle/tables/*.jsonl` - table data export for ETL into PostgreSQL
 
 Current state:
-- application endpoints now route dialect-specific SQL through [storage.py](/Users/liux17/Documents/colony/storage.py)
+- application endpoints now route dialect-specific SQL through [storage.py](/Users/liux17/Documents/colony/storage.py), with backend implementations in [storage_sqlite.py](/Users/liux17/Documents/colony/storage_sqlite.py) and [storage_postgres.py](/Users/liux17/Documents/colony/storage_postgres.py)
 - the runtime accepts `MURISPHERE_DB_DIALECT=postgres` plus `MURISPHERE_DATABASE_URL=<dsn>` for the PostgreSQL adapter path
 - PostgreSQL bootstrap now uses the explicit checked-in [schema_postgres.sql](/Users/liux17/Documents/colony/schema_postgres.sql)
-- remaining SQLite-only runtime blockers are isolated to the storage layer and schema rather than scattered across `app.py`
+- the PostgreSQL readiness audit now passes for the Postgres-target runtime path
 - current PostgreSQL schema bootstrap is a development bridge, not the final production migration plan
 
 ## CI/CD

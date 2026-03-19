@@ -714,7 +714,7 @@ def system_health() -> Response:
             "app": APP_NAME,
             "version": APP_VERSION,
             "runtimeMode": RUNTIME_MODE,
-            "storage": "sqlite",
+            "storage": "postgres" if storage.is_postgres() else "sqlite",
             "timestamp": now_iso(),
         }
     )

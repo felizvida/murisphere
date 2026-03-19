@@ -8,11 +8,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 CHECKS = [
-    ("sqlite_driver", [Path("app.py"), Path("storage.py")], re.compile(r"\bsqlite3\b")),
-    ("group_concat", [Path("app.py"), Path("storage.py")], re.compile(r"GROUP_CONCAT")),
-    ("insert_or_replace", [Path("app.py"), Path("storage.py")], re.compile(r"INSERT OR REPLACE")),
-    ("julianday", [Path("app.py"), Path("storage.py")], re.compile(r"julianday")),
-    ("pragma_usage", [Path("app.py"), Path("storage.py")], re.compile(r"PRAGMA")),
+    ("sqlite_driver", [Path("app.py"), Path("storage.py"), Path("storage_postgres.py")], re.compile(r"\bsqlite3\b")),
+    ("group_concat", [Path("app.py"), Path("storage.py"), Path("storage_postgres.py")], re.compile(r"GROUP_CONCAT")),
+    ("insert_or_replace", [Path("app.py"), Path("storage.py"), Path("storage_postgres.py")], re.compile(r"INSERT OR REPLACE")),
+    ("julianday", [Path("app.py"), Path("storage.py"), Path("storage_postgres.py")], re.compile(r"julianday")),
+    ("pragma_usage", [Path("app.py"), Path("storage.py"), Path("storage_postgres.py")], re.compile(r"PRAGMA")),
     ("sqlite_schema_pragma", [Path("schema_postgres.sql")], re.compile(r"^PRAGMA ", re.MULTILINE)),
     ("autoincrement", [Path("schema_postgres.sql")], re.compile(r"AUTOINCREMENT")),
 ]
@@ -54,6 +54,7 @@ def build_report() -> dict[str, object]:
         "notes": [
             "A zero count means the specific SQLite-only pattern is no longer present.",
             "Non-zero counts identify code or schema that still needs refactoring before direct PostgreSQL runtime support.",
+            "SQLite compatibility code is allowed to remain in storage_sqlite.py and is not counted as a PostgreSQL blocker.",
         ],
     }
 

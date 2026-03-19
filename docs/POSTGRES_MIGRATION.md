@@ -30,13 +30,20 @@ Two migration-prep tools are now in the repo:
 There is also an initial runtime abstraction layer:
 
 3. `storage.py`
-   - Centralizes connection setup and dialect-specific SQL helpers
+   - Dispatches runtime storage by dialect
    - Replaces scattered endpoint-local SQLite constructs with a single adapter surface
    - Keeps current SQLite behavior intact while reducing the eventual PostgreSQL porting footprint
    - Supports `MURISPHERE_DB_DIALECT=postgres` and `MURISPHERE_DATABASE_URL=...`
-   - Translates SQLite-style `?` parameters for the PostgreSQL driver during the transition period
+   - Delegates to `storage_sqlite.py` and `storage_postgres.py`
 
-4. `schema_postgres.sql`
+4. `storage_postgres.py`
+   - Holds PostgreSQL-specific connection, query translation, and cursor-wrapper logic
+   - Keeps PostgreSQL runtime concerns out of the generic dispatcher
+
+5. `storage_sqlite.py`
+   - Keeps legacy SQLite compatibility isolated from the PostgreSQL runtime path
+
+6. `schema_postgres.sql`
    - Explicit checked-in PostgreSQL bootstrap schema
    - Generated from `schema.sql` via `generate_postgres_schema.py`
    - Removes SQLite-only DDL such as `PRAGMA` and `AUTOINCREMENT`
@@ -76,15 +83,18 @@ python3 app.py
 - `tables/<table>.jsonl` - one JSON record per row in stable per-table order
 - `README.txt` - quick reminder of how the bundle was produced
 
-## Known Remaining Blockers
-The readiness audit intentionally flags SQLite-specific constructs that still need refactoring, such as:
-- `sqlite3` driver usage
-- `PRAGMA` calls
-- `AUTOINCREMENT`
-- SQLite-only SQL functions or expressions
+## Readiness Audit
+The PostgreSQL readiness audit now passes for the Postgres-target runtime path.
 
-This is expected. The current tooling is for migration preparation, not a claim that PostgreSQL runtime support is already complete.
-The important improvement is that those blockers are now concentrated in `storage.py`, while the checked-in PostgreSQL schema no longer carries the old SQLite-only DDL markers.
+That means:
+- `app.py`
+- `storage.py`
+- `storage_postgres.py`
+- `schema_postgres.sql`
+
+no longer contain the specific SQLite-only constructs tracked by the audit.
+
+SQLite compatibility still exists in `storage_sqlite.py`, but that is no longer treated as a blocker for the PostgreSQL runtime path.
 The current PostgreSQL bootstrap is explicit and versioned, but a production cutover should still move to first-class Postgres-native migrations.
 
 ## Target Architecture

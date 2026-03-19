@@ -12,6 +12,8 @@ import generate_postgres_schema
 import postgres_export_bundle
 import postgres_readiness_audit
 import storage
+import storage_postgres
+import storage_sqlite
 
 
 class PostgresToolingTests(unittest.TestCase):
@@ -49,9 +51,9 @@ class PostgresToolingTests(unittest.TestCase):
 
     def test_postgres_readiness_audit_flags_known_sqlite_patterns(self) -> None:
         report = postgres_readiness_audit.build_report()
-        self.assertFalse(report["ok"])
+        self.assertTrue(report["ok"])
         findings = {item["id"]: item for item in report["findings"]}
-        self.assertGreater(findings["sqlite_driver"]["count"], 0)
+        self.assertEqual(findings["sqlite_driver"]["count"], 0)
         self.assertEqual(findings["autoincrement"]["count"], 0)
         self.assertEqual(findings["sqlite_schema_pragma"]["count"], 0)
         self.assertEqual(findings["insert_or_replace"]["count"], 0)
@@ -65,10 +67,10 @@ class PostgresToolingTests(unittest.TestCase):
         )
         self.assertIn("ON CONFLICT", upsert_sql)
         self.assertNotIn("INSERT OR REPLACE", upsert_sql)
-        self.assertIn("GROUP_CONCAT", storage.sql_list_agg("pj.project_code"))
+        self.assertIn("GROUP_CONCAT", storage_sqlite.sql_list_agg("pj.project_code"))
 
     def test_storage_translates_qmark_placeholders_for_postgres(self) -> None:
-        translated = storage._translate_qmark_sql("SELECT * FROM cages WHERE cage_code = ? AND notes <> '?'")
+        translated = storage_postgres.translate_qmark_sql("SELECT * FROM cages WHERE cage_code = ? AND notes <> '?'")
         self.assertEqual(translated, "SELECT * FROM cages WHERE cage_code = %s AND notes <> '?'")
 
     def test_postgres_schema_generation_matches_committed_schema(self) -> None:
@@ -90,8 +92,8 @@ class PostgresToolingTests(unittest.TestCase):
 
         with mock.patch.dict(os.environ, {"MURISPHERE_DB_DIALECT": "postgres"}, clear=False):
             with mock.patch.object(storage, "DATABASE_DIALECT", "postgres"):
-                with mock.patch.object(storage, "psycopg", fake_psycopg):
-                    with mock.patch.object(storage, "dict_row", object()):
+                with mock.patch.object(storage_postgres, "psycopg", fake_psycopg):
+                    with mock.patch.object(storage_postgres, "dict_row", object()):
                         conn = storage.connect("postgresql://demo")
                         cur = conn.execute("INSERT INTO cages (cage_code) VALUES (?)", ("C-1",))
 

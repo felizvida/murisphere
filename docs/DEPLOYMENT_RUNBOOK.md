@@ -97,7 +97,7 @@ Expected outputs:
 - `dist/postgres-bundle/tables/*.jsonl`
 
 Current adapter note:
-- The app can now open a PostgreSQL connection and translate SQLite-style parameterized queries through `storage.py`.
+- The app now dispatches runtime storage through `storage.py`, with PostgreSQL-specific behavior isolated in `storage_postgres.py`.
 - The current schema bootstrap path uses the checked-in `schema_postgres.sql`.
 - Production rollout should still use an explicit Postgres-native schema/migration set before cutover.
 

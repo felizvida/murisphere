@@ -69,3 +69,28 @@ class PostgresIntegrationTests(unittest.TestCase):
         self.assertIsInstance(note_id, int)
         self.assertGreater(note_id, 0)
         self.assertEqual(row["text"], "postgres-bridge")
+
+    def test_auth_and_cage_listing_workflow_on_postgres(self) -> None:
+        self.appmod.init_db()
+        self.appmod.app.config.update(TESTING=True)
+        client = self.appmod.app.test_client()
+
+        login = client.post("/api/auth/login", json={"email": "admin@murisphere.local", "password": "admin1234"})
+        self.assertEqual(login.status_code, 200)
+        token = login.get_json()["token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        health = client.get("/api/system/health")
+        self.assertEqual(health.status_code, 200)
+        self.assertEqual(health.get_json()["storage"], "postgres")
+
+        cages = client.get("/api/cages", headers=headers)
+        self.assertEqual(cages.status_code, 200)
+        cage_rows = cages.get_json()
+        self.assertGreaterEqual(len(cage_rows), 1)
+
+        cards = client.post("/api/cages/cards", headers=headers, json={"ids": [cage_rows[0]["id"]]})
+        self.assertEqual(cards.status_code, 200)
+        card = cards.get_json()[0]
+        self.assertIn("qrValue", card)
+        self.assertIn("projectCodes", card)
