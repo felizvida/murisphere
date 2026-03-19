@@ -8,6 +8,7 @@ from pathlib import Path
 class DesktopScaffoldTests(unittest.TestCase):
     def test_tauri_project_files_exist(self) -> None:
         self.assertTrue(Path("desktop/package.json").exists())
+        self.assertTrue(Path("desktop/scripts/sync-version.mjs").exists())
         self.assertTrue(Path("desktop/ui/index.html").exists())
         self.assertTrue(Path("desktop/src-tauri/Cargo.toml").exists())
         self.assertTrue(Path("desktop/src-tauri/tauri.conf.json").exists())
@@ -21,6 +22,13 @@ class DesktopScaffoldTests(unittest.TestCase):
         self.assertEqual(config["build"]["frontendDist"], "../ui")
         self.assertEqual(config["app"]["windows"][0]["label"], "main")
         self.assertTrue(config["app"]["withGlobalTauri"])
+
+        version = Path("VERSION").read_text(encoding="utf-8").strip()
+        package_json = json.loads(Path("desktop/package.json").read_text(encoding="utf-8"))
+        cargo = Path("desktop/src-tauri/Cargo.toml").read_text(encoding="utf-8")
+        self.assertEqual(package_json["version"], version)
+        self.assertEqual(config["version"], version)
+        self.assertIn(f'version = "{version}"', cargo)
 
     def test_desktop_bootstrap_supports_remote_and_local_modes(self) -> None:
         rust = Path("desktop/src-tauri/src/main.rs").read_text(encoding="utf-8")

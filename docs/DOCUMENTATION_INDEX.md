@@ -8,6 +8,7 @@
 - `docs/API_REFERENCE.md` - API endpoint catalog
 - `docs/WORKFLOW_COVERAGE_MATRIX.md` - technician and manager routine workflow mapping
 - `docs/DEPLOYMENT_RUNBOOK.md` - deployment, upgrade, and rollback procedures
+- `docs/POSTGRES_MIGRATION.md` - centralized PostgreSQL transition plan and tooling usage
 - `desktop/README.md` - Tauri desktop companion setup and operating modes
 - `docs/OPERATIONS_RUNBOOK.md` - monitoring, incident, and routine operations playbook
 - `docs/SECURITY_COMPLIANCE.md` - implemented controls, residual risks, governance practices
@@ -19,6 +20,7 @@
 - `docs/releases/v0.2.0.md` - release notes for QR/barcode server-side rendering fix
 - `docs/releases/v0.3.0.md` - release notes for workflow/compliance/visualization expansion
 - `docs/releases/v0.3.1.md` - release notes for cage-card refinement and LaTeX tutorial PDF pipeline
+- `docs/releases/v0.3.2.md` - release notes for dashboard/search/public-scan hardening work
 - `docs/test_reports/UI_CLICKABILITY_REPORT.html` - visual UI clickability contract report
 - `docs/test_reports/UI_CLICKABILITY_RESULT.json` - machine-readable UI clickability audit result
 - `docs/test_reports/ALERT_COVERAGE_RESULT.json` - synthesized-data alert coverage verification result

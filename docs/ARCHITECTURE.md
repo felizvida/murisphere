@@ -16,6 +16,7 @@
 - Data model: `schema.sql`
 - Demo scale seeding: `seed_large_demo.py`
 - Validation tools: `qrcode_diagnostic.py`, `ui_clickability_audit.py`, `alert_coverage_verifier.py`
+- Migration tools: `postgres_readiness_audit.py`, `postgres_export_bundle.py`
 
 ## Data Domains
 - Facility hierarchy: Facility -> Room -> Rack -> Cage
@@ -46,6 +47,7 @@
 - Desktop companion: Tauri shell in `desktop/`, targeting a centralized backend or source-local Flask runtime
 - CI: `.github/workflows/ci.yml`
 - CD image publish: `.github/workflows/cd.yml`
+- Desktop bundle workflow: `.github/workflows/desktop-release.yml`
 - No CDN dependency for cage-card QR/barcode rendering
 
 ## Performance Notes
@@ -58,3 +60,4 @@
 - Recommended deployment remains centralized backend plus shared database.
 - Web stays primary for phone and tablet cage workflows.
 - Tauri is positioned as a desktop companion for reporting, printing, local desktop integrations, and future workstation/offline flows.
+- PostgreSQL remains the target shared database for enterprise rollout; the repo now includes a readiness audit and logical export bundle generator to support that transition.

@@ -37,7 +37,7 @@ jobs:
 
       - name: Python syntax check
         run: |
-          python -m py_compile app.py seed_large_demo.py alert_coverage_verifier.py cage_card_layout_audit.py docs/tutorial/build_tutorial_pdf.py
+          python -m py_compile app.py seed_large_demo.py alert_coverage_verifier.py cage_card_layout_audit.py docs/tutorial/build_tutorial_pdf.py postgres_export_bundle.py postgres_readiness_audit.py
 
       - name: Run tests
         run: |
@@ -81,6 +81,11 @@ jobs:
         working-directory: desktop
         run: |
           npm install
+
+      - name: Sync desktop version
+        working-directory: desktop
+        run: |
+          npm run sync-version
 
       - name: Desktop scaffold tests
         run: |

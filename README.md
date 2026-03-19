@@ -2,7 +2,7 @@
 
 Murisphere is a browser-based mouse colony and vivarium management SaaS optimized for cage-level speed, data accuracy, and operational simplicity.
 
-Current release: `v0.3.1` (2026-03-05)
+Current version: `v0.3.2`
 
 ## Product Name
 `Murisphere`
@@ -75,6 +75,17 @@ npm run dev
 
 The desktop shell is designed to share the same centralized backend as the browser and phone workflows. On first launch, you can save the Murisphere base URL in the desktop setup screen; when run from source, it can also auto-start the local Flask backend for development.
 
+Desktop packaging:
+```bash
+cd desktop
+npm install
+npm run build
+```
+
+GitHub desktop bundle workflow:
+- Tag `main` with `desktop-v<version>` to trigger [`.github/workflows/desktop-release.yml`](/Users/liux17/Documents/colony/.github/workflows/desktop-release.yml).
+- The workflow builds platform bundles for macOS, Linux, and Windows and uploads them as workflow artifacts.
+
 ## Release Validation Commands
 ```bash
 pip install -r requirements-dev.txt
@@ -90,6 +101,19 @@ Generated artifacts:
 - `docs/test_reports/UI_CLICKABILITY_RESULT.json`
 - `docs/test_reports/ALERT_COVERAGE_RESULT.json`
 - `docs/test_reports/CAGE_CARD_LAYOUT_RESULT.json`
+
+## PostgreSQL Migration Prep
+Murisphere still runs on SQLite today, but the repo now includes migration-prep tooling for a centralized shared database rollout:
+
+```bash
+python3 postgres_readiness_audit.py --out docs/test_reports/POSTGRES_READINESS.json
+python3 postgres_export_bundle.py --db murisphere.db --out dist/postgres-bundle
+```
+
+Outputs:
+- `docs/test_reports/POSTGRES_READINESS.json` - SQLite-specific blockers still present in code/schema
+- `dist/postgres-bundle/manifest.json` - logical export manifest with dependency-aware table order
+- `dist/postgres-bundle/tables/*.jsonl` - table data export for ETL into PostgreSQL
 
 ## CI/CD
 - `./.github/workflows/ci.yml`
@@ -124,6 +148,7 @@ Seed profile:
 - [Security and compliance](docs/SECURITY_COMPLIANCE.md)
 - [Testing strategy](docs/TESTING_STRATEGY.md)
 - [Deployment runbook](docs/DEPLOYMENT_RUNBOOK.md)
+- [PostgreSQL migration guide](docs/POSTGRES_MIGRATION.md)
 - [Operations runbook](docs/OPERATIONS_RUNBOOK.md)
 - Tutorial HTML: `docs/tutorial/user_training_tutorial.html`
 - Tutorial PDF: `docs/tutorial/user_training_tutorial.pdf`
@@ -131,6 +156,7 @@ Seed profile:
   - [v0.2.0](docs/releases/v0.2.0.md)
   - [v0.3.0](docs/releases/v0.3.0.md)
   - [v0.3.1](docs/releases/v0.3.1.md)
+  - [v0.3.2](docs/releases/v0.3.2.md)
 
 ## Notes
 - QR/barcode card assets are rendered server-side to avoid client CDN failures in restricted networks.

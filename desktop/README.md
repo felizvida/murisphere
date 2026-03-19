@@ -51,6 +51,23 @@ Optional environment variables:
 - Supports local source-backed desktop development
 - Preserves the existing phone/tablet/browser workflow as the primary operational surface
 
+## Build Desktop Bundles
+Local build:
+```bash
+cd desktop
+npm install
+npm run build
+```
+
+GitHub release build:
+- Tag `main` with `desktop-v<version>`
+- Push the tag
+- Download artifacts from the `Desktop Release` workflow
+
+Versioning:
+- `desktop/scripts/sync-version.mjs` keeps `desktop/package.json`, `desktop/src-tauri/tauri.conf.json`, and `desktop/src-tauri/Cargo.toml` aligned with the repo `VERSION`
+- `npm run dev` and `npm run build` both run the sync step first
+
 ## Next Desktop Steps
 - Bundle a production backend/sidecar for offline workstation deployments
 - Add native print presets, desktop notifications, and file-system/export integration

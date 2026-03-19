@@ -1,11 +1,12 @@
 {
   "name": "murisphere-desktop",
-  "version": "0.1.0",
+  "version": "0.3.2",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tauri dev",
-    "build": "tauri build",
+    "sync-version": "node ./scripts/sync-version.mjs",
+    "dev": "npm run sync-version && tauri dev",
+    "build": "npm run sync-version && tauri build",
     "tauri": "tauri"
   },
   "devDependencies": {

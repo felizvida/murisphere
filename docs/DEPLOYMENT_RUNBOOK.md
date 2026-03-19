@@ -51,10 +51,44 @@ npm install
 npm run dev
 ```
 
+## 3b) Desktop Release Bundles
+To produce signed installable bundles in GitHub Actions:
+
+1. Ensure `VERSION` matches the intended desktop release version.
+2. Tag `main` with `desktop-v<version>`.
+3. Push the tag.
+4. GitHub runs [`.github/workflows/desktop-release.yml`](/Users/liux17/Documents/colony/.github/workflows/desktop-release.yml) and uploads platform artifacts.
+
+For a local packaging smoke check:
+```bash
+cd desktop
+npm install
+npm run build
+```
+
 ## 4) Persistent Data
 - Set `MURISPHERE_DB` to a persistent path.
 - Set `MURISPHERE_ATTACHMENT_DIR` to persistent storage.
 - Back up DB file daily with retention policy.
+
+## 4a) PostgreSQL Migration Preparation
+Murisphere is still SQLite-backed today. Use the migration-prep tools to stage a centralized database transition without guessing at the current blockers.
+
+Readiness audit:
+```bash
+python3 postgres_readiness_audit.py --out docs/test_reports/POSTGRES_READINESS.json
+```
+
+Logical export bundle:
+```bash
+python3 postgres_export_bundle.py --db <sqlite_db_path> --out dist/postgres-bundle
+```
+
+Expected outputs:
+- `docs/test_reports/POSTGRES_READINESS.json`
+- `dist/postgres-bundle/manifest.json`
+- `dist/postgres-bundle/schema-sqlite.sql`
+- `dist/postgres-bundle/tables/*.jsonl`
 
 ## 5) Upgrade Procedure
 1. Back up DB and attachments.
