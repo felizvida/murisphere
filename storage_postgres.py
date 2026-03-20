@@ -90,11 +90,46 @@ def split_sql_statements(script: str) -> list[str]:
     current: list[str] = []
     in_single = False
     in_double = False
-    for char in script:
+    in_line_comment = False
+    in_block_comment = False
+    idx = 0
+    while idx < len(script):
+        char = script[idx]
+        nxt = script[idx + 1] if idx + 1 < len(script) else ""
+
+        if in_line_comment:
+            current.append(char)
+            if char == "\n":
+                in_line_comment = False
+            idx += 1
+            continue
+
+        if in_block_comment:
+            current.append(char)
+            if char == "*" and nxt == "/":
+                current.append(nxt)
+                in_block_comment = False
+                idx += 2
+                continue
+            idx += 1
+            continue
+
         if char == "'" and not in_double:
             in_single = not in_single
         elif char == '"' and not in_single:
             in_double = not in_double
+        elif not in_single and not in_double and char == "-" and nxt == "-":
+            current.append(char)
+            current.append(nxt)
+            in_line_comment = True
+            idx += 2
+            continue
+        elif not in_single and not in_double and char == "/" and nxt == "*":
+            current.append(char)
+            current.append(nxt)
+            in_block_comment = True
+            idx += 2
+            continue
         if char == ";" and not in_single and not in_double:
             statement = "".join(current).strip()
             if statement:
@@ -102,6 +137,7 @@ def split_sql_statements(script: str) -> list[str]:
             current = []
         else:
             current.append(char)
+        idx += 1
     tail = "".join(current).strip()
     if tail:
         statements.append(tail)

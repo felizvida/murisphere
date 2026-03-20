@@ -115,6 +115,27 @@ class PostgresToolingTests(unittest.TestCase):
         fake_cursor.execute.assert_called_once_with("INSERT INTO cages (cage_code) VALUES (%s) RETURNING id", ("C-1",))
         self.assertEqual(cur.lastrowid, 41)
 
+    def test_split_sql_statements_ignores_semicolons_inside_comments(self) -> None:
+        script = """/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ */
+-- Generated from schema.sql by generate_postgres_schema.py
+CREATE TABLE demo (id SERIAL PRIMARY KEY);
+INSERT INTO demo (id) VALUES (1);
+"""
+        statements = storage_postgres.split_sql_statements(script)
+        self.assertEqual(
+            statements,
+            [
+                """/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ */
+-- Generated from schema.sql by generate_postgres_schema.py
+CREATE TABLE demo (id SERIAL PRIMARY KEY)""",
+                "INSERT INTO demo (id) VALUES (1)",
+            ],
+        )
+
     def test_app_selects_postgres_schema_when_postgres_dialect_is_active(self) -> None:
         with mock.patch.object(storage, "DATABASE_DIALECT", "postgres"):
             self.assertEqual(appmod.schema_path(), "schema_postgres.sql")
