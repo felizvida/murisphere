@@ -5289,17 +5289,48 @@ def create_planner_scenario() -> Response:
 def list_planner_scenarios() -> Response:
     rows = db().execute(
         """
-        SELECT id, lab_id, name, needed_by, target_animals, max_new_cages, status, created_at, updated_at
-        FROM planner_scenarios
+        SELECT ps.id, ps.lab_id, ps.name, ps.needed_by, ps.target_animals, ps.max_new_cages, ps.status, ps.created_at, ps.updated_at,
+               l.name AS lab_name
+        FROM planner_scenarios ps
+        JOIN labs l ON l.id = ps.lab_id
         """
-        + ("" if is_admin(g.user) else " WHERE lab_id = ? ")
+        + ("" if is_admin(g.user) else " WHERE ps.lab_id = ? ")
         + """
-        ORDER BY id DESC
+        ORDER BY ps.id DESC
         LIMIT 200
         """,
         () if is_admin(g.user) else (g.user.lab_id,),
     ).fetchall()
     return jsonify([dict(r) for r in rows])
+
+
+@app.get("/api/planner/scenarios/<int:scenario_id>")
+@require_auth()
+def planner_scenario_detail(scenario_id: int) -> Response:
+    scenario = ensure_planner_scenario_scope(scenario_id, g.user)
+    if not scenario:
+        return jsonify({"error": "Not found"}), 404
+    detail = db().execute(
+        """
+        SELECT ps.id, ps.lab_id, ps.name, ps.needed_by, ps.target_animals, ps.max_new_cages, ps.status, ps.assumptions_json, ps.created_at, ps.updated_at,
+               l.name AS lab_name
+        FROM planner_scenarios ps
+        JOIN labs l ON l.id = ps.lab_id
+        WHERE ps.id = ?
+        """,
+        (scenario_id,),
+    ).fetchone()
+    projects = db().execute(
+        """
+        SELECT p.id, p.project_code, p.title, p.status, sp.animals_needed, sp.priority
+        FROM planner_scenario_projects sp
+        JOIN projects p ON p.id = sp.project_id
+        WHERE sp.scenario_id = ?
+        ORDER BY sp.priority ASC, p.project_code ASC
+        """,
+        (scenario_id,),
+    ).fetchall()
+    return jsonify({"scenario": dict(detail), "projects": [dict(r) for r in projects]})
 
 
 @app.post("/api/planner/scenarios/<int:scenario_id>/projects")

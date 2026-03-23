@@ -14,6 +14,7 @@ toc-depth: 3
 This tutorial is designed for **self-paced learning**. It teaches Murisphere as an operational system and as a biological thinking tool.
 
 Inside Murisphere, the landing dashboard now includes a **Start Learning** section. Use it to launch this tutorial, open the PDF, and jump into seeded example workflows directly from the app.
+You can also mark modules complete there, so self-paced learning survives across sessions on the same device/browser.
 
 The goal is not only to click through screens. The goal is to learn how a mouse colony actually behaves over time:
 
@@ -402,7 +403,7 @@ You need to know:
 - whether cage space can absorb that plan without stressing the facility
 
 ## Guided walkthrough
-1. Open planner scenarios.
+1. Open the `Analytics` tab and use the planner workspace under the charts.
 2. Start with `Neurogenetics Lab Cohort Plan`.
 3. Review needed-by date, target animals, and linked projects.
 4. Review the generated risk level and projected deficit.

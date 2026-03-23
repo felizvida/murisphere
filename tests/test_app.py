@@ -265,6 +265,8 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertNotIn("cdn.jsdelivr.net/npm/qrcode", body)
         self.assertNotIn("cdn.jsdelivr.net/npm/jsbarcode", body)
         self.assertIn('id="dashboardLearning"', body)
+        self.assertIn('id="plannerScenarioForm"', body)
+        self.assertIn('id="loadPlannerBtn"', body)
 
     def test_learning_routes_serve_tutorial_assets(self) -> None:
         redirect_res = self.client.get("/learn", follow_redirects=False)
@@ -390,6 +392,55 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertEqual(enriched["examples"]["sample"]["sample_code"], "SMP-LEARN-001")
         self.assertEqual(enriched["examples"]["plannerScenario"]["name"], "Learning Planner Scenario")
 
+    def test_planner_detail_and_recommendation_workflow(self) -> None:
+        token = self.login("admin@murisphere.local", "admin1234")
+
+        project = self.client.post(
+            "/api/projects",
+            headers=self.auth_headers(token),
+            json={"labId": 1, "projectCode": "PRJ-PLAN-001", "title": "Planner Demand", "status": "active", "targetAnimals": 30},
+        )
+        self.assertEqual(project.status_code, 201)
+        project_id = project.get_json()["id"]
+
+        scenario = self.client.post(
+            "/api/planner/scenarios",
+            headers=self.auth_headers(token),
+            json={"labId": 1, "name": "Planner Console Scenario", "neededBy": "2026-04-20", "targetAnimals": 30, "maxNewCages": 3},
+        )
+        self.assertEqual(scenario.status_code, 201)
+        scenario_id = scenario.get_json()["id"]
+
+        attach = self.client.post(
+            f"/api/planner/scenarios/{scenario_id}/projects",
+            headers=self.auth_headers(token),
+            json={"projects": [{"projectId": project_id, "animalsNeeded": 30, "priority": 1}]},
+        )
+        self.assertEqual(attach.status_code, 200)
+
+        detail = self.client.get(f"/api/planner/scenarios/{scenario_id}", headers=self.auth_headers(token))
+        self.assertEqual(detail.status_code, 200)
+        detail_payload = detail.get_json()
+        self.assertEqual(detail_payload["scenario"]["name"], "Planner Console Scenario")
+        self.assertEqual(detail_payload["projects"][0]["project_code"], "PRJ-PLAN-001")
+        self.assertIn("lab_name", detail_payload["scenario"])
+
+        evaluate = self.client.post(f"/api/planner/scenarios/{scenario_id}/evaluate", headers=self.auth_headers(token))
+        self.assertEqual(evaluate.status_code, 200)
+        self.assertIn("riskLevel", evaluate.get_json())
+
+        plans = self.client.get(f"/api/planner/scenarios/{scenario_id}/plans", headers=self.auth_headers(token))
+        self.assertEqual(plans.status_code, 200)
+        self.assertTrue(plans.get_json())
+
+        recs = self.client.get("/api/recommendations?status=open", headers=self.auth_headers(token))
+        self.assertEqual(recs.status_code, 200)
+        self.assertTrue(isinstance(recs.get_json(), list))
+
+        outcomes = self.client.get("/api/recommendations/outcomes", headers=self.auth_headers(token))
+        self.assertEqual(outcomes.status_code, 200)
+        self.assertTrue(isinstance(outcomes.get_json(), list))
+
     def test_scan_template_escapes_public_fields(self) -> None:
         page = self.client.get("/scan/test-token-123")
         self.assertEqual(page.status_code, 200)
@@ -407,6 +458,14 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertIn("err.status = res.status", js)
         self.assertIn("if (err && Number(err.status) === 401)", js)
         self.assertIn("loadActiveAlertFeed().catch((err) => handleBackgroundError(err", js)
+
+    def test_frontend_learning_and_planner_contract(self) -> None:
+        js = Path("static/app.js").read_text(encoding="utf-8")
+        self.assertIn("const LEARNING_PROGRESS_KEY =", js)
+        self.assertIn('el("plannerScenarioForm").addEventListener("submit"', js)
+        self.assertIn('el("generateRecommendationsBtn").addEventListener("click"', js)
+        self.assertIn('api("/api/planner/scenarios"', js)
+        self.assertIn('data-learning-toggle-module', js)
 
     def test_breeding_calendar_forecast_and_analytics(self) -> None:
         token = self.login("admin@murisphere.local", "admin1234")

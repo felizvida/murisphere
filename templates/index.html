@@ -165,6 +165,42 @@
           <h3>Operations Dashboard</h3>
           <div id="analyticsSummary" class="kpis"></div>
           <div id="analyticsVisuals" class="viz-grid"></div>
+          <div class="planner-shell">
+            <div class="inline-form between">
+              <h4 class="viz-heading">Planner Workspace</h4>
+              <div class="inline-form planner-toolbar">
+                <button id="loadPlannerBtn" type="button">Load Planner</button>
+                <button id="generateRecommendationsBtn" type="button">Generate Recommendations</button>
+              </div>
+            </div>
+            <form id="plannerScenarioForm" class="grid-form">
+              <label>Scenario Name<input id="plannerName" required placeholder="e.g., Neurogenetics Cohort Q2" /></label>
+              <label>Needed By<input id="plannerNeededBy" type="date" required /></label>
+              <label>Target Animals<input id="plannerTargetAnimals" type="number" min="1" value="60" required /></label>
+              <label>Max New Cages<input id="plannerMaxNewCages" type="number" min="0" value="12" /></label>
+              <label>Lab
+                <select id="plannerLabId"></select>
+              </label>
+              <button type="submit">Create Scenario</button>
+            </form>
+            <form id="plannerProjectForm" class="grid-form">
+              <label>Scenario
+                <select id="plannerScenarioSelect"></select>
+              </label>
+              <label>Project
+                <select id="plannerProjectSelect"></select>
+              </label>
+              <label>Animals Needed<input id="plannerAnimalsNeeded" type="number" min="1" value="40" required /></label>
+              <label>Priority<input id="plannerPriority" type="number" min="1" max="9" value="1" required /></label>
+              <button type="submit">Attach Project Demand</button>
+            </form>
+            <div class="planner-action-row">
+              <button id="evaluatePlannerBtn" type="button">Evaluate Selected Scenario</button>
+            </div>
+            <div id="plannerScenarios"></div>
+            <div id="plannerInspector"></div>
+            <div id="recommendationPanel"></div>
+          </div>
         </section>
 
         <section id="tab-reports" class="tab-content card">

@@ -23,10 +23,13 @@ const state = {
   alerts: [],
   alertsByCage: {},
   learning: null,
+  plannerScenarios: [],
+  selectedPlannerScenarioId: null,
 };
 const PENDING_SCAN_KEY = "murisphere_pending_scan";
 const SCAN_BASE_KEY = "murisphere_scan_base_url";
 const MUTATION_QUEUE_KEY = "murisphere_mutation_queue";
+const LEARNING_PROGRESS_KEY = "murisphere_learning_progress";
 const SEVERITY_RANK = { high: 3, medium: 2, low: 1 };
 
 const el = (id) => document.getElementById(id);
@@ -125,6 +128,10 @@ function mutationQueueKey() {
   return `${MUTATION_QUEUE_KEY}:${state.user?.id || "anon"}`;
 }
 
+function learningProgressKey() {
+  return `${LEARNING_PROGRESS_KEY}:${state.user?.id || "anon"}`;
+}
+
 function readMutationQueue() {
   try {
     return JSON.parse(localStorage.getItem(mutationQueueKey()) || "[]");
@@ -148,6 +155,29 @@ function enqueueMutation(path, opts) {
     queuedAt: new Date().toISOString(),
   });
   writeMutationQueue(queue);
+}
+
+function readLearningProgress() {
+  try {
+    return JSON.parse(localStorage.getItem(learningProgressKey()) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function writeLearningProgress(progress) {
+  localStorage.setItem(learningProgressKey(), JSON.stringify(progress || {}));
+}
+
+function moduleComplete(moduleId) {
+  return !!readLearningProgress()[moduleId];
+}
+
+function setModuleComplete(moduleId, complete) {
+  const progress = readLearningProgress();
+  if (complete) progress[moduleId] = true;
+  else delete progress[moduleId];
+  writeLearningProgress(progress);
 }
 
 async function flushMutationQueue() {
@@ -436,6 +466,326 @@ function renderAnalyticsVisuals(summary, nonProd, reminders, space, consolidatio
   ].join("");
 }
 
+function plannerRiskClass(level) {
+  if (level === "high" || level === "medium" || level === "low") return level;
+  return "low";
+}
+
+function plannerScenarioById(id) {
+  return (state.plannerScenarios || []).find((scenario) => Number(scenario.id) === Number(id));
+}
+
+function parseJsonField(raw) {
+  if (!raw) return {};
+  if (typeof raw === "object") return raw;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+function plannerLabs() {
+  const labs = new Map();
+  (state.projects || []).forEach((project) => {
+    const id = Number(project.lab_id || project.labId || 0);
+    if (!id) return;
+    if (!labs.has(id)) labs.set(id, { id, name: project.lab_name || `Lab ${id}` });
+  });
+  (state.plannerScenarios || []).forEach((scenario) => {
+    const id = Number(scenario.lab_id || scenario.labId || 0);
+    if (!id) return;
+    if (!labs.has(id)) labs.set(id, { id, name: scenario.lab_name || `Lab ${id}` });
+  });
+  if (!labs.size && state.user?.labId) labs.set(Number(state.user.labId), { id: Number(state.user.labId), name: `Lab ${state.user.labId}` });
+  return Array.from(labs.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function populatePlannerControls() {
+  const labSelect = el("plannerLabId");
+  const scenarioSelect = el("plannerScenarioSelect");
+  const projectSelect = el("plannerProjectSelect");
+  const selectedScenario = plannerScenarioById(state.selectedPlannerScenarioId);
+  const labs = plannerLabs();
+  const fallbackLabId = Number(selectedScenario?.lab_id || state.user?.labId || labs[0]?.id || 0);
+  const currentLabId = Number(labSelect.value || fallbackLabId || 0);
+  labSelect.innerHTML = labs.length
+    ? labs.map((lab) => `<option value="${esc(lab.id)}">${esc(lab.name)} (ID ${esc(lab.id)})</option>`).join("")
+    : `<option value="">No labs</option>`;
+  if (currentLabId) labSelect.value = String(currentLabId);
+
+  if (!state.selectedPlannerScenarioId && state.plannerScenarios.length) {
+    state.selectedPlannerScenarioId = Number(state.plannerScenarios[0].id);
+  }
+  scenarioSelect.innerHTML = state.plannerScenarios.length
+    ? state.plannerScenarios
+        .map(
+          (scenario) =>
+            `<option value="${esc(scenario.id)}">${esc(scenario.name)} · ${esc(scenario.lab_name || `Lab ${scenario.lab_id}`)}</option>`
+        )
+        .join("")
+    : `<option value="">No scenarios yet</option>`;
+  if (state.selectedPlannerScenarioId) scenarioSelect.value = String(state.selectedPlannerScenarioId);
+
+  const activeLabId = Number(plannerScenarioById(state.selectedPlannerScenarioId)?.lab_id || labSelect.value || 0);
+  const visibleProjects = (state.projects || []).filter((project) => !activeLabId || Number(project.lab_id || 0) === activeLabId);
+  projectSelect.innerHTML = visibleProjects.length
+    ? visibleProjects
+        .map((project) => `<option value="${esc(project.id)}">${esc(project.project_code)} · ${esc(project.title)}</option>`)
+        .join("")
+    : `<option value="">No projects available</option>`;
+
+  if (!el("plannerNeededBy").value) {
+    const due = new Date();
+    due.setDate(due.getDate() + 21);
+    el("plannerNeededBy").value = due.toISOString().slice(0, 10);
+  }
+}
+
+function renderPlannerScenarios(scenarios) {
+  const host = el("plannerScenarios");
+  if (!scenarios.length) {
+    host.innerHTML = `<p class="hint">No planner scenarios yet. Create one to estimate deficits and cage pressure.</p>`;
+    return;
+  }
+  host.innerHTML = `
+    <div class="planner-list">
+      ${scenarios
+        .map((scenario) => {
+          const selected = Number(scenario.id) === Number(state.selectedPlannerScenarioId);
+          return `
+            <article class="planner-item">
+              <div class="planner-item-head">
+                <div>
+                  <strong>${esc(scenario.name)}</strong>
+                  <div class="learning-copy">${esc(scenario.lab_name || `Lab ${scenario.lab_id}`)} · target ${esc(scenario.target_animals)} by ${esc(
+                    fmtDate(scenario.needed_by)
+                  )}</div>
+                </div>
+                <span class="detail-pill">${esc(selected ? "selected" : scenario.status || "draft")}</span>
+              </div>
+              <div class="planner-meta">
+                <span class="legend-item">Max new cages ${esc(scenario.max_new_cages || 0)}</span>
+                <span class="legend-item">Status ${esc(scenario.status || "draft")}</span>
+              </div>
+              <div class="learning-actions">
+                <button type="button" class="table-link" data-planner-scenario-id="${esc(scenario.id)}">Inspect Scenario</button>
+                <button type="button" class="table-link" data-evaluate-planner-id="${esc(scenario.id)}">Evaluate</button>
+              </div>
+            </article>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function renderPlannerInspector(detail, plans) {
+  const host = el("plannerInspector");
+  if (!detail?.scenario) {
+    host.innerHTML = `<p class="hint">Select a scenario to review project demand, risk, and recent plans.</p>`;
+    return;
+  }
+  const scenario = detail.scenario;
+  const projects = detail.projects || [];
+  const latestPlan = (plans || [])[0] || null;
+  const recommendation = parseJsonField(latestPlan?.recommendation_json);
+  const demandBars = latestPlan
+    ? drawBars(
+        [
+          { label: "Target", value: recommendation.targetAnimals || scenario.target_animals || 0, color: "#4f8ef7" },
+          { label: "Current", value: recommendation.currentActiveAnimals || 0, color: "#18a172" },
+          { label: "Deficit", value: recommendation.projectedDeficit || latestPlan.projected_deficit || 0, color: "#ca513d" },
+        ],
+        { height: 120 }
+      )
+    : `<p class="hint">No evaluation yet. Run Evaluate Selected Scenario to generate a plan.</p>`;
+
+  host.innerHTML = `
+    <div class="detail-shell">
+      <div class="detail-head">
+        <h4>${esc(scenario.name)}</h4>
+        <span class="alert-pill ${esc(plannerRiskClass(latestPlan?.risk_level || "low"))}">${esc((latestPlan?.risk_level || "draft").toUpperCase())}</span>
+      </div>
+      <div class="detail-grid">
+        ${chartCard(
+          "Scenario Demand",
+          `${esc(scenario.lab_name || `Lab ${scenario.lab_id}`)} · needed by ${esc(fmtDate(scenario.needed_by))}`,
+          demandBars,
+          `<span class="legend-item">Target ${esc(scenario.target_animals || 0)}</span><span class="legend-item">Max new cages ${esc(
+            scenario.max_new_cages || 0
+          )}</span>`
+        )}
+        ${chartCard(
+          "Latest Plan",
+          latestPlan ? `Plan ${esc(latestPlan.id)} created ${esc(fmtDate(latestPlan.created_at))}` : "Awaiting evaluation",
+          latestPlan
+            ? `<div class="learning-pill-row">
+                <span class="learning-pill ${esc(plannerRiskClass(latestPlan.risk_level))}">${esc(latestPlan.risk_level.toUpperCase())} risk</span>
+                <span class="legend-item">Litters ${esc(latestPlan.estimated_litters)}</span>
+                <span class="legend-item">Cages ${esc(latestPlan.estimated_cages)}</span>
+                <span class="legend-item">Deficit ${esc(latestPlan.projected_deficit)}</span>
+              </div>`
+            : `<p class="learning-copy">Attach one or more projects and evaluate to estimate litter count, cages, and supply risk.</p>`,
+          projects.length
+            ? projects.map((project) => `<span class="legend-item">${esc(project.project_code)} need ${esc(project.animals_needed)}</span>`).join("")
+            : `<span class="legend-item">No project demand attached yet</span>`
+        )}
+      </div>
+      <div class="detail-grid">
+        <article class="viz-card">
+          <h4>Scenario Projects</h4>
+          <table class="table compact-table">
+            <thead><tr><th>Project</th><th>Title</th><th>Animals Needed</th><th>Priority</th></tr></thead>
+            <tbody>
+              ${
+                projects
+                  .map(
+                    (project) => `<tr>
+                      <td><button type="button" class="table-link" data-project-id="${esc(project.id)}">${esc(project.project_code)}</button></td>
+                      <td>${esc(project.title)}</td>
+                      <td>${esc(project.animals_needed)}</td>
+                      <td>${esc(project.priority)}</td>
+                    </tr>`
+                  )
+                  .join("") || `<tr><td colspan="4">No project demand attached.</td></tr>`
+              }
+            </tbody>
+          </table>
+        </article>
+        <article class="viz-card">
+          <h4>Plan History</h4>
+          <div class="timeline-list">
+            ${
+              (plans || [])
+                .slice(0, 6)
+                .map(
+                  (plan) =>
+                    `<div class="timeline-item"><strong>Plan ${esc(plan.id)} · ${esc((plan.risk_level || "low").toUpperCase())}</strong><span>${esc(
+                      fmtDate(plan.created_at)
+                    )}</span></div>`
+                )
+                .join("") || `<div class="hint">No plan history yet.</div>`
+            }
+          </div>
+        </article>
+      </div>
+    </div>
+  `;
+}
+
+function renderRecommendationPanel(recommendations, outcomes) {
+  const host = el("recommendationPanel");
+  const outcomeBars = (outcomes || []).map((row) => ({
+    label: `${row.rec_type}:${row.status}`.slice(0, 10),
+    value: toNum(row.n || 0),
+    color: row.status === "accepted" || row.status === "completed" ? "#18a172" : row.status === "ignored" ? "#64748b" : "#eb9c44",
+  }));
+  host.innerHTML = `
+    <div class="detail-grid">
+      <article class="viz-card">
+        <h4>Open Recommendations</h4>
+        <div class="recommendation-list">
+          ${
+            recommendations.length
+              ? recommendations
+                  .map(
+                    (recommendation) => `
+                      <div class="recommendation-item">
+                        <div class="recommendation-item-head">
+                          <div>
+                            <strong>${esc(recommendation.rec_type)}</strong>
+                            <div class="learning-copy">${esc(recommendation.rationale || "No rationale")}</div>
+                          </div>
+                          <span class="detail-pill">${esc(recommendation.status)}</span>
+                        </div>
+                        <div class="recommendation-meta">
+                          <span class="legend-item">${esc(recommendation.cage_code || "facility-wide")}</span>
+                          <span class="legend-item">${esc(fmtDate(recommendation.created_at))}</span>
+                        </div>
+                        ${
+                          roleAllows(["PI", "Admin"])
+                            ? `<div class="learning-actions">
+                                <button type="button" class="table-link" data-recommendation-id="${esc(recommendation.id)}" data-recommendation-decision="accepted">Accept</button>
+                                <button type="button" class="table-link" data-recommendation-id="${esc(recommendation.id)}" data-recommendation-decision="completed">Complete</button>
+                                <button type="button" class="table-link" data-recommendation-id="${esc(recommendation.id)}" data-recommendation-decision="ignored">Ignore</button>
+                              </div>`
+                            : ``
+                        }
+                      </div>
+                    `
+                  )
+                  .join("")
+              : `<p class="hint">No open recommendations right now.</p>`
+          }
+        </div>
+      </article>
+      <article class="viz-card">
+        <h4>Recommendation Outcomes</h4>
+        ${
+          outcomeBars.length
+            ? `${drawBars(outcomeBars.slice(0, 10), { height: 130 })}<div class="viz-legend">${(outcomes || [])
+                .map((row) => `<span class="legend-item">${esc(row.rec_type)} · ${esc(row.status)} ${esc(row.n)}</span>`)
+                .join("")}</div>`
+            : `<p class="hint">No recommendation outcomes recorded yet.</p>`
+        }
+      </article>
+    </div>
+  `;
+}
+
+async function loadPlannerScenarioInspector(scenarioId) {
+  if (!scenarioId) {
+    renderPlannerInspector(null, []);
+    return;
+  }
+  state.selectedPlannerScenarioId = Number(scenarioId);
+  populatePlannerControls();
+  renderPlannerScenarios(state.plannerScenarios);
+  const [detail, plans] = await Promise.all([
+    api(`/api/planner/scenarios/${scenarioId}`, { headers: headers(false) }),
+    api(`/api/planner/scenarios/${scenarioId}/plans`, { headers: headers(false) }),
+  ]);
+  renderPlannerInspector(detail, plans);
+}
+
+async function loadPlannerWorkspace() {
+  if (!state.projects.length) {
+    try {
+      await loadProjects();
+    } catch {
+      state.projects = [];
+    }
+  }
+  const [scenarios, recommendations, outcomes] = await Promise.all([
+    api("/api/planner/scenarios", { headers: headers(false) }),
+    api("/api/recommendations?status=open", { headers: headers(false) }),
+    api("/api/recommendations/outcomes", { headers: headers(false) }),
+  ]);
+  state.plannerScenarios = scenarios;
+  if (!state.selectedPlannerScenarioId || !plannerScenarioById(state.selectedPlannerScenarioId)) {
+    state.selectedPlannerScenarioId = scenarios.length ? Number(scenarios[0].id) : null;
+  }
+  populatePlannerControls();
+  renderPlannerScenarios(scenarios);
+  renderRecommendationPanel(recommendations, outcomes);
+  await loadPlannerScenarioInspector(state.selectedPlannerScenarioId);
+}
+
+async function evaluatePlannerScenario(scenarioId) {
+  const activeId = Number(scenarioId || state.selectedPlannerScenarioId || 0);
+  if (!activeId) {
+    showMessage("Select or create a planner scenario first.", "warn");
+    return;
+  }
+  const result = await api(`/api/planner/scenarios/${activeId}/evaluate`, {
+    method: "POST",
+    headers: headers(),
+  });
+  await loadPlannerWorkspace();
+  showMessage(`Planner evaluated. deficit=${result.projectedDeficit}, risk=${result.riskLevel}.`, "success");
+}
+
 function renderBreedingVisuals(events, productivity = []) {
   const eventMap = {};
   for (const e of events.slice(0, 40)) {
@@ -541,6 +891,10 @@ function renderLearningHub(overview) {
   const scanBase = normalizedScanBase();
   const phoneReady = !(scanBase.includes("localhost") || scanBase.includes("127.0.0.1"));
   const examples = overview.examples || {};
+  const modules = overview.modules || [];
+  const completed = modules.filter((module) => moduleComplete(module.id)).length;
+  const nextModule = modules.find((module) => !moduleComplete(module.id)) || modules[0];
+  const progressPct = modules.length ? Math.round((completed * 100) / modules.length) : 0;
 
   const exampleCards = [];
   if (examples.cage) {
@@ -637,19 +991,46 @@ function renderLearningHub(overview) {
           ${learningPill("Planner", availability.planner)}
           ${learningPill("Projects", availability.projects)}
         </div>
+        <div class="learning-progress">
+          <div class="learning-progress-head">
+            <div>
+              <span class="learning-step">Learner Progress</span>
+              <strong>${completed}/${modules.length} modules complete</strong>
+            </div>
+            <span class="detail-pill">${esc(progressPct)}%</span>
+          </div>
+          <div class="learning-progress-bar"><span style="width:${progressPct}%"></span></div>
+          <div class="learning-progress-copy">
+            ${nextModule ? `Next suggested module: ${esc(nextModule.order)}. ${esc(nextModule.title)}.` : "All modules are marked complete."}
+          </div>
+          <div class="learning-actions">
+            ${
+              nextModule
+                ? `<button type="button" class="button-link" data-learning-tab="${esc(nextModule.tab)}">Continue Module ${esc(nextModule.order)}</button>`
+                : `<a class="button-link" href="${esc(overview.tutorialUrl)}" target="_blank" rel="noopener">Review Tutorial</a>`
+            }
+            <button type="button" class="button-link button-link-soft" data-learning-reset="1">Reset Progress</button>
+          </div>
+        </div>
       </div>
     </section>
     <div class="learning-grid">
-      ${(overview.modules || [])
+      ${modules
         .map(
           (module) => `
-            <article class="learning-card">
+            <article class="learning-card ${moduleComplete(module.id) ? "complete" : ""}">
               <div class="learning-step">Module ${esc(module.order)}</div>
               <h4>${esc(module.title)}</h4>
               <p class="learning-copy">${esc(module.summary)}</p>
+              <div class="learning-pill-row">
+                <span class="learning-pill ${moduleComplete(module.id) ? "ready" : "pending"}">${moduleComplete(module.id) ? "Completed" : "Not started"}</span>
+              </div>
               <div class="learning-actions">
                 <button type="button" class="table-link" data-learning-tab="${esc(module.tab)}">${esc(module.actionLabel)}</button>
                 <a class="button-link button-link-soft" href="${esc(overview.tutorialUrl)}" target="_blank" rel="noopener">Read Guide</a>
+                <button type="button" class="button-link button-link-soft" data-learning-toggle-module="${esc(module.id)}">
+                  ${moduleComplete(module.id) ? "Mark Incomplete" : "Mark Complete"}
+                </button>
               </div>
             </article>
           `
@@ -1375,6 +1756,7 @@ async function loadAnalytics() {
     <div class="kpi"><div>Consolidation Opportunities</div><div class="value">${consolidation.length}</div></div>
   `;
   renderAnalyticsVisuals(a, nonProd, reminders, space, consolidation);
+  await loadPlannerWorkspace();
 }
 
 async function loadCalendar() {
@@ -1469,9 +1851,12 @@ function setButtonEnabled(id, enabled, blockedMessage = "") {
 function applyRoleAccess() {
   const canManageProjects = roleAllows(["PI", "Admin"]);
   const isAdminUser = roleAllows(["Admin"]);
+  const canPlan = roleAllows(["PI", "Admin"]);
   setButtonEnabled("dispatchAlertsBtn", canManageProjects, "Requires PI/Admin role");
   setButtonEnabled("loadSlaBtn", canManageProjects, "Requires PI/Admin role");
   setButtonEnabled("loadQuotasBtn", canManageProjects, "Requires PI/Admin role");
+  setButtonEnabled("generateRecommendationsBtn", canPlan, "Requires PI/Admin role");
+  setButtonEnabled("evaluatePlannerBtn", canPlan, "Requires PI/Admin role");
 
   const projectSubmit = el("projectForm")?.querySelector("button[type='submit']");
   if (projectSubmit) {
@@ -1489,6 +1874,18 @@ function applyRoleAccess() {
   if (excelSubmit) {
     excelSubmit.disabled = !isAdminUser;
     excelSubmit.title = isAdminUser ? "" : "Requires Admin role";
+  }
+
+  const plannerScenarioSubmit = el("plannerScenarioForm")?.querySelector("button[type='submit']");
+  if (plannerScenarioSubmit) {
+    plannerScenarioSubmit.disabled = !canPlan;
+    plannerScenarioSubmit.title = canPlan ? "" : "Requires PI/Admin role";
+  }
+
+  const plannerProjectSubmit = el("plannerProjectForm")?.querySelector("button[type='submit']");
+  if (plannerProjectSubmit) {
+    plannerProjectSubmit.disabled = !canPlan;
+    plannerProjectSubmit.title = canPlan ? "" : "Requires PI/Admin role";
   }
 }
 
@@ -1614,6 +2011,69 @@ async function init() {
   el("refreshProjectsBtn").addEventListener("click", () => withAction("Project refresh failed", loadProjects).catch(() => undefined));
   el("loadQuotasBtn").addEventListener("click", () => withAction("Quota load failed", loadQuotas).catch(() => undefined));
 
+  el("loadPlannerBtn").addEventListener("click", () => withAction("Planner load failed", loadPlannerWorkspace).catch(() => undefined));
+  el("generateRecommendationsBtn").addEventListener("click", () => {
+    withAction("Recommendation generation failed", async () => {
+      const result = await api("/api/recommendations/generate", { method: "POST", headers: headers() });
+      await loadPlannerWorkspace();
+      showMessage(`Generated ${result.generated} recommendations.`, "success");
+    }).catch(() => undefined);
+  });
+  el("evaluatePlannerBtn").addEventListener("click", () => withAction("Planner evaluation failed", () => evaluatePlannerScenario()).catch(() => undefined));
+
+  el("plannerScenarioForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await withAction("Planner scenario creation failed", async () => {
+      const result = await api("/api/planner/scenarios", {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({
+          labId: Number(el("plannerLabId").value || 0),
+          name: el("plannerName").value.trim(),
+          neededBy: el("plannerNeededBy").value,
+          targetAnimals: Number(el("plannerTargetAnimals").value || 0),
+          maxNewCages: Number(el("plannerMaxNewCages").value || 0),
+        }),
+      });
+      el("plannerName").value = "";
+      state.selectedPlannerScenarioId = Number(result.id);
+      await loadPlannerWorkspace();
+      showMessage("Planner scenario created.", "success");
+    }).catch(() => undefined);
+  });
+
+  el("plannerProjectForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await withAction("Planner project demand update failed", async () => {
+      const scenarioId = Number(el("plannerScenarioSelect").value || 0);
+      const projectId = Number(el("plannerProjectSelect").value || 0);
+      if (!scenarioId) throw new Error("Select a scenario first");
+      if (!projectId) throw new Error("Select a project first");
+      await api(`/api/planner/scenarios/${scenarioId}/projects`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({
+          projects: [
+            {
+              projectId,
+              animalsNeeded: Number(el("plannerAnimalsNeeded").value || 0),
+              priority: Number(el("plannerPriority").value || 1),
+            },
+          ],
+        }),
+      });
+      state.selectedPlannerScenarioId = scenarioId;
+      await loadPlannerWorkspace();
+      showMessage("Planner demand attached to scenario.", "success");
+    }).catch(() => undefined);
+  });
+
+  el("plannerScenarioSelect").addEventListener("change", () => {
+    const nextId = Number(el("plannerScenarioSelect").value || 0);
+    state.selectedPlannerScenarioId = nextId || null;
+    withAction("Planner scenario load failed", () => loadPlannerScenarioInspector(nextId)).catch(() => undefined);
+  });
+
   el("genoUploadForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     await withAction("Genotyping upload failed", async () => {
@@ -1717,6 +2177,40 @@ async function init() {
     withAction("Cage detail load failed", () => openCageInspector(Number(cageNode.getAttribute("data-cage-id")))).catch(() => undefined);
   });
 
+  el("plannerScenarios").addEventListener("click", (evt) => {
+    const scenarioNode = evt.target.closest("button[data-planner-scenario-id]");
+    if (scenarioNode) {
+      const scenarioId = Number(scenarioNode.getAttribute("data-planner-scenario-id"));
+      withAction("Planner scenario load failed", () => loadPlannerScenarioInspector(scenarioId)).catch(() => undefined);
+      return;
+    }
+    const evaluateNode = evt.target.closest("button[data-evaluate-planner-id]");
+    if (!evaluateNode) return;
+    withAction("Planner evaluation failed", () => evaluatePlannerScenario(Number(evaluateNode.getAttribute("data-evaluate-planner-id")))).catch(() => undefined);
+  });
+
+  el("plannerInspector").addEventListener("click", (evt) => {
+    const projectNode = evt.target.closest("button[data-project-id]");
+    if (!projectNode) return;
+    withAction("Project detail load failed", () => openProjectInspector(Number(projectNode.getAttribute("data-project-id")))).catch(() => undefined);
+  });
+
+  el("recommendationPanel").addEventListener("click", (evt) => {
+    const node = evt.target.closest("button[data-recommendation-id]");
+    if (!node) return;
+    const recommendationId = Number(node.getAttribute("data-recommendation-id"));
+    const decision = node.getAttribute("data-recommendation-decision");
+    withAction("Recommendation decision failed", async () => {
+      await api(`/api/recommendations/${recommendationId}/decision`, {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ decision }),
+      });
+      await loadPlannerWorkspace();
+      showMessage(`Recommendation marked ${decision}.`, "success");
+    }).catch(() => undefined);
+  });
+
   el("dashboardAlerts").addEventListener("click", (evt) => {
     const cageNode = evt.target.closest("button[data-cage-id]");
     if (cageNode) {
@@ -1750,6 +2244,22 @@ async function init() {
   });
 
   el("dashboardLearning").addEventListener("click", (evt) => {
+    const toggleNode = evt.target.closest("[data-learning-toggle-module]");
+    if (toggleNode) {
+      const moduleId = toggleNode.getAttribute("data-learning-toggle-module");
+      const complete = !moduleComplete(moduleId);
+      setModuleComplete(moduleId, complete);
+      renderLearningHub(state.learning);
+      showMessage(`Module ${complete ? "completed" : "reopened"}.`, "success");
+      return;
+    }
+    const resetNode = evt.target.closest("[data-learning-reset]");
+    if (resetNode) {
+      writeLearningProgress({});
+      renderLearningHub(state.learning);
+      showMessage("Learning progress reset.", "success");
+      return;
+    }
     const tabNode = evt.target.closest("[data-learning-tab]");
     if (tabNode) {
       withAction("Learning module load failed", () => handleTabOpen(tabNode.getAttribute("data-learning-tab"))).catch(() => undefined);
