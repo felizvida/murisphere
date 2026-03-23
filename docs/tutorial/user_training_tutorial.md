@@ -331,11 +331,13 @@ That lets you learn the process as a pipeline instead of a single field.
 9. Download the provider template CSV for that order.
 10. Open the order reconciliation view and note how it distinguishes `ready to ship`, `in transit`, `with provider`, `missing result`, and `resulted`.
 11. Inspect the **Project Cohort Readiness** panel and find which project has the largest assignment deficit.
-12. Add a genotype target rule for the selected project, for example `Cre/+` or `fl/*`.
-13. In **Assignment Candidates**, open one genotype-ready animal and confirm whether it matches the target rule.
-14. Select one or more matching animals and reserve them into the project cohort.
-15. Review **Breeder Decisions** and decide whether the active pair should keep producing, pause soon, or be reviewed for low output.
-16. If you are practicing as an admin, import a result CSV or use callback simulation and watch the order move toward completion.
+12. Apply a built-in cohort template, or add a genotype target rule for the selected project, for example `Cre/+` or `fl/*`.
+13. Optionally save the current rule set as a reusable lab template for the next project that needs the same design.
+14. In **Assignment Candidates**, open one genotype-ready animal and confirm whether it matches the target rule.
+15. Select one or more matching animals and reserve them into the project cohort.
+16. Move one selected animal from `reserved` to `assigned` and inspect the **Assignment Flow** chart plus the recent assignment activity log.
+17. Review **Breeder Decisions** and decide whether the active pair should keep producing, pause soon, or be reviewed for low output.
+18. If you are practicing as an admin, import a result CSV or use callback simulation and watch the order move toward completion.
 
 ## Exercise
 Choose one `resulted` sample and one `collected` sample.
@@ -516,7 +518,7 @@ Keep this reference near any cage-card printing station.
 These are good for paired learning, onboarding, or team huddles.
 
 ## Mission 1: Rescue a delayed cohort
-A lab needs animals in four weeks. Use `Neurogenetics Lab Cohort Plan` and the breeder cages in lab 1 to decide whether current supply is enough.
+A lab needs animals in four weeks. Use `Neurogenetics Lab Cohort Plan` and the breeder cages in lab 1 to decide whether current supply is enough, which genotype template best fits the study, and whether any reserved animals are already stuck in `assigned` or `shipped`.
 
 ## Mission 2: Find the highest-risk welfare pattern
 Review high-severity alerts and decide whether the issue is isolated or repeated across one lab or room.

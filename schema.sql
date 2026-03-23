@@ -145,6 +145,28 @@ CREATE TABLE IF NOT EXISTS project_genotype_targets (
     FOREIGN KEY(project_id) REFERENCES projects(id)
 );
 
+CREATE TABLE IF NOT EXISTS genotype_target_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    lab_id INTEGER,
+    name TEXT NOT NULL,
+    description TEXT,
+    created_by INTEGER,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(lab_id) REFERENCES labs(id),
+    FOREIGN KEY(created_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS genotype_target_template_rules (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    template_id INTEGER NOT NULL,
+    genotype_pattern TEXT NOT NULL,
+    target_count INTEGER NOT NULL DEFAULT 0,
+    priority INTEGER NOT NULL DEFAULT 1,
+    notes TEXT,
+    UNIQUE(template_id, genotype_pattern),
+    FOREIGN KEY(template_id) REFERENCES genotype_target_templates(id)
+);
+
 CREATE TABLE IF NOT EXISTS litters (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     cage_id INTEGER NOT NULL,
@@ -187,6 +209,23 @@ CREATE TABLE IF NOT EXISTS project_animal_assignments (
     FOREIGN KEY(project_id) REFERENCES projects(id),
     FOREIGN KEY(animal_id) REFERENCES animals(id),
     FOREIGN KEY(assigned_by) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS project_animal_assignment_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assignment_id INTEGER,
+    project_id INTEGER NOT NULL,
+    animal_id INTEGER NOT NULL,
+    event_type TEXT NOT NULL,
+    from_status TEXT,
+    to_status TEXT NOT NULL,
+    notes TEXT,
+    actor_user_id INTEGER,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(assignment_id) REFERENCES project_animal_assignments(id),
+    FOREIGN KEY(project_id) REFERENCES projects(id),
+    FOREIGN KEY(animal_id) REFERENCES animals(id),
+    FOREIGN KEY(actor_user_id) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS lifecycle_events (
@@ -805,8 +844,12 @@ CREATE INDEX IF NOT EXISTS idx_projects_lab ON projects(lab_id);
 CREATE INDEX IF NOT EXISTS idx_project_cages_project ON project_cages(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_cages_cage ON project_cages(cage_id);
 CREATE INDEX IF NOT EXISTS idx_project_genotype_targets_project ON project_genotype_targets(project_id);
+CREATE INDEX IF NOT EXISTS idx_genotype_target_templates_lab ON genotype_target_templates(lab_id);
+CREATE INDEX IF NOT EXISTS idx_genotype_target_template_rules_template ON genotype_target_template_rules(template_id);
 CREATE INDEX IF NOT EXISTS idx_project_animal_assignments_project ON project_animal_assignments(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_animal_assignments_status ON project_animal_assignments(status);
+CREATE INDEX IF NOT EXISTS idx_project_assignment_events_project ON project_animal_assignment_events(project_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_project_assignment_events_animal ON project_animal_assignment_events(animal_id);
 CREATE INDEX IF NOT EXISTS idx_billing_entries_period ON billing_entries(period_start, period_end);
 CREATE INDEX IF NOT EXISTS idx_facility_requests_lab ON facility_requests(lab_id);
 CREATE INDEX IF NOT EXISTS idx_census_scan_session ON cage_census_scans(session_id);

@@ -133,6 +133,47 @@ GENOTYPING_PROVIDER_PRESETS: list[dict[str, Any]] = [
     },
 ]
 
+PROJECT_GENOTYPE_TEMPLATE_PRESETS: list[dict[str, Any]] = [
+    {
+        "presetKey": "balanced-pilot",
+        "name": "Balanced Pilot Cohort",
+        "description": "Quick pilot design for a small proof-of-concept cohort with matched driver and carrier animals.",
+        "targetAnimals": 4,
+        "targets": [
+            {"genotypePattern": "Cre/+", "targetCount": 2, "priority": 1, "notes": "Driver-positive pilot animals"},
+            {"genotypePattern": "fl/+", "targetCount": 2, "priority": 2, "notes": "Matched carrier controls"},
+        ],
+    },
+    {
+        "presetKey": "conditional-knockout",
+        "name": "Conditional Knockout Study",
+        "description": "Focus cohort on recombined conditional animals while keeping a smaller floxed-only control arm.",
+        "targetAnimals": 6,
+        "targets": [
+            {"genotypePattern": "Cre/+;fl/fl", "targetCount": 4, "priority": 1, "notes": "Primary conditional knockout animals"},
+            {"genotypePattern": "fl/fl", "targetCount": 2, "priority": 2, "notes": "Floxed controls without Cre"},
+        ],
+    },
+    {
+        "presetKey": "reporter-validation",
+        "name": "Reporter Validation Set",
+        "description": "Useful for imaging or validation projects that need reporter-positive animals alongside reporter-only comparators.",
+        "targetAnimals": 6,
+        "targets": [
+            {"genotypePattern": "Cre/+;Ai14/+", "targetCount": 4, "priority": 1, "notes": "Reporter-positive experimental animals"},
+            {"genotypePattern": "Ai14/+", "targetCount": 2, "priority": 2, "notes": "Reporter-only controls"},
+        ],
+    },
+]
+
+ASSIGNMENT_STATUS_STEPS: list[dict[str, str]] = [
+    {"key": "reserved", "label": "Reserved", "color": "#4f8ef7"},
+    {"key": "assigned", "label": "Assigned", "color": "#18a172"},
+    {"key": "shipped", "label": "Shipped", "color": "#eb9c44"},
+    {"key": "consumed", "label": "Consumed", "color": "#7c6cf2"},
+    {"key": "released", "label": "Released", "color": "#64748b"},
+]
+
 
 def now_iso() -> str:
     return datetime.now(UTC).isoformat()
@@ -144,6 +185,14 @@ def _provider_preset_by_name(name: str | None) -> dict[str, Any]:
         if normalized in {preset["key"], str(preset["name"]).strip().lower(), str(preset["orderProvider"]).strip().lower()}:
             return preset
     return GENOTYPING_PROVIDER_PRESETS[0]
+
+
+def _genotype_template_preset_by_key(key: str | None) -> dict[str, Any] | None:
+    normalized = str(key or "").strip().lower()
+    for preset in PROJECT_GENOTYPE_TEMPLATE_PRESETS:
+        if normalized == str(preset["presetKey"]).strip().lower():
+            return preset
+    return None
 
 
 def _csv_pick(row: dict[str, Any], keys: list[str]) -> str:
@@ -167,6 +216,30 @@ def _match_genotype_pattern(genotype: str | None, pattern: str | None) -> bool:
     return genotype_text == pattern_text or pattern_text in genotype_text
 
 
+def _normalize_target_rules(items: Any) -> list[dict[str, Any]]:
+    if not isinstance(items, list):
+        return []
+    normalized: list[dict[str, Any]] = []
+    seen_patterns: set[str] = set()
+    for idx, item in enumerate(items, start=1):
+        pattern = str((item or {}).get("genotypePattern") or (item or {}).get("genotype_pattern") or "").strip()
+        folded = pattern.lower()
+        if not pattern or folded in seen_patterns:
+            continue
+        seen_patterns.add(folded)
+        raw_count = (item or {}).get("targetCount", (item or {}).get("target_count", 0))
+        raw_priority = (item or {}).get("priority", idx)
+        normalized.append(
+            {
+                "genotypePattern": pattern,
+                "targetCount": max(0, int(raw_count or 0)),
+                "priority": max(1, int(raw_priority or idx)),
+                "notes": str((item or {}).get("notes") or "").strip(),
+            }
+        )
+    return normalized
+
+
 def _project_target_map(project_ids: list[int]) -> dict[int, list[dict[str, Any]]]:
     if not project_ids:
         return {}
@@ -184,6 +257,224 @@ def _project_target_map(project_ids: list[int]) -> dict[int, list[dict[str, Any]
     for row in rows:
         targets.setdefault(int(row["project_id"]), []).append(dict(row))
     return targets
+
+
+def _replace_project_genotype_targets(project_id: int, targets: Any) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int]:
+    before = _project_target_map([project_id]).get(project_id, [])
+    normalized = _normalize_target_rules(targets)
+    db().execute("DELETE FROM project_genotype_targets WHERE project_id = ?", (project_id,))
+    saved = 0
+    for idx, item in enumerate(normalized, start=1):
+        db().execute(
+            """
+            INSERT INTO project_genotype_targets (project_id, genotype_pattern, target_count, priority, notes, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (project_id, item["genotypePattern"], item["targetCount"], max(1, int(item["priority"] or idx)), item["notes"], now_iso()),
+        )
+        saved += 1
+    after = _project_target_map([project_id]).get(project_id, [])
+    return before, after, saved
+
+
+def _custom_genotype_target_templates(user: AuthContext, template_ids: list[int] | None = None) -> list[dict[str, Any]]:
+    filters: list[str] = []
+    params: list[Any] = []
+    if template_ids:
+        filters.append("t.id IN (" + ", ".join(["?"] * len(template_ids)) + ")")
+        params.extend(template_ids)
+    if not is_admin(user):
+        if user.lab_id is None:
+            return []
+        filters.append("t.lab_id = ?")
+        params.append(user.lab_id)
+    rows = db().execute(
+        """
+        SELECT t.id, t.lab_id, t.name, t.description, t.created_at,
+               l.name AS lab_name, u.full_name AS created_by_name
+        FROM genotype_target_templates t
+        LEFT JOIN labs l ON l.id = t.lab_id
+        LEFT JOIN users u ON u.id = t.created_by
+        """
+        + (" WHERE " + " AND ".join(filters) if filters else "")
+        + """
+        ORDER BY t.id DESC
+        """,
+        params,
+    ).fetchall()
+    if not rows:
+        return []
+    row_ids = [int(row["id"]) for row in rows]
+    rules = db().execute(
+        """
+        SELECT id, template_id, genotype_pattern, target_count, priority, notes
+        FROM genotype_target_template_rules
+        WHERE template_id IN ("""
+        + ", ".join(["?"] * len(row_ids))
+        + """)
+        ORDER BY template_id ASC, priority ASC, id ASC
+        """,
+        row_ids,
+    ).fetchall()
+    by_template: dict[int, list[dict[str, Any]]] = {}
+    for rule in rules:
+        by_template.setdefault(int(rule["template_id"]), []).append(
+            {
+                "id": int(rule["id"]),
+                "genotypePattern": rule["genotype_pattern"],
+                "targetCount": int(rule["target_count"] or 0),
+                "priority": int(rule["priority"] or 1),
+                "notes": rule["notes"],
+            }
+        )
+    templates: list[dict[str, Any]] = []
+    for row in rows:
+        template_rules = by_template.get(int(row["id"]), [])
+        templates.append(
+            {
+                "id": int(row["id"]),
+                "source": "custom",
+                "name": row["name"],
+                "description": row["description"],
+                "labId": row["lab_id"],
+                "labName": row["lab_name"],
+                "createdByName": row["created_by_name"],
+                "targetAnimals": sum(int(rule["targetCount"]) for rule in template_rules),
+                "targets": template_rules,
+            }
+        )
+    return templates
+
+
+def _visible_genotype_target_templates(user: AuthContext) -> list[dict[str, Any]]:
+    templates = [
+        {
+            "source": "preset",
+            "presetKey": preset["presetKey"],
+            "name": preset["name"],
+            "description": preset["description"],
+            "labName": "Built-in",
+            "targetAnimals": preset["targetAnimals"],
+            "targets": _normalize_target_rules(preset["targets"]),
+        }
+        for preset in PROJECT_GENOTYPE_TEMPLATE_PRESETS
+    ]
+    templates.extend(_custom_genotype_target_templates(user))
+    return templates
+
+
+def _resolve_target_template(payload: dict[str, Any], user: AuthContext) -> dict[str, Any] | None:
+    preset = _genotype_template_preset_by_key(payload.get("presetKey"))
+    if preset:
+        return {
+            "source": "preset",
+            "presetKey": preset["presetKey"],
+            "name": preset["name"],
+            "description": preset["description"],
+            "targetAnimals": preset["targetAnimals"],
+            "targets": _normalize_target_rules(preset["targets"]),
+        }
+    template_id = payload.get("templateId")
+    if template_id is None:
+        return None
+    templates = _custom_genotype_target_templates(user, [int(template_id)])
+    return templates[0] if templates else None
+
+
+def _empty_assignment_status_counts() -> dict[str, int]:
+    return {step["key"]: 0 for step in ASSIGNMENT_STATUS_STEPS}
+
+
+def _project_assignment_status_counts(project_ids: list[int]) -> dict[int, dict[str, int]]:
+    if not project_ids:
+        return {}
+    placeholders = ", ".join(["?"] * len(project_ids))
+    rows = db().execute(
+        f"""
+        SELECT project_id, status, COUNT(*) AS count
+        FROM project_animal_assignments
+        WHERE project_id IN ({placeholders})
+        GROUP BY project_id, status
+        """,
+        project_ids,
+    ).fetchall()
+    counts = {project_id: _empty_assignment_status_counts() for project_id in project_ids}
+    for row in rows:
+        project_counts = counts.setdefault(int(row["project_id"]), _empty_assignment_status_counts())
+        project_counts[str(row["status"] or "reserved")] = int(row["count"] or 0)
+    return counts
+
+
+def _assignment_status_flow(project_id: int) -> list[dict[str, Any]]:
+    counts = _project_assignment_status_counts([project_id]).get(project_id, _empty_assignment_status_counts())
+    return [
+        {
+            "key": step["key"],
+            "label": step["label"],
+            "value": int(counts.get(step["key"], 0)),
+            "color": step["color"],
+        }
+        for step in ASSIGNMENT_STATUS_STEPS
+    ]
+
+
+def _log_project_assignment_event(
+    *,
+    assignment_id: int | None,
+    project_id: int,
+    animal_id: int,
+    event_type: str,
+    from_status: str | None,
+    to_status: str,
+    notes: str | None,
+    actor_user_id: int | None,
+) -> None:
+    db().execute(
+        """
+        INSERT INTO project_animal_assignment_events
+            (assignment_id, project_id, animal_id, event_type, from_status, to_status, notes, actor_user_id, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (assignment_id, project_id, animal_id, event_type, from_status, to_status, notes, actor_user_id, now_iso()),
+    )
+
+
+def _project_assignment_timeline_payload(project_id: int) -> dict[str, Any]:
+    flow = _assignment_status_flow(project_id)
+    counts = {item["key"]: int(item["value"]) for item in flow}
+    rows = db().execute(
+        """
+        SELECT e.id, e.event_type, e.from_status, e.to_status, e.notes, e.created_at,
+               a.animal_code, c.cage_code, u.full_name AS actor_name
+        FROM project_animal_assignment_events e
+        JOIN animals a ON a.id = e.animal_id
+        LEFT JOIN cages c ON c.id = a.cage_id
+        LEFT JOIN users u ON u.id = e.actor_user_id
+        WHERE e.project_id = ?
+        ORDER BY e.created_at DESC, e.id DESC
+        LIMIT 16
+        """,
+        (project_id,),
+    ).fetchall()
+    return {
+        "statusFlow": flow,
+        "statusCounts": counts,
+        "activeAssignments": sum(count for key, count in counts.items() if key != "released"),
+        "events": [
+            {
+                "id": int(row["id"]),
+                "eventType": row["event_type"],
+                "fromStatus": row["from_status"],
+                "toStatus": row["to_status"],
+                "notes": row["notes"],
+                "createdAt": row["created_at"],
+                "animalCode": row["animal_code"],
+                "cageCode": row["cage_code"],
+                "actorName": row["actor_name"],
+            }
+            for row in rows
+        ],
+    }
 
 
 def db_target() -> str:
@@ -1332,36 +1623,93 @@ def set_project_genotype_targets(project_id: int) -> Response:
     targets = payload.get("targets", [])
     if not isinstance(targets, list):
         return jsonify({"error": "targets must be a list"}), 400
-
-    before = _project_target_map([project_id]).get(project_id, [])
-    db().execute("DELETE FROM project_genotype_targets WHERE project_id = ?", (project_id,))
-    saved = 0
-    seen_patterns: set[str] = set()
-    for item in targets:
-        pattern = str(item.get("genotypePattern", "")).strip()
-        normalized = pattern.lower()
-        if not pattern or normalized in seen_patterns:
-            continue
-        seen_patterns.add(normalized)
-        db().execute(
-            """
-            INSERT INTO project_genotype_targets (project_id, genotype_pattern, target_count, priority, notes, created_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                project_id,
-                pattern,
-                max(0, int(item.get("targetCount", 0))),
-                max(1, int(item.get("priority", saved + 1))),
-                item.get("notes"),
-                now_iso(),
-            ),
-        )
-        saved += 1
+    before, after, saved = _replace_project_genotype_targets(project_id, targets)
     db().commit()
-    after = _project_target_map([project_id]).get(project_id, [])
     audit_log(g.user.user_id, "project", project_id, "set_genotype_targets", {"targets": before}, {"targets": after})
     return jsonify({"saved": saved})
+
+
+@app.get("/api/genotyping/target-templates")
+@require_auth()
+def genotype_target_templates() -> Response:
+    return jsonify(_visible_genotype_target_templates(g.user))
+
+
+@app.post("/api/genotyping/target-templates")
+@require_auth(("PI", "Admin"))
+def create_genotype_target_template() -> Response:
+    payload = request.get_json(force=True)
+    name = str(payload.get("name") or "").strip()
+    targets = payload.get("targets", [])
+    if not name:
+        return jsonify({"error": "Provide template name"}), 400
+    normalized = _normalize_target_rules(targets)
+    if not normalized:
+        return jsonify({"error": "Provide at least one genotype target rule"}), 400
+    lab_id = int(payload.get("labId") or g.user.lab_id or 0)
+    if not lab_id:
+        return jsonify({"error": "Provide labId"}), 400
+    if not is_admin(g.user) and g.user.lab_id != lab_id:
+        return jsonify({"error": "Forbidden"}), 403
+    cur = db().execute(
+        """
+        INSERT INTO genotype_target_templates (lab_id, name, description, created_by, created_at)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (lab_id, name, payload.get("description"), g.user.user_id, now_iso()),
+    )
+    template_id = int(cur.lastrowid)
+    for idx, item in enumerate(normalized, start=1):
+        db().execute(
+            """
+            INSERT INTO genotype_target_template_rules (template_id, genotype_pattern, target_count, priority, notes)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (template_id, item["genotypePattern"], item["targetCount"], max(1, int(item["priority"] or idx)), item["notes"]),
+        )
+    db().commit()
+    audit_log(
+        g.user.user_id,
+        "genotype_target_template",
+        template_id,
+        "create",
+        None,
+        {"name": name, "labId": lab_id, "targets": normalized},
+    )
+    return jsonify({"id": template_id}), 201
+
+
+@app.post("/api/projects/<int:project_id>/apply-target-template")
+@require_auth(("PI", "Admin"))
+def apply_project_target_template(project_id: int) -> Response:
+    project = ensure_project_scope(project_id, g.user)
+    if not project:
+        return jsonify({"error": "Not found"}), 404
+    payload = request.get_json(force=True)
+    template = _resolve_target_template(payload, g.user)
+    if not template:
+        return jsonify({"error": "Template not found"}), 404
+    before, after, saved = _replace_project_genotype_targets(project_id, template["targets"])
+    if template.get("targetAnimals") is not None:
+        db().execute("UPDATE projects SET target_animals = ? WHERE id = ?", (int(template["targetAnimals"] or 0), project_id))
+    db().commit()
+    audit_log(
+        g.user.user_id,
+        "project",
+        project_id,
+        "apply_target_template",
+        {"targets": before},
+        {
+            "targets": after,
+            "template": {
+                "source": template.get("source"),
+                "presetKey": template.get("presetKey"),
+                "id": template.get("id"),
+                "name": template.get("name"),
+            },
+        },
+    )
+    return jsonify({"saved": saved, "templateName": template.get("name")})
 
 
 @app.get("/api/projects/<int:project_id>/assignments")
@@ -1386,6 +1734,15 @@ def project_animal_assignments(project_id: int) -> Response:
         (project_id,),
     ).fetchall()
     return jsonify([dict(r) for r in rows])
+
+
+@app.get("/api/projects/<int:project_id>/assignment-timeline")
+@require_auth()
+def project_assignment_timeline(project_id: int) -> Response:
+    project = ensure_project_scope(project_id, g.user)
+    if not project:
+        return jsonify({"error": "Not found"}), 404
+    return jsonify(_project_assignment_timeline_payload(project_id))
 
 
 @app.post("/api/projects/<int:project_id>/reserve-animals")
@@ -1423,7 +1780,7 @@ def reserve_project_animals(project_id: int) -> Response:
             SELECT pa.project_id, pa.status, p.project_code
             FROM project_animal_assignments pa
             JOIN projects p ON p.id = pa.project_id
-            WHERE pa.animal_id = ? AND pa.status = 'reserved'
+            WHERE pa.animal_id = ? AND pa.status <> 'released'
             """,
             (animal_id,),
         ).fetchone()
@@ -1443,10 +1800,92 @@ def reserve_project_animals(project_id: int) -> Response:
             """,
             (project_id, animal_id, notes, now_iso(), g.user.user_id),
         )
+        assignment = db().execute(
+            """
+            SELECT id
+            FROM project_animal_assignments
+            WHERE project_id = ? AND animal_id = ?
+            """,
+            (project_id, animal_id),
+        ).fetchone()
+        _log_project_assignment_event(
+            assignment_id=int(assignment["id"]) if assignment else None,
+            project_id=project_id,
+            animal_id=animal_id,
+            event_type="reserve",
+            from_status=str(existing["status"]) if existing else None,
+            to_status="reserved",
+            notes=notes,
+            actor_user_id=g.user.user_id,
+        )
         reserved += 1
     db().commit()
     audit_log(g.user.user_id, "project", project_id, "reserve_animals", None, {"animalIds": animal_ids, "reserved": reserved, "conflicts": conflicts})
     return jsonify({"reserved": reserved, "conflicts": conflicts})
+
+
+@app.post("/api/projects/<int:project_id>/assignment-status")
+@require_auth(("PI", "Admin"))
+def update_project_assignment_status(project_id: int) -> Response:
+    project = ensure_project_scope(project_id, g.user)
+    if not project:
+        return jsonify({"error": "Not found"}), 404
+    payload = request.get_json(force=True)
+    animal_ids = [int(x) for x in payload.get("animalIds", [])]
+    if not animal_ids:
+        return jsonify({"error": "Provide animalIds"}), 400
+    status = str(payload.get("status") or "").strip().lower()
+    allowed = {step["key"] for step in ASSIGNMENT_STATUS_STEPS}
+    if status not in allowed:
+        return jsonify({"error": "Invalid status"}), 400
+    notes = payload.get("notes")
+    updated = 0
+    conflicts = []
+    for animal_id in animal_ids:
+        row = db().execute(
+            """
+            SELECT id, status
+            FROM project_animal_assignments
+            WHERE project_id = ? AND animal_id = ?
+            """,
+            (project_id, animal_id),
+        ).fetchone()
+        if not row:
+            conflicts.append({"animalId": animal_id, "reason": "assignment_missing"})
+            continue
+        before_status = str(row["status"] or "")
+        if before_status == status:
+            conflicts.append({"animalId": animal_id, "reason": "unchanged"})
+            continue
+        db().execute(
+            """
+            UPDATE project_animal_assignments
+            SET status = ?, notes = COALESCE(?, notes), assigned_by = ?
+            WHERE id = ?
+            """,
+            (status, notes, g.user.user_id, int(row["id"])),
+        )
+        _log_project_assignment_event(
+            assignment_id=int(row["id"]),
+            project_id=project_id,
+            animal_id=animal_id,
+            event_type=f"status_{status}",
+            from_status=before_status,
+            to_status=status,
+            notes=notes,
+            actor_user_id=g.user.user_id,
+        )
+        updated += 1
+    db().commit()
+    audit_log(
+        g.user.user_id,
+        "project",
+        project_id,
+        "assignment_status",
+        None,
+        {"animalIds": animal_ids, "status": status, "updated": updated, "conflicts": conflicts},
+    )
+    return jsonify({"updated": updated, "conflicts": conflicts})
 
 
 @app.post("/api/projects/<int:project_id>/release-animals")
@@ -1461,11 +1900,27 @@ def release_project_animals(project_id: int) -> Response:
         return jsonify({"error": "Provide animalIds"}), 400
     released = 0
     for animal_id in animal_ids:
-        result = db().execute(
-            "UPDATE project_animal_assignments SET status = 'released', notes = COALESCE(?, notes) WHERE project_id = ? AND animal_id = ? AND status = 'reserved'",
-            (payload.get("notes"), project_id, animal_id),
+        row = db().execute(
+            "SELECT id, status FROM project_animal_assignments WHERE project_id = ? AND animal_id = ?",
+            (project_id, animal_id),
+        ).fetchone()
+        if not row or str(row["status"] or "") == "released":
+            continue
+        db().execute(
+            "UPDATE project_animal_assignments SET status = 'released', notes = COALESCE(?, notes), assigned_by = ? WHERE id = ?",
+            (payload.get("notes"), g.user.user_id, int(row["id"])),
         )
-        released += int(result.rowcount or 0)
+        _log_project_assignment_event(
+            assignment_id=int(row["id"]),
+            project_id=project_id,
+            animal_id=animal_id,
+            event_type="release",
+            from_status=str(row["status"] or ""),
+            to_status="released",
+            notes=payload.get("notes"),
+            actor_user_id=g.user.user_id,
+        )
+        released += 1
     db().commit()
     audit_log(g.user.user_id, "project", project_id, "release_animals", None, {"animalIds": animal_ids, "released": released})
     return jsonify({"released": released})
@@ -2688,7 +3143,7 @@ def genotyping_cohort_insights() -> Response:
 
     projects = db().execute(
         """
-        SELECT p.id, p.project_code, p.title, p.target_animals, l.name AS lab_name
+        SELECT p.id, p.lab_id, p.project_code, p.title, p.target_animals, l.name AS lab_name
         FROM projects p
         JOIN labs l ON l.id = p.lab_id
         WHERE """
@@ -2702,7 +3157,7 @@ def genotyping_cohort_insights() -> Response:
     project_ids = [int(row["id"]) for row in projects]
     project_targets = _project_target_map(project_ids)
 
-    assignment_filters = ["pa.status = 'reserved'"]
+    assignment_filters = ["1 = 1"]
     assignment_params: list[Any] = []
     if not is_admin(g.user):
         assignment_filters.append("p.lab_id = ?")
@@ -2716,10 +3171,16 @@ def genotyping_cohort_insights() -> Response:
         + " AND ".join(assignment_filters),
         assignment_params,
     ).fetchall()
-    assignment_by_animal = {int(row["animal_id"]): dict(row) for row in assignment_rows}
+    assignment_by_animal = {int(row["animal_id"]): dict(row) for row in assignment_rows if str(row["status"] or "") != "released"}
     reserved_counts: dict[int, int] = {}
+    status_counts: dict[int, dict[str, int]] = {project_id: _empty_assignment_status_counts() for project_id in project_ids}
     for row in assignment_rows:
-        reserved_counts[int(row["project_id"])] = reserved_counts.get(int(row["project_id"]), 0) + 1
+        project_id = int(row["project_id"])
+        status = str(row["status"] or "reserved")
+        project_status_counts = status_counts.setdefault(project_id, _empty_assignment_status_counts())
+        project_status_counts[status] = project_status_counts.get(status, 0) + 1
+        if status == "reserved":
+            reserved_counts[project_id] = reserved_counts.get(project_id, 0) + 1
 
     animal_rows = db().execute(
         f"""
@@ -2784,6 +3245,7 @@ def genotyping_cohort_insights() -> Response:
         cohort_projects.append(
             {
                 "id": int(row["id"]),
+                "labId": int(row["lab_id"]),
                 "projectCode": row["project_code"],
                 "title": row["title"],
                 "labName": row["lab_name"],
@@ -2802,6 +3264,15 @@ def genotyping_cohort_insights() -> Response:
                 "reservedAnimals": reserved,
                 "assignmentPressure": pressure,
                 "recommendedAction": action,
+                "statusFlow": [
+                    {
+                        "key": step["key"],
+                        "label": step["label"],
+                        "value": int(status_counts.get(int(row["id"]), _empty_assignment_status_counts()).get(step["key"], 0)),
+                        "color": step["color"],
+                    }
+                    for step in ASSIGNMENT_STATUS_STEPS
+                ],
             }
         )
 

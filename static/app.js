@@ -31,7 +31,9 @@ const state = {
   selectedGenotypingOrderId: null,
   genotypingDashboard: null,
   providerPresets: [],
+  genotypeTargetTemplates: [],
   cohortInsights: null,
+  cohortTimeline: null,
   selectedCohortAnimalIds: [],
   selectedCohortProjectId: null,
 };
@@ -75,7 +77,9 @@ function handleSessionExpired(message = "Session expired. Please sign in again."
   state.selectedGenotypingOrderId = null;
   state.genotypingDashboard = null;
   state.providerPresets = [];
+  state.genotypeTargetTemplates = [];
   state.cohortInsights = null;
+  state.cohortTimeline = null;
   state.selectedCohortAnimalIds = [];
   state.selectedCohortProjectId = null;
   showMessage(message, "warn");
@@ -940,6 +944,20 @@ function setCohortAnimalSelected(animalId, selected) {
   state.selectedCohortAnimalIds = Array.from(next.values());
 }
 
+function activeCohortProject() {
+  return (state.cohortInsights?.projects || []).find((row) => Number(row.id) === Number(state.selectedCohortProjectId)) || null;
+}
+
+async function loadCohortTimeline(projectId) {
+  if (!projectId) {
+    state.cohortTimeline = null;
+    return null;
+  }
+  const timeline = await api(`/api/projects/${projectId}/assignment-timeline`, { headers: headers(false) });
+  state.cohortTimeline = timeline;
+  return timeline;
+}
+
 function renderCohortInsights(insights) {
   const host = el("cohortInsights");
   if (!host) return;
@@ -952,11 +970,17 @@ function renderCohortInsights(insights) {
   if (!state.selectedCohortProjectId || !projects.some((row) => Number(row.id) === Number(state.selectedCohortProjectId))) {
     state.selectedCohortProjectId = projects.length ? Number(projects[0].id) : null;
   }
-  const activeProject = projects.find((row) => Number(row.id) === Number(state.selectedCohortProjectId)) || null;
+  const activeProject = activeCohortProject();
+  const activeTimeline = state.cohortTimeline || null;
   const projectBars = (insights.projects || []).slice(0, 8).map((row) => ({
     label: row.projectCode,
     value: row.matchedReadyAnimals,
     color: row.assignmentPressure > 0 ? "#eb9c44" : "#18a172",
+  }));
+  const flowBars = (activeTimeline?.statusFlow || activeProject?.statusFlow || []).map((row) => ({
+    label: row.label || row.key,
+    value: Number(row.value || 0),
+    color: row.color || "#64748b",
   }));
   const candidateAnimals = (insights.readyAnimals || []).filter((animal) =>
     activeProject
@@ -973,7 +997,7 @@ function renderCohortInsights(insights) {
           animal.genotype
         )} · ${
           animal.matchingProjects?.length ? esc(animal.matchingProjects.map((project) => project.projectCode).join(", ")) : "no match"
-        }${animal.assignment ? ` · reserved to ${esc(animal.assignment.project_code)}` : ""}</span>
+        }${animal.assignment ? ` · ${esc(animal.assignment.status)} in ${esc(animal.assignment.project_code)}` : ""}</span>
         <span class="timeline-actions">
           <button type="button" class="table-link" data-cohort-animal-toggle="${esc(animal.id)}">${
             cohortAnimalSelected(animal.id) ? "Deselect" : "Select"
@@ -1008,6 +1032,24 @@ function renderCohortInsights(insights) {
         <strong>${esc(rule.genotypePattern)}</strong>
         <span>${esc(rule.targetCount)} animals · priority ${esc(rule.priority)}</span>
         <span class="timeline-actions"><button type="button" class="table-link" data-target-remove-id="${esc(rule.id)}">Remove</button></span>
+      </div>`
+    )
+    .join("");
+  const templateOptions = (state.genotypeTargetTemplates || [])
+    .map(
+      (template) =>
+        `<option value="${esc(
+          template.source === "preset" ? `preset:${template.presetKey}` : `custom:${template.id}`
+        )}">${esc(template.name)} · ${esc(template.targetAnimals || 0)} animals${template.source === "preset" ? " · built-in" : ""}</option>`
+    )
+    .join("");
+  const timelineEvents = (activeTimeline?.events || [])
+    .map(
+      (event) => `<div class="timeline-item">
+        <strong>${esc(event.animalCode)}</strong>
+        <span>${esc(event.fromStatus || "new")} → ${esc(event.toStatus)} · ${esc(event.cageCode || "N/A")}${
+          event.actorName ? ` · ${esc(event.actorName)}` : ""
+        }</span>
       </div>`
     )
     .join("");
@@ -1056,10 +1098,29 @@ function renderCohortInsights(insights) {
               }
             </select>
           </label>
+          <label>Template
+            <select id="cohortTemplateSelect">
+              <option value="">Choose a template</option>
+              ${templateOptions}
+            </select>
+          </label>
+          <label>Save Template As<input id="cohortTemplateName" placeholder="e.g., Fast Pilot" /></label>
           <label>Genotype Target<input id="cohortTargetPattern" placeholder="e.g., Cre/+ or fl/*" /></label>
           <label>Target Count<input id="cohortTargetCount" type="number" min="0" value="4" /></label>
+          <label>Status
+            <select id="cohortStatusSelect">
+              <option value="reserved">Reserved</option>
+              <option value="assigned">Assigned</option>
+              <option value="shipped">Shipped</option>
+              <option value="consumed">Consumed</option>
+              <option value="released">Released</option>
+            </select>
+          </label>
           <div class="learning-actions">
             <button type="button" id="saveCohortTargetBtn" ${canManageProjects ? "" : "disabled title='Requires PI/Admin role'"}>Add Target Rule</button>
+            <button type="button" id="applyCohortTemplateBtn" ${canManageProjects ? "" : "disabled title='Requires PI/Admin role'"}>Apply Template</button>
+            <button type="button" id="saveCohortTemplateBtn" ${canManageProjects ? "" : "disabled title='Requires PI/Admin role'"}>Save As Template</button>
+            <button type="button" id="advanceCohortStatusBtn" ${canManageProjects ? "" : "disabled title='Requires PI/Admin role'"}>Update Selected Status</button>
             <button type="button" id="reserveCohortAnimalsBtn" ${canManageProjects ? "" : "disabled title='Requires PI/Admin role'"}>Reserve Selected</button>
             <button type="button" id="releaseCohortAnimalsBtn" ${canManageProjects ? "" : "disabled title='Requires PI/Admin role'"}>Release Selected</button>
           </div>
@@ -1088,6 +1149,20 @@ function renderCohortInsights(insights) {
               .join("") || `<div class="hint">No project demand context is visible yet.</div>`
           }
         </div>
+      </article>
+    </div>
+    <div class="detail-grid">
+      ${chartCard(
+        "Assignment Flow",
+        activeProject
+          ? `${esc(activeProject.projectCode)} status mix across reserved, assigned, shipped, consumed, and released animals`
+          : "Select a project to inspect its cohort movement",
+        flowBars.length ? drawBars(flowBars, { height: 132 }) : `<p class="hint">No assignment activity is visible yet.</p>`,
+        flowBars.map((row) => `<span class="legend-item">${esc(row.label)} ${esc(row.value)}</span>`).join("")
+      )}
+      <article class="viz-card">
+        <h4>Recent Assignment Activity</h4>
+        <div class="timeline-list">${timelineEvents || `<div class="hint">No assignment events have been recorded for this project yet.</div>`}</div>
       </article>
     </div>
   `;
@@ -1497,14 +1572,12 @@ async function inspectGenotypingOrder(orderId) {
 }
 
 async function loadSampleWorkspace() {
-  if (!state.projects.length) {
-    try {
-      await loadProjects();
-    } catch {
-      state.projects = [];
-    }
+  try {
+    await loadProjects();
+  } catch {
+    state.projects = [];
   }
-  const [samples, orders, mendelian, alerts, dashboard, presets, cohorts] = await Promise.all([
+  const [samples, orders, mendelian, alerts, dashboard, presets, cohorts, templates] = await Promise.all([
     api("/api/samples", { headers: headers(false) }),
     api("/api/genotyping/orders", { headers: headers(false) }),
     api("/api/genotyping/mendelian", { headers: headers(false) }),
@@ -1512,16 +1585,22 @@ async function loadSampleWorkspace() {
     api("/api/genotyping/dashboard", { headers: headers(false) }),
     api("/api/genotyping/providers", { headers: headers(false) }),
     api("/api/genotyping/cohorts", { headers: headers(false) }),
+    api("/api/genotyping/target-templates", { headers: headers(false) }),
   ]);
   state.samples = samples;
   state.genotypingOrders = orders;
   state.genotypingDashboard = dashboard;
   state.providerPresets = presets;
+  state.genotypeTargetTemplates = templates;
   state.cohortInsights = cohorts;
   state.selectedSampleIds = state.selectedSampleIds.filter((id) => samples.some((row) => Number(row.id) === Number(id)));
   state.selectedCohortAnimalIds = state.selectedCohortAnimalIds.filter((id) =>
     (cohorts.readyAnimals || []).some((row) => Number(row.id) === Number(id))
   );
+  if (!state.selectedCohortProjectId || !(cohorts.projects || []).some((row) => Number(row.id) === Number(state.selectedCohortProjectId))) {
+    state.selectedCohortProjectId = cohorts.projects?.length ? Number(cohorts.projects[0].id) : null;
+  }
+  state.cohortTimeline = state.selectedCohortProjectId ? await loadCohortTimeline(state.selectedCohortProjectId) : null;
   if (!state.selectedGenotypingOrderId || !orders.some((row) => Number(row.id) === Number(state.selectedGenotypingOrderId))) {
     state.selectedGenotypingOrderId = orders.length ? Number(orders[0].id) : null;
   }
@@ -1911,7 +1990,7 @@ function renderCageInspector(detail) {
   `;
 }
 
-function renderProjectInspector(project, cages, targets = [], assignments = []) {
+function renderProjectInspector(project, cages, targets = [], assignments = [], timeline = null) {
   if (!project) {
     el("projectInspector").innerHTML = "";
     return;
@@ -1926,6 +2005,18 @@ function renderProjectInspector(project, cages, targets = [], assignments = []) 
   const assigned = toNum(project.assigned_cages || 0);
   const target = Math.max(0, toNum(project.target_animals || 0));
   const progress = Math.min(100, target ? Math.round((assigned * 100) / target) : 0);
+  const flowBars = (timeline?.statusFlow || []).map((row) => ({
+    label: row.label || row.key,
+    value: Number(row.value || 0),
+    color: row.color || "#64748b",
+  }));
+  const timelineRows = (timeline?.events || [])
+    .map(
+      (row) => `<div class="timeline-item"><strong>${esc(row.animalCode)}</strong><span>${esc(row.fromStatus || "new")} → ${esc(
+        row.toStatus
+      )} · ${esc(row.cageCode || "N/A")}${row.actorName ? ` · ${esc(row.actorName)}` : ""}</span></div>`
+    )
+    .join("");
 
   el("projectInspector").innerHTML = `
     <div class="detail-shell">
@@ -1945,6 +2036,12 @@ function renderProjectInspector(project, cages, targets = [], assignments = []) 
           "Assigned cage breeding status",
           drawBars(statusBars, { height: 120 }),
           statusBars.map((x) => `<span class="legend-item">${esc(x.label)} ${esc(x.value)}</span>`).join("")
+        )}
+        ${chartCard(
+          "Assignment Flow",
+          "Current cohort movement by status",
+          flowBars.length ? drawBars(flowBars, { height: 120 }) : `<p class="hint">No animals have moved through this cohort yet.</p>`,
+          flowBars.map((x) => `<span class="legend-item">${esc(x.label)} ${esc(x.value)}</span>`).join("")
         )}
       </div>
       <div class="detail-grid">
@@ -1966,7 +2063,7 @@ function renderProjectInspector(project, cages, targets = [], assignments = []) 
           </div>
         </article>
         <article class="viz-card">
-          <h4>Reserved Animals</h4>
+          <h4>Assigned Animals</h4>
           <div class="timeline-list">
             ${
               assignments.length
@@ -1979,11 +2076,15 @@ function renderProjectInspector(project, cages, targets = [], assignments = []) 
                         )} · ${esc(row.status)}</span></div>`
                     )
                     .join("")
-                : `<div class="hint">No animals reserved to this project yet.</div>`
+                : `<div class="hint">No animals are assigned to this project yet.</div>`
             }
           </div>
         </article>
       </div>
+      <article class="viz-card">
+        <h4>Assignment Activity</h4>
+        <div class="timeline-list">${timelineRows || `<div class="hint">No assignment events recorded yet.</div>`}</div>
+      </article>
       <article class="viz-card">
         <h4>Assigned Cages</h4>
         <table class="table compact-table">
@@ -2021,13 +2122,14 @@ async function openCageInspector(cageId) {
 async function openProjectInspector(projectId) {
   if (!projectId) return;
   const project = state.projects.find((p) => Number(p.id) === Number(projectId));
-  const [cages, targets, assignments] = await Promise.all([
+  const [cages, targets, assignments, timeline] = await Promise.all([
     api(`/api/projects/${projectId}/cages`, { headers: headers(false) }),
     api(`/api/projects/${projectId}/genotype-targets`, { headers: headers(false) }),
     api(`/api/projects/${projectId}/assignments`, { headers: headers(false) }),
+    api(`/api/projects/${projectId}/assignment-timeline`, { headers: headers(false) }),
   ]);
   activateTab("projects");
-  renderProjectInspector(project, cages, targets, assignments);
+  renderProjectInspector(project, cages, targets, assignments, timeline);
   showMessage(`Loaded project ${project?.project_code || projectId}`, "success");
 }
 
@@ -3311,6 +3413,68 @@ async function init() {
   });
 
   el("cohortInsights").addEventListener("click", (evt) => {
+    const applyTemplateNode = evt.target.closest("button#applyCohortTemplateBtn");
+    if (applyTemplateNode) {
+      const projectId = Number(el("cohortProjectSelect")?.value || state.selectedCohortProjectId || 0);
+      withAction("Project template application failed", async () => {
+        if (!projectId) throw new Error("Select a project first");
+        const templateValue = el("cohortTemplateSelect")?.value || "";
+        if (!templateValue) throw new Error("Choose a genotype template first");
+        const [source, ref] = templateValue.split(":");
+        const payload = source === "preset" ? { presetKey: ref } : { templateId: Number(ref) };
+        const result = await api(`/api/projects/${projectId}/apply-target-template`, {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify(payload),
+        });
+        await loadSampleWorkspace();
+        showMessage(`Applied ${result.templateName || "template"} to the selected project.`, "success");
+      }).catch(() => undefined);
+      return;
+    }
+    const saveTemplateNode = evt.target.closest("button#saveCohortTemplateBtn");
+    if (saveTemplateNode) {
+      const projectId = Number(el("cohortProjectSelect")?.value || state.selectedCohortProjectId || 0);
+      withAction("Template save failed", async () => {
+        const project = activeCohortProject();
+        if (!projectId || !project) throw new Error("Select a project first");
+        const name = el("cohortTemplateName")?.value.trim();
+        if (!name) throw new Error("Enter a template name");
+        const targets = project.targetRules || [];
+        if (!targets.length) throw new Error("Add or apply genotype rules before saving a template");
+        await api("/api/genotyping/target-templates", {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify({
+            labId: Number(project.labId || 0),
+            name,
+            description: `Saved from ${project.projectCode}`,
+            targets,
+          }),
+        });
+        el("cohortTemplateName").value = "";
+        await loadSampleWorkspace();
+        showMessage("Saved the current project rules as a reusable template.", "success");
+      }).catch(() => undefined);
+      return;
+    }
+    const advanceStatusNode = evt.target.closest("button#advanceCohortStatusBtn");
+    if (advanceStatusNode) {
+      const projectId = Number(el("cohortProjectSelect")?.value || state.selectedCohortProjectId || 0);
+      withAction("Assignment status update failed", async () => {
+        if (!projectId) throw new Error("Select a project first");
+        if (!state.selectedCohortAnimalIds.length) throw new Error("Select at least one animal first");
+        const status = el("cohortStatusSelect")?.value || "assigned";
+        const result = await api(`/api/projects/${projectId}/assignment-status`, {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify({ animalIds: state.selectedCohortAnimalIds, status }),
+        });
+        await loadSampleWorkspace();
+        showMessage(`Updated ${result.updated} animals to ${status}.`, "success");
+      }).catch(() => undefined);
+      return;
+    }
     const reserveNode = evt.target.closest("button#reserveCohortAnimalsBtn");
     if (reserveNode) {
       const projectId = Number(el("cohortProjectSelect")?.value || state.selectedCohortProjectId || 0);
@@ -3421,10 +3585,15 @@ async function init() {
     withAction("Animal pedigree load failed", () => openLearningPedigree(Number(animalNode.getAttribute("data-sample-animal-id")))).catch(() => undefined);
   });
 
-  el("cohortInsights").addEventListener("change", (evt) => {
+  el("cohortInsights").addEventListener("change", async (evt) => {
     const projectSelect = evt.target.closest("select#cohortProjectSelect");
     if (!projectSelect) return;
     state.selectedCohortProjectId = Number(projectSelect.value || 0) || null;
+    try {
+      await loadCohortTimeline(state.selectedCohortProjectId);
+    } catch (err) {
+      handleBackgroundError(err, "Cohort timeline refresh failed");
+    }
     renderCohortInsights(state.cohortInsights);
   });
 

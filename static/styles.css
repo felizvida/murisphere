@@ -623,6 +623,11 @@ button:disabled,
 
 .cohort-toolbar {
   margin-bottom: 0.55rem;
+  align-items: end;
+}
+
+.cohort-toolbar .learning-actions {
+  grid-column: 1 / -1;
 }
 
 .timeline-actions {

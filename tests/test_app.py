@@ -483,9 +483,15 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertIn('api("/api/genotyping/dashboard"', js)
         self.assertIn('api("/api/genotyping/providers"', js)
         self.assertIn('api("/api/genotyping/cohorts"', js)
+        self.assertIn('api("/api/genotyping/target-templates"', js)
         self.assertIn('reserveCohortAnimalsBtn', js)
+        self.assertIn("applyCohortTemplateBtn", js)
+        self.assertIn("advanceCohortStatusBtn", js)
         self.assertIn("/genotype-targets", js)
+        self.assertIn("/apply-target-template", js)
         self.assertIn("/reserve-animals", js)
+        self.assertIn("/assignment-status", js)
+        self.assertIn("/assignment-timeline", js)
         self.assertIn('inspectGenotypingOrder(orderId)', js)
         self.assertIn('"/api/genotyping/orders"', js)
         self.assertIn('"/api/genotyping/orders/callback"', js)
@@ -1574,15 +1580,51 @@ class AppIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(assigned.status_code, 200)
 
-        targets = self.client.post(
-            f"/api/projects/{project_id}/genotype-targets",
+        template_create = self.client.post(
+            "/api/genotyping/target-templates",
             headers=self.auth_headers(admin),
-            json={"targets": [{"genotypePattern": "Cre/+", "targetCount": 3, "priority": 1}]},
+            json={
+                "labId": 1,
+                "name": "Cre Expansion",
+                "description": "Reusable Cre-positive cohort template",
+                "targets": [{"genotypePattern": "Cre/+", "targetCount": 3, "priority": 1}],
+            },
+        )
+        self.assertEqual(template_create.status_code, 201)
+        template_id = template_create.get_json()["id"]
+
+        templates = self.client.get("/api/genotyping/target-templates", headers=self.auth_headers(tech))
+        self.assertEqual(templates.status_code, 200)
+        template_payload = templates.get_json()
+        self.assertTrue(any(row["source"] == "preset" and row["presetKey"] == "balanced-pilot" for row in template_payload))
+        self.assertTrue(any(row["source"] == "custom" and row["id"] == template_id for row in template_payload))
+
+        targets = self.client.post(
+            f"/api/projects/{project_id}/apply-target-template",
+            headers=self.auth_headers(admin),
+            json={"templateId": template_id},
         )
         self.assertEqual(targets.status_code, 200)
         listed_targets = self.client.get(f"/api/projects/{project_id}/genotype-targets", headers=self.auth_headers(tech))
         self.assertEqual(listed_targets.status_code, 200)
         self.assertEqual(listed_targets.get_json()[0]["genotype_pattern"], "Cre/+")
+
+        preset_project = self.client.post(
+            "/api/projects",
+            headers=self.auth_headers(admin),
+            json={"labId": 1, "projectCode": "PRJ-TPL-002", "title": "Template Applied", "status": "active", "targetAnimals": 0},
+        )
+        self.assertEqual(preset_project.status_code, 201)
+        preset_project_id = preset_project.get_json()["id"]
+        preset_apply = self.client.post(
+            f"/api/projects/{preset_project_id}/apply-target-template",
+            headers=self.auth_headers(admin),
+            json={"presetKey": "balanced-pilot"},
+        )
+        self.assertEqual(preset_apply.status_code, 200)
+        preset_targets = self.client.get(f"/api/projects/{preset_project_id}/genotype-targets", headers=self.auth_headers(tech))
+        self.assertEqual(preset_targets.status_code, 200)
+        self.assertEqual(len(preset_targets.get_json()), 2)
 
         with sqlite3.connect(appmod.DB_PATH) as conn:
             now = datetime.now(UTC).isoformat()
@@ -1675,12 +1717,28 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertEqual(assignments.status_code, 200)
         self.assertEqual(assignments.get_json()[0]["animal_code"], "COHORT-SIRE-001")
 
+        status_update = self.client.post(
+            f"/api/projects/{project_id}/assignment-status",
+            headers=self.auth_headers(admin),
+            json={"animalIds": [sire_id], "status": "assigned"},
+        )
+        self.assertEqual(status_update.status_code, 200)
+        self.assertEqual(status_update.get_json()["updated"], 1)
+
+        timeline = self.client.get(f"/api/projects/{project_id}/assignment-timeline", headers=self.auth_headers(tech))
+        self.assertEqual(timeline.status_code, 200)
+        timeline_payload = timeline.get_json()
+        self.assertEqual(timeline_payload["statusCounts"]["assigned"], 1)
+        self.assertTrue(any(row["toStatus"] == "assigned" and row["animalCode"] == "COHORT-SIRE-001" for row in timeline_payload["events"]))
+
         cohorts = self.client.get("/api/genotyping/cohorts", headers=self.auth_headers(tech))
         self.assertEqual(cohorts.status_code, 200)
         cohort_payload = cohorts.get_json()
-        self.assertTrue(any(row["projectCode"] == "PRJ-GENO-001" and row["matchedReadyAnimals"] >= 1 and row["reservedAnimals"] >= 1 for row in cohort_payload["projects"]))
+        self.assertTrue(any(row["projectCode"] == "PRJ-GENO-001" and row["matchedReadyAnimals"] >= 1 for row in cohort_payload["projects"]))
         self.assertTrue(any(row["animalCode"] == "COHORT-SIRE-001" for row in cohort_payload["readyAnimals"]))
-        self.assertEqual(next(row for row in cohort_payload["projects"] if row["projectCode"] == "PRJ-GENO-001")["targetRules"][0]["genotypePattern"], "Cre/+")
+        project_row = next(row for row in cohort_payload["projects"] if row["projectCode"] == "PRJ-GENO-001")
+        self.assertEqual(project_row["targetRules"][0]["genotypePattern"], "Cre/+")
+        self.assertTrue(any(item["key"] == "assigned" and item["value"] >= 1 for item in project_row["statusFlow"]))
         self.assertTrue(cohort_payload["breederSignals"])
         self.assertIn("signal", cohort_payload["breederSignals"][0])
 
@@ -1691,6 +1749,9 @@ class AppIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(release.status_code, 200)
         self.assertEqual(release.get_json()["released"], 1)
+        released_timeline = self.client.get(f"/api/projects/{project_id}/assignment-timeline", headers=self.auth_headers(tech))
+        self.assertEqual(released_timeline.status_code, 200)
+        self.assertGreaterEqual(released_timeline.get_json()["statusCounts"]["released"], 1)
 
 
 if __name__ == "__main__":
