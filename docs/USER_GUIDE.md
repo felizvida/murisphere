@@ -25,10 +25,14 @@ Then keep these two documents open together:
 ## Samples And Genotyping
 Use the `Reports` tab for the samples/genotyping workspace.
 
+- review the genotyping overview dashboard for sample states, provider load, order flow, and genotype mix
 - create samples from animal codes
 - inspect sample event history
 - select samples into genotyping orders
 - submit draft orders
+- download provider-ready CSV templates for a selected order
+- import provider result CSV files back into the same order
+- inspect order reconciliation to see resulted, missing, in-transit, and blocked items
 - review order items and results
 - inspect Mendelian summaries and genotype alerts
 

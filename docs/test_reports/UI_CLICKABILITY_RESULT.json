@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-03-23T15:50:06.398058+00:00",
+  "generatedAt": "2026-03-23T16:05:05.633948+00:00",
   "summary": {
-    "passed": 47,
+    "passed": 50,
     "failed": 0,
     "skipped": 9,
     "score": 100.0
@@ -64,6 +64,12 @@
     {
       "category": "form",
       "item": "#genotypingCallbackForm",
+      "status": "pass",
+      "detail": "submit listener found"
+    },
+    {
+      "category": "form",
+      "item": "#genotypingImportForm",
       "status": "pass",
       "detail": "submit listener found"
     },
@@ -262,6 +268,18 @@
     {
       "category": "button",
       "item": "#simulateCallbackBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "#downloadProviderTemplateBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "#importResultsBtn",
       "status": "pass",
       "detail": "clickable via direct or form submit listener"
     },

@@ -820,24 +820,36 @@ field.</p>
 <ol type="1">
 <li>Open the <code>Reports</code> tab and use the <strong>Samples &amp;
 Genotyping Workspace</strong>.</li>
+<li>Pause at the overview cards first and identify which provider has
+the highest pending load.</li>
 <li>Locate <code>SMP-0004</code>.</li>
 <li>Confirm it belongs to <code>F1-L01-C0012-P01</code>.</li>
 <li>Review the event history from collection to result.</li>
 <li>Compare it to <code>SMP-0001</code>, which is still only
 <code>collected</code>.</li>
-<li>Ask what operational step is missing between those two states.</li>
+<li>Create or open a genotyping order that includes one of those
+samples.</li>
+<li>Download the provider template CSV for that order.</li>
+<li>Open the order reconciliation view and note how it distinguishes
+<code>ready to ship</code>, <code>in transit</code>,
+<code>with provider</code>, <code>missing result</code>, and
+<code>resulted</code>.</li>
+<li>If you are practicing as an admin, import a result CSV or use
+callback simulation and watch the order move toward completion.</li>
 </ol>
 <h2 id="exercise-4">Exercise</h2>
 <p>Choose one <code>resulted</code> sample and one
 <code>collected</code> sample.</p>
 <p>Write down: - which one is research-ready now - which one still
-carries operational risk - what the next handoff should be</p>
+carries operational risk - what the next handoff should be - whether the
+provider workflow is blocked by shipping, provider receipt, or missing
+result reconciliation</p>
 <h2 id="fun-application-1">Fun application</h2>
 <p>Pretend a PI needs to start a pilot cohort tomorrow. Your job is to
 identify which animals are closest to assignment.</p>
-<p>Use sample status, genotype results, and cage context together. This
-is how good colony software becomes a research acceleration tool rather
-than a record archive.</p>
+<p>Use sample status, genotype results, provider reconciliation, and
+cage context together. This is how good colony software becomes a
+research acceleration tool rather than a record archive.</p>
 <h1 id="module-6.-compliance-welfare-and-abnormal-conditions">Module 6.
 Compliance, Welfare, and Abnormal Conditions</h1>
 <h2 id="learning-goal-5">Learning goal</h2>

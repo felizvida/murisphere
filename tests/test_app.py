@@ -270,6 +270,9 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertIn('id="sampleCreateForm"', body)
         self.assertIn('id="loadSamplesBtn"', body)
         self.assertIn('id="genotypingCallbackForm"', body)
+        self.assertIn('id="genotypingOverview"', body)
+        self.assertIn('id="genotypingImportForm"', body)
+        self.assertIn('id="downloadProviderTemplateBtn"', body)
 
     def test_learning_routes_serve_tutorial_assets(self) -> None:
         redirect_res = self.client.get("/learn", follow_redirects=False)
@@ -472,9 +475,14 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertIn('el("sampleCreateForm").addEventListener("submit"', js)
         self.assertIn('el("genotypingOrderForm").addEventListener("submit"', js)
         self.assertIn('el("genotypingCallbackForm").addEventListener("submit"', js)
+        self.assertIn('el("genotypingImportForm").addEventListener("submit"', js)
+        self.assertIn('el("downloadProviderTemplateBtn").addEventListener("click"', js)
+        self.assertIn('api("/api/genotyping/dashboard"', js)
         self.assertIn('inspectGenotypingOrder(orderId)', js)
         self.assertIn('"/api/genotyping/orders"', js)
         self.assertIn('"/api/genotyping/orders/callback"', js)
+        self.assertIn("provider-template.csv", js)
+        self.assertIn("/import-results", js)
 
     def test_breeding_calendar_forecast_and_analytics(self) -> None:
         token = self.login("admin@murisphere.local", "admin1234")
@@ -1456,6 +1464,88 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertEqual(stream.status_code, 200)
         self.assertIn("text/event-stream", stream.content_type)
         self.assertIn(b"event: alerts", stream.data)
+
+    def test_genotyping_dashboard_provider_template_and_csv_import(self) -> None:
+        admin = self.login("admin@murisphere.local", "admin1234")
+        tech = self.login("tech@murisphere.local", "tech1234")
+
+        with sqlite3.connect(appmod.DB_PATH) as conn:
+            now = datetime.now(UTC).isoformat()
+            conn.execute(
+                """
+                INSERT INTO animals (animal_code, sex, dob, strain, genotype, status, cage_id, litter_id, sire_id, dam_id, created_at, updated_at)
+                VALUES (?, 'M', ?, 'C57BL/6J', 'WT/WT', 'Active', 1, NULL, NULL, NULL, ?, ?)
+                """,
+                ("IMPORT-SIRE-001", date.today().isoformat(), now, now),
+            )
+            sire_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.commit()
+
+        sample = self.client.post(
+            "/api/samples",
+            headers=self.auth_headers(tech),
+            json={"animalId": sire_id, "sampleType": "tail", "sampleCode": "SMP-IMPORT-001", "provider": "Transnetyx"},
+        )
+        self.assertEqual(sample.status_code, 201)
+        sample_id = sample.get_json()["id"]
+
+        order = self.client.post(
+            "/api/genotyping/orders",
+            headers=self.auth_headers(tech),
+            json={"provider": "Transnetyx", "sampleIds": [sample_id], "markerPanel": "Cre Panel"},
+        )
+        self.assertEqual(order.status_code, 201)
+        order_id = order.get_json()["id"]
+        order_ref = order.get_json()["orderRef"]
+
+        template = self.client.get(f"/api/genotyping/orders/{order_id}/provider-template.csv", headers=self.auth_headers(tech))
+        self.assertEqual(template.status_code, 200)
+        self.assertIn("text/csv", template.content_type)
+        self.assertIn(order_ref, template.data.decode("utf-8"))
+        self.assertIn("SMP-IMPORT-001", template.data.decode("utf-8"))
+
+        import_res = self.client.post(
+            f"/api/genotyping/orders/{order_id}/import-results",
+            headers=self.auth_headers(admin),
+            data={
+                "status": "closed",
+                "file": (
+                    io.BytesIO(b"sample_code,result,marker_panel\nSMP-IMPORT-001,Cre/+,Cre Panel\n"),
+                    "provider_results.csv",
+                ),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(import_res.status_code, 200)
+        self.assertEqual(import_res.get_json()["updatedAnimals"], 1)
+
+        detail = self.client.get(f"/api/genotyping/orders/{order_id}", headers=self.auth_headers(tech))
+        self.assertEqual(detail.status_code, 200)
+        payload = detail.get_json()
+        self.assertEqual(payload["order"]["status"], "closed")
+        self.assertEqual(payload["items"][0]["result"], "Cre/+")
+        self.assertEqual(payload["items"][0]["sample_status"], "resulted")
+        self.assertEqual(payload["reconciliation"]["summary"]["completionPct"], 100.0)
+        self.assertEqual(payload["reconciliation"]["summary"]["resultedItems"], 1)
+
+        reconciliation = self.client.get(f"/api/genotyping/orders/{order_id}/reconciliation", headers=self.auth_headers(tech))
+        self.assertEqual(reconciliation.status_code, 200)
+        self.assertEqual(reconciliation.get_json()["items"][0]["workflowState"], "resulted")
+
+        sample_events = self.client.get(f"/api/samples/{sample_id}/events", headers=self.auth_headers(tech))
+        self.assertEqual(sample_events.status_code, 200)
+        self.assertTrue(any(event["event_type"] == "resulted" for event in sample_events.get_json()))
+
+        genotype_history = self.client.get(f"/api/animals/{sire_id}/genotypes", headers=self.auth_headers(tech))
+        self.assertEqual(genotype_history.status_code, 200)
+        self.assertEqual(genotype_history.get_json()[0]["result"], "Cre/+")
+
+        dashboard = self.client.get("/api/genotyping/dashboard", headers=self.auth_headers(tech))
+        self.assertEqual(dashboard.status_code, 200)
+        dashboard_payload = dashboard.get_json()
+        self.assertTrue(any(row["label"] == "resulted" and row["value"] >= 1 for row in dashboard_payload["sampleStatus"]))
+        self.assertTrue(any(row["label"] == "closed" and row["value"] >= 1 for row in dashboard_payload["orderStatus"]))
+        self.assertTrue(any(row["provider"] == "Transnetyx" for row in dashboard_payload["providers"]))
 
 
 if __name__ == "__main__":

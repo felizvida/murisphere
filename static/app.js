@@ -29,6 +29,7 @@ const state = {
   selectedSampleIds: [],
   genotypingOrders: [],
   selectedGenotypingOrderId: null,
+  genotypingDashboard: null,
 };
 const PENDING_SCAN_KEY = "murisphere_pending_scan";
 const SCAN_BASE_KEY = "murisphere_scan_base_url";
@@ -68,6 +69,7 @@ function handleSessionExpired(message = "Session expired. Please sign in again."
   state.selectedSampleIds = [];
   state.genotypingOrders = [];
   state.selectedGenotypingOrderId = null;
+  state.genotypingDashboard = null;
   showMessage(message, "warn");
 }
 
@@ -770,9 +772,164 @@ function renderSampleSelectionBanner() {
   banner.textContent = `${state.selectedSampleIds.length} sample${state.selectedSampleIds.length > 1 ? "s" : ""} selected for genotyping order creation.`;
 }
 
+function renderWorkflowRail(steps, currentStep, completedSteps = []) {
+  const active = String(currentStep || "").toLowerCase();
+  const done = new Set((completedSteps || []).map((step) => String(step).toLowerCase()));
+  const activeIndex = steps.findIndex((step) => String(step).toLowerCase() === active);
+  return `<div class="workflow-rail">${steps
+    .map((step, index) => {
+      const key = String(step).toLowerCase();
+      const isActive = key === active;
+      const isDone = done.has(key) || (activeIndex >= index && activeIndex !== -1);
+      const cls = isActive ? "active" : isDone ? "complete" : "pending";
+      return `<div class="workflow-step ${cls}">
+        <span>${index + 1}</span>
+        <strong>${esc(step)}</strong>
+      </div>`;
+    })
+    .join("")}</div>`;
+}
+
+function renderGenotypingOverview(dashboard) {
+  const host = el("genotypingOverview");
+  if (!host) return;
+  if (!dashboard) {
+    host.innerHTML = "";
+    return;
+  }
+  const sampleParts = (dashboard.sampleStatus || []).map((row, idx) => ({
+    label: row.label,
+    value: row.value,
+    color: ["#3b82f6", "#18a172", "#eb9c44", "#ca513d", "#64748b"][idx % 5],
+  }));
+  const orderBars = (dashboard.orderStatus || []).map((row, idx) => ({
+    label: row.label,
+    value: row.value,
+    color: ["#18a172", "#3ba0d8", "#eb9c44", "#ca513d", "#64748b"][idx % 5],
+  }));
+  const providerBars = (dashboard.providers || []).map((row) => ({
+    label: row.provider,
+    value: row.pending,
+    color: row.pending > 0 ? "#eb9c44" : "#18a172",
+  }));
+  const genotypeBars = (dashboard.genotypeDistribution || []).slice(0, 8).map((row, idx) => ({
+    label: row.label,
+    value: row.value,
+    color: ["#0f7a58", "#3b82f6", "#eb9c44", "#ca513d", "#8b5cf6", "#14b8a6"][idx % 6],
+  }));
+  const turnaroundSeries = (dashboard.turnaround || []).map((row) => toNum(row.value));
+  const recentRows = (dashboard.recentActivity || [])
+    .map(
+      (row) =>
+        `<div class="timeline-item"><strong>${esc(row.ref_code || row.kind)}</strong><span>${esc(row.label)} · ${esc(fmtDate(row.happened_at))}</span></div>`
+    )
+    .join("");
+  host.innerHTML = `
+    <div class="detail-grid">
+      ${chartCard(
+        "Sample Chain Of Custody",
+        "Where samples sit today",
+        sampleParts.length ? drawDonut(sampleParts, { size: 168 }) : `<p class="hint">No samples recorded yet.</p>`,
+        sampleParts.map((row) => `<span class="legend-item">${esc(row.label)} ${esc(row.value)}</span>`).join("")
+      )}
+      ${chartCard(
+        "Order Flow",
+        "Current order statuses",
+        orderBars.length ? drawBars(orderBars, { height: 132 }) : `<p class="hint">No genotyping orders yet.</p>`,
+        orderBars.map((row) => `<span class="legend-item">${esc(row.label)} ${esc(row.value)}</span>`).join("")
+      )}
+      ${chartCard(
+        "Provider Load",
+        "Pending items by provider",
+        providerBars.length ? drawBars(providerBars, { height: 132 }) : `<p class="hint">No provider work queued.</p>`,
+        (dashboard.providers || [])
+          .map((row) => `<span class="legend-item">${esc(row.provider)} ${esc(row.pending)} pending / ${esc(row.resulted)} resulted</span>`)
+          .join("")
+      )}
+      ${chartCard(
+        "Genotype Distribution",
+        "Observed animal genotype mix",
+        genotypeBars.length ? drawBars(genotypeBars, { height: 132 }) : `<p class="hint">No genotype results recorded yet.</p>`,
+        genotypeBars.map((row) => `<span class="legend-item">${esc(row.label)} ${esc(row.value)}</span>`).join("")
+      )}
+    </div>
+    <div class="detail-grid">
+      ${chartCard(
+        "Turnaround Pressure",
+        "Sample age buckets from collection date",
+        drawSparkline(turnaroundSeries, "#0f7a58"),
+        (dashboard.turnaround || []).map((row) => `<span class="legend-item">${esc(row.label)} ${esc(row.value)}</span>`).join("")
+      )}
+      <article class="viz-card">
+        <h4>Recent Genotyping Activity</h4>
+        <div class="timeline-list">${recentRows || `<div class="hint">No recent sample or order activity yet.</div>`}</div>
+      </article>
+    </div>
+  `;
+}
+
+function renderReconciliationInspector(reconciliation) {
+  const host = el("reconciliationInspector");
+  if (!host) return;
+  if (!reconciliation?.summary) {
+    host.innerHTML = "";
+    return;
+  }
+  const summary = reconciliation.summary;
+  const bars = [
+    { label: "done", value: summary.resultedItems, color: "#18a172" },
+    { label: "missing", value: summary.missingResultItems, color: "#ca513d" },
+    { label: "provider", value: summary.withProviderItems, color: "#3b82f6" },
+    { label: "transit", value: summary.inTransitItems, color: "#eb9c44" },
+    { label: "ready", value: summary.readyToShipItems, color: "#64748b" },
+    { label: "blocked", value: summary.blockedItems, color: "#8b5cf6" },
+  ];
+  const items = reconciliation.items || [];
+  host.innerHTML = `
+    <article class="viz-card">
+      <h4>Order Reconciliation</h4>
+      <div class="viz-sub">Expected ${esc(summary.expectedItems)} items · ${esc(summary.completionPct)}% completed</div>
+      ${drawBars(bars, { height: 132 })}
+      <div class="viz-legend">
+        <span class="legend-item">Resulted ${esc(summary.resultedItems)}</span>
+        <span class="legend-item">Missing ${esc(summary.missingResultItems)}</span>
+        <span class="legend-item">With Provider ${esc(summary.withProviderItems)}</span>
+        <span class="legend-item">In Transit ${esc(summary.inTransitItems)}</span>
+        <span class="legend-item">Ready ${esc(summary.readyToShipItems)}</span>
+        <span class="legend-item">Blocked ${esc(summary.blockedItems)}</span>
+      </div>
+      <div class="timeline-list reconciliation-list">
+        ${
+          items.length
+            ? items
+                .slice(0, 8)
+                .map(
+                  (item) => `<div class="timeline-item">
+                    <strong>${esc(item.sample_code || `#${item.sample_id}`)}</strong>
+                    <span>${esc(item.workflowState)} · ${esc(item.result || item.sample_status || "pending")}</span>
+                  </div>`
+                )
+                .join("")
+            : `<div class="hint">No items in this order yet.</div>`
+        }
+      </div>
+    </article>
+  `;
+}
+
+function downloadProviderTemplate(orderId) {
+  const activeId = Number(orderId || state.selectedGenotypingOrderId || 0);
+  if (!activeId) {
+    showMessage("Select a genotyping order first.", "warn");
+    return;
+  }
+  window.open(`/api/genotyping/orders/${activeId}/provider-template.csv`, "_blank", "noopener");
+}
+
 function populateOrderControls() {
   const projectSelect = el("orderProjectSelect");
   const orderSelect = el("callbackOrderSelect");
+  const importSelect = el("importOrderSelect");
   const projects = state.projects || [];
   projectSelect.innerHTML =
     `<option value="">No project / lab-level order</option>` +
@@ -784,11 +941,13 @@ function populateOrderControls() {
         .map((order) => `<option value="${esc(order.id)}">${esc(order.order_ref)} · ${esc(order.status)} · ${esc(order.provider)}</option>`)
         .join("")
     : `<option value="">No orders available</option>`;
+  importSelect.innerHTML = orderSelect.innerHTML;
   if (!state.selectedGenotypingOrderId && state.genotypingOrders.length) {
     state.selectedGenotypingOrderId = Number(state.genotypingOrders[0].id);
   }
   if (state.selectedGenotypingOrderId) {
     orderSelect.value = String(state.selectedGenotypingOrderId);
+    importSelect.value = String(state.selectedGenotypingOrderId);
   }
 }
 
@@ -842,6 +1001,7 @@ function renderSampleInspector(sample, events = [], genotypes = []) {
     host.innerHTML = "";
     return;
   }
+  const workflow = renderWorkflowRail(["Collected", "Shipped", "Received", "Resulted"], sample.status);
   const eventBars = drawBars(
     events.map((event, idx) => ({
       label: `${idx + 1}`.padStart(2, "0"),
@@ -856,6 +1016,7 @@ function renderSampleInspector(sample, events = [], genotypes = []) {
         <h4>${esc(sample.sample_code)}</h4>
         <span class="detail-pill">${esc(sample.status)}</span>
       </div>
+      ${workflow}
       <div class="detail-grid">
         ${chartCard(
           "Sample Timeline",
@@ -947,10 +1108,17 @@ function renderOrderInspector(detail) {
   const host = el("orderInspector");
   if (!detail?.order) {
     host.innerHTML = "";
+    renderReconciliationInspector(null);
     return;
   }
   const order = detail.order;
   const items = detail.items || [];
+  const reconciliation = detail.reconciliation || null;
+  const orderRail = renderWorkflowRail(
+    ["Draft", "Submitted", "Received", "Closed"],
+    order.status,
+    order.status === "failed" ? [] : order.status === "closed" ? ["draft", "submitted", "received", "closed"] : []
+  );
   const resultBars = drawBars(
     [
       { label: "Items", value: items.length, color: "#4f8ef7" },
@@ -964,6 +1132,7 @@ function renderOrderInspector(detail) {
         <h4>${esc(order.order_ref)}</h4>
         <span class="detail-pill">${esc(order.status)}</span>
       </div>
+      ${orderRail}
       <div class="detail-grid">
         ${chartCard(
           "Order Throughput",
@@ -974,10 +1143,20 @@ function renderOrderInspector(detail) {
           )} resulted</span>`
         )}
         ${chartCard(
-          "Callback Ready",
-          "Use the simulation form below for seeded/demo workflows",
-          `<p class="learning-copy">Current status: ${esc(order.status)}. If you are testing seeded workflows, select this order in the callback form and post provider results directly from the UI.</p>`,
-          `<span class="legend-item">Updated ${esc(fmtDate(order.updated_at))}</span>`
+          "Provider Handoff",
+          "Export CSV or post results back into this order",
+          `<div class="learning-actions">
+             <button type="button" class="table-link" data-order-template-id="${esc(order.id)}">Download Provider CSV</button>
+             ${
+               order.status === "draft"
+                 ? `<button type="button" class="table-link" data-submit-order-id="${esc(order.id)}">Submit Order</button>`
+                 : ``
+             }
+           </div>
+           <p class="learning-copy">Current status: ${esc(order.status)}. Use callback simulation for seeded demos, or import a provider CSV to reconcile real-style results against this order.</p>`,
+          `<span class="legend-item">Updated ${esc(fmtDate(order.updated_at))}</span><span class="legend-item">${
+            reconciliation?.summary ? `${esc(reconciliation.summary.completionPct)}% complete` : "No reconciliation yet"
+          }</span>`
         )}
       </div>
       <article class="viz-card">
@@ -1003,6 +1182,7 @@ function renderOrderInspector(detail) {
       </article>
     </div>
   `;
+  renderReconciliationInspector(reconciliation);
 }
 
 function renderGenotypeAnalytics(mendelian, alerts) {
@@ -1099,19 +1279,22 @@ async function loadSampleWorkspace() {
       state.projects = [];
     }
   }
-  const [samples, orders, mendelian, alerts] = await Promise.all([
+  const [samples, orders, mendelian, alerts, dashboard] = await Promise.all([
     api("/api/samples", { headers: headers(false) }),
     api("/api/genotyping/orders", { headers: headers(false) }),
     api("/api/genotyping/mendelian", { headers: headers(false) }),
     api("/api/genotyping/alerts?threshold=0.1", { headers: headers(false) }),
+    api("/api/genotyping/dashboard", { headers: headers(false) }),
   ]);
   state.samples = samples;
   state.genotypingOrders = orders;
+  state.genotypingDashboard = dashboard;
   state.selectedSampleIds = state.selectedSampleIds.filter((id) => samples.some((row) => Number(row.id) === Number(id)));
   if (!state.selectedGenotypingOrderId || !orders.some((row) => Number(row.id) === Number(state.selectedGenotypingOrderId))) {
     state.selectedGenotypingOrderId = orders.length ? Number(orders[0].id) : null;
   }
   populateOrderControls();
+  renderGenotypingOverview(dashboard);
   renderSampleList(samples);
   renderOrderList(orders);
   renderGenotypeAnalytics(mendelian, alerts);
@@ -2240,12 +2423,14 @@ function applyRoleAccess() {
   const isAdminUser = roleAllows(["Admin"]);
   const canPlan = roleAllows(["PI", "Admin"]);
   const canHandleSamples = roleAllows(["Technician", "PI", "Admin"]);
+  const canImportGenotyping = roleAllows(["PI", "Admin"]);
   setButtonEnabled("dispatchAlertsBtn", canManageProjects, "Requires PI/Admin role");
   setButtonEnabled("loadSlaBtn", canManageProjects, "Requires PI/Admin role");
   setButtonEnabled("loadQuotasBtn", canManageProjects, "Requires PI/Admin role");
   setButtonEnabled("generateRecommendationsBtn", canPlan, "Requires PI/Admin role");
   setButtonEnabled("evaluatePlannerBtn", canPlan, "Requires PI/Admin role");
   setButtonEnabled("simulateCallbackBtn", isAdminUser, "Requires Admin role");
+  setButtonEnabled("downloadProviderTemplateBtn", canHandleSamples, "Requires Technician/PI/Admin role");
 
   const projectSubmit = el("projectForm")?.querySelector("button[type='submit']");
   if (projectSubmit) {
@@ -2293,6 +2478,12 @@ function applyRoleAccess() {
   if (callbackSubmit) {
     callbackSubmit.disabled = !isAdminUser;
     callbackSubmit.title = isAdminUser ? "" : "Requires Admin role";
+  }
+
+  const importSubmit = el("genotypingImportForm")?.querySelector("button[type='submit']");
+  if (importSubmit) {
+    importSubmit.disabled = !canImportGenotyping;
+    importSubmit.title = canImportGenotyping ? "" : "Requires PI/Admin role";
   }
 }
 
@@ -2573,9 +2764,47 @@ async function init() {
     }).catch(() => undefined);
   });
 
+  el("downloadProviderTemplateBtn").addEventListener("click", () => {
+    downloadProviderTemplate(Number(el("importOrderSelect").value || state.selectedGenotypingOrderId || 0));
+  });
+
+  el("genotypingImportForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await withAction("Provider results import failed", async () => {
+      const orderId = Number(el("importOrderSelect").value || 0);
+      if (!orderId) throw new Error("Select an order first");
+      const file = el("importResultsFile").files[0];
+      if (!file) throw new Error("Choose a CSV file");
+      const fd = new FormData();
+      fd.append("status", el("importOrderStatus").value);
+      fd.append("file", file);
+      const res = await fetch(`/api/genotyping/orders/${orderId}/import-results`, {
+        method: "POST",
+        credentials: "same-origin",
+        headers: state.token ? { Authorization: `Bearer ${state.token}` } : {},
+        body: fd,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Import failed");
+      el("importResultsFile").value = "";
+      state.selectedGenotypingOrderId = orderId;
+      await loadSampleWorkspace();
+      await inspectGenotypingOrder(orderId);
+      showMessage(`Imported provider results. updatedAnimals=${data.updatedAnimals}.`, "success");
+    }).catch(() => undefined);
+  });
+
   el("callbackOrderSelect").addEventListener("change", () => {
     const orderId = Number(el("callbackOrderSelect").value || 0);
     if (!orderId) return;
+    if (el("importOrderSelect")) el("importOrderSelect").value = String(orderId);
+    withAction("Order detail load failed", () => inspectGenotypingOrder(orderId)).catch(() => undefined);
+  });
+
+  el("importOrderSelect").addEventListener("change", () => {
+    const orderId = Number(el("importOrderSelect").value || 0);
+    if (!orderId) return;
+    if (el("callbackOrderSelect")) el("callbackOrderSelect").value = String(orderId);
     withAction("Order detail load failed", () => inspectGenotypingOrder(orderId)).catch(() => undefined);
   });
 
@@ -2769,6 +2998,25 @@ async function init() {
     const sampleNode = evt.target.closest("button[data-sample-id]");
     if (sampleNode) {
       withAction("Sample detail load failed", () => inspectSample(Number(sampleNode.getAttribute("data-sample-id")))).catch(() => undefined);
+      return;
+    }
+    const templateNode = evt.target.closest("button[data-order-template-id]");
+    if (templateNode) {
+      downloadProviderTemplate(Number(templateNode.getAttribute("data-order-template-id")));
+      return;
+    }
+    const submitNode = evt.target.closest("button[data-submit-order-id]");
+    if (submitNode) {
+      const orderId = Number(submitNode.getAttribute("data-submit-order-id"));
+      withAction("Order submission failed", async () => {
+        await api(`/api/genotyping/orders/${orderId}/submit`, {
+          method: "POST",
+          headers: headers(),
+        });
+        await loadSampleWorkspace();
+        await inspectGenotypingOrder(orderId);
+        showMessage("Genotyping order submitted.", "success");
+      }).catch(() => undefined);
       return;
     }
     const animalNode = evt.target.closest("button[data-sample-animal-id]");

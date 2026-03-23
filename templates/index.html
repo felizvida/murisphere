@@ -280,6 +280,31 @@
               <label>Marker Panel<input id="callbackMarkerPanel" placeholder="e.g., Cre Panel" /></label>
               <button id="simulateCallbackBtn" type="submit">Simulate Provider Callback</button>
             </form>
+            <div id="genotypingOverview"></div>
+            <div class="detail-grid provider-workspace">
+              <article class="viz-card">
+                <h4>Provider Workflow</h4>
+                <div class="viz-sub">Export a clean order template, then import provider results back into the same order for reconciliation.</div>
+                <div class="learning-actions">
+                  <button id="downloadProviderTemplateBtn" type="button">Download Selected Order CSV</button>
+                </div>
+                <form id="genotypingImportForm" class="grid-form">
+                  <label>Order
+                    <select id="importOrderSelect"></select>
+                  </label>
+                  <label>Final Status
+                    <select id="importOrderStatus">
+                      <option value="received">received</option>
+                      <option value="closed">closed</option>
+                      <option value="failed">failed</option>
+                    </select>
+                  </label>
+                  <label>Results CSV<input type="file" id="importResultsFile" accept=".csv" required /></label>
+                  <button id="importResultsBtn" type="submit">Import Provider Results CSV</button>
+                </form>
+              </article>
+              <div id="reconciliationInspector"></div>
+            </div>
             <div id="sampleSelectionBanner" class="alert-banner hidden"></div>
             <div id="sampleList"></div>
             <div id="sampleInspector"></div>

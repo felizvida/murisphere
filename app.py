@@ -2118,6 +2118,300 @@ def genotyping_alerts() -> Response:
     return jsonify(alerts)
 
 
+def _sample_workflow_state(sample_status: str | None, item_result: str | None, order_status: str | None) -> str:
+    status = (sample_status or "").strip().lower()
+    order = (order_status or "").strip().lower()
+    if item_result:
+        return "resulted"
+    if status == "rejected":
+        return "blocked"
+    if order in {"received", "closed"} and not item_result:
+        return "missing_result"
+    if status == "received":
+        return "with_provider"
+    if status == "shipped":
+        return "in_transit"
+    return "ready_to_ship"
+
+
+def _order_scope_row(order_id: int, user: AuthContext) -> storage.Row | None:
+    return db().execute(
+        """
+        SELECT o.*, l.name AS lab_name, p.project_code
+        FROM genotyping_orders o
+        JOIN labs l ON l.id = o.lab_id
+        LEFT JOIN projects p ON p.id = o.project_id
+        WHERE o.id = ?
+        """
+        + ("" if is_admin(user) else " AND o.lab_id = ?"),
+        (order_id,) if is_admin(user) else (order_id, user.lab_id),
+    ).fetchone()
+
+
+def _order_items_with_sample_context(order_id: int) -> list[dict[str, Any]]:
+    rows = db().execute(
+        """
+        SELECT i.id, i.sample_id, i.animal_id, i.marker_panel, i.result, i.result_at,
+               s.sample_code, s.status AS sample_status, s.provider AS sample_provider, s.tracking_number, s.collected_on,
+               a.animal_code
+        FROM genotyping_order_items i
+        LEFT JOIN sample_records s ON s.id = i.sample_id
+        LEFT JOIN animals a ON a.id = i.animal_id
+        WHERE i.order_id = ?
+        ORDER BY i.id ASC
+        """,
+        (order_id,),
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def _serialize_genotyping_reconciliation(order: storage.Row | dict[str, Any], items: list[dict[str, Any]]) -> dict[str, Any]:
+    order_status = order["status"] if order and "status" in order.keys() else None
+    counts = {
+        "resulted": 0,
+        "missing_result": 0,
+        "with_provider": 0,
+        "in_transit": 0,
+        "ready_to_ship": 0,
+        "blocked": 0,
+    }
+    sample_status_counts: dict[str, int] = {}
+    enriched: list[dict[str, Any]] = []
+    for item in items:
+        workflow_state = _sample_workflow_state(item.get("sample_status"), item.get("result"), order_status)
+        counts[workflow_state] = counts.get(workflow_state, 0) + 1
+        sample_status = item.get("sample_status") or "unknown"
+        sample_status_counts[sample_status] = sample_status_counts.get(sample_status, 0) + 1
+        payload = dict(item)
+        payload["workflowState"] = workflow_state
+        enriched.append(payload)
+    return {
+        "summary": {
+            "expectedItems": len(items),
+            "resultedItems": counts["resulted"],
+            "missingResultItems": counts["missing_result"],
+            "withProviderItems": counts["with_provider"],
+            "inTransitItems": counts["in_transit"],
+            "readyToShipItems": counts["ready_to_ship"],
+            "blockedItems": counts["blocked"],
+            "completionPct": round((counts["resulted"] / max(1, len(items))) * 100, 1),
+            "sampleStatuses": sample_status_counts,
+        },
+        "items": enriched,
+    }
+
+
+def _append_sample_event(sample_id: int, event_type: str, actor_user_id: int | None, details: dict[str, Any] | None) -> None:
+    db().execute(
+        "INSERT INTO sample_events (sample_id, event_type, event_time, actor_user_id, details_json) VALUES (?, ?, ?, ?, ?)",
+        (sample_id, event_type, now_iso(), actor_user_id, json.dumps(details or {}, default=str)),
+    )
+
+
+def _apply_order_results(
+    order: storage.Row | dict[str, Any],
+    results: list[dict[str, Any]],
+    *,
+    order_status: str,
+    genotype_source: str,
+    actor_user_id: int | None,
+) -> int:
+    updated = 0
+    for item in results:
+        result = str(item.get("result") or "").strip()
+        if not result:
+            continue
+        resolved: storage.Row | None = None
+        sample_code = str(item.get("sampleCode") or "").strip()
+        if sample_code:
+            resolved = db().execute(
+                """
+                SELECT i.id, i.sample_id, i.animal_id, s.status AS sample_status
+                FROM genotyping_order_items i
+                JOIN sample_records s ON s.id = i.sample_id
+                WHERE i.order_id = ? AND s.sample_code = ?
+                """,
+                (order["id"], sample_code),
+            ).fetchone()
+        elif item.get("animalCode"):
+            resolved = db().execute(
+                """
+                SELECT i.id, i.sample_id, i.animal_id, s.status AS sample_status
+                FROM genotyping_order_items i
+                JOIN animals a ON a.id = i.animal_id
+                LEFT JOIN sample_records s ON s.id = i.sample_id
+                WHERE i.order_id = ? AND a.animal_code = ?
+                """,
+                (order["id"], str(item.get("animalCode")).strip()),
+            ).fetchone()
+        if not resolved or not resolved["animal_id"]:
+            continue
+        db().execute(
+            "UPDATE genotyping_order_items SET result = ?, result_at = ?, marker_panel = COALESCE(?, marker_panel) WHERE id = ?",
+            (result, now_iso(), item.get("markerPanel"), resolved["id"]),
+        )
+        db().execute(
+            "INSERT INTO genotype_results (animal_id, result, source, created_at) VALUES (?, ?, ?, ?)",
+            (resolved["animal_id"], result, genotype_source, now_iso()),
+        )
+        db().execute("UPDATE animals SET genotype = ?, updated_at = ? WHERE id = ?", (result, now_iso(), resolved["animal_id"]))
+        if resolved["sample_id"] and (resolved["sample_status"] or "") != "resulted":
+            db().execute("UPDATE sample_records SET status = 'resulted' WHERE id = ?", (resolved["sample_id"],))
+            _append_sample_event(
+                int(resolved["sample_id"]),
+                "resulted",
+                actor_user_id,
+                {"orderRef": order["order_ref"], "source": genotype_source, "result": result},
+            )
+        updated += 1
+    db().execute("UPDATE genotyping_orders SET status = ?, updated_at = ? WHERE id = ?", (order_status, now_iso(), order["id"]))
+    return updated
+
+
+@app.get("/api/genotyping/dashboard")
+@require_auth()
+def genotyping_dashboard() -> Response:
+    sample_scope = ""
+    order_scope = ""
+    animal_scope = ""
+    sample_params: list[Any] = []
+    order_params: list[Any] = []
+    animal_params: list[Any] = []
+    if not is_admin(g.user):
+        sample_scope = " WHERE c.lab_id = ? "
+        order_scope = " WHERE o.lab_id = ? "
+        animal_scope = " WHERE c.lab_id = ? "
+        sample_params.append(g.user.lab_id)
+        order_params.append(g.user.lab_id)
+        animal_params.append(g.user.lab_id)
+
+    sample_rows = db().execute(
+        f"""
+        SELECT s.status, COUNT(*) AS n
+        FROM sample_records s
+        LEFT JOIN cages c ON c.id = s.cage_id
+        {sample_scope}
+        GROUP BY s.status
+        ORDER BY n DESC, s.status ASC
+        """,
+        sample_params,
+    ).fetchall()
+    order_rows = db().execute(
+        f"""
+        SELECT o.status, COUNT(*) AS n
+        FROM genotyping_orders o
+        {order_scope}
+        GROUP BY o.status
+        ORDER BY n DESC, o.status ASC
+        """,
+        order_params,
+    ).fetchall()
+    provider_rows = db().execute(
+        f"""
+        SELECT o.provider,
+               COUNT(DISTINCT o.id) AS order_count,
+               COUNT(i.id) AS item_count,
+               SUM(CASE WHEN i.result IS NOT NULL THEN 1 ELSE 0 END) AS resulted_count
+        FROM genotyping_orders o
+        LEFT JOIN genotyping_order_items i ON i.order_id = o.id
+        {order_scope}
+        GROUP BY o.provider
+        ORDER BY order_count DESC, o.provider ASC
+        LIMIT 12
+        """,
+        order_params,
+    ).fetchall()
+    genotype_rows = db().execute(
+        f"""
+        SELECT a.genotype, COUNT(*) AS n
+        FROM animals a
+        LEFT JOIN cages c ON c.id = a.cage_id
+        {animal_scope}
+        {" AND " if animal_scope else " WHERE "} COALESCE(a.genotype, '') <> ''
+        GROUP BY a.genotype
+        ORDER BY n DESC, a.genotype ASC
+        LIMIT 12
+        """,
+        animal_params,
+    ).fetchall()
+    turnaround_rows = db().execute(
+        f"""
+        SELECT s.collected_on, s.status
+        FROM sample_records s
+        LEFT JOIN cages c ON c.id = s.cage_id
+        {sample_scope}
+        ORDER BY s.id DESC
+        LIMIT 1000
+        """,
+        sample_params,
+    ).fetchall()
+    sample_activity_rows = db().execute(
+        f"""
+        SELECT 'sample' AS kind, s.sample_code AS ref_code, e.event_type AS label, e.event_time AS happened_at
+        FROM sample_events e
+        JOIN sample_records s ON s.id = e.sample_id
+        LEFT JOIN cages c ON c.id = s.cage_id
+        {sample_scope}
+        ORDER BY e.id DESC
+        LIMIT 8
+        """,
+        sample_params,
+    ).fetchall()
+    order_activity_rows = db().execute(
+        f"""
+        SELECT 'order' AS kind, o.order_ref AS ref_code, o.status AS label, o.updated_at AS happened_at
+        FROM genotyping_orders o
+        {order_scope}
+        ORDER BY o.id DESC
+        LIMIT 8
+        """,
+        order_params,
+    ).fetchall()
+
+    turnaround_buckets = {"0-2d": 0, "3-7d": 0, "8-14d": 0, "15d+": 0}
+    today = datetime.now(UTC).date()
+    for row in turnaround_rows:
+        try:
+            collected = date.fromisoformat(str(row["collected_on"]))
+            age = max(0, (today - collected).days)
+        except ValueError:
+            continue
+        if age <= 2:
+            turnaround_buckets["0-2d"] += 1
+        elif age <= 7:
+            turnaround_buckets["3-7d"] += 1
+        elif age <= 14:
+            turnaround_buckets["8-14d"] += 1
+        else:
+            turnaround_buckets["15d+"] += 1
+
+    recent_activity = sorted(
+        [dict(r) for r in sample_activity_rows] + [dict(r) for r in order_activity_rows],
+        key=lambda row: str(row.get("happened_at") or ""),
+        reverse=True,
+    )[:10]
+
+    return jsonify(
+        {
+            "sampleStatus": [{"label": r["status"], "value": int(r["n"])} for r in sample_rows],
+            "orderStatus": [{"label": r["status"], "value": int(r["n"])} for r in order_rows],
+            "providers": [
+                {
+                    "provider": r["provider"] or "Unspecified",
+                    "orders": int(r["order_count"]),
+                    "items": int(r["item_count"] or 0),
+                    "resulted": int(r["resulted_count"] or 0),
+                    "pending": max(0, int(r["item_count"] or 0) - int(r["resulted_count"] or 0)),
+                }
+                for r in provider_rows
+            ],
+            "genotypeDistribution": [{"label": r["genotype"], "value": int(r["n"])} for r in genotype_rows],
+            "turnaround": [{"label": label, "value": value} for label, value in turnaround_buckets.items()],
+            "recentActivity": recent_activity,
+        }
+    )
+
+
 @app.get("/api/forecast/cage-space")
 @require_auth(("PI", "Admin"))
 def forecast_cage_space() -> Response:
@@ -5064,32 +5358,50 @@ def list_genotyping_orders() -> Response:
 @app.get("/api/genotyping/orders/<int:order_id>")
 @require_auth()
 def genotyping_order_detail(order_id: int) -> Response:
-    order = db().execute(
-        """
-        SELECT o.*, l.name AS lab_name, p.project_code
-        FROM genotyping_orders o
-        JOIN labs l ON l.id = o.lab_id
-        LEFT JOIN projects p ON p.id = o.project_id
-        WHERE o.id = ?
-        """
-        + ("" if is_admin(g.user) else " AND o.lab_id = ?"),
-        (order_id,) if is_admin(g.user) else (order_id, g.user.lab_id),
-    ).fetchone()
+    order = _order_scope_row(order_id, g.user)
     if not order:
         return jsonify({"error": "Not found"}), 404
-    items = db().execute(
-        """
-        SELECT i.id, i.sample_id, i.animal_id, i.marker_panel, i.result, i.result_at,
-               s.sample_code, a.animal_code
-        FROM genotyping_order_items i
-        LEFT JOIN sample_records s ON s.id = i.sample_id
-        LEFT JOIN animals a ON a.id = i.animal_id
-        WHERE i.order_id = ?
-        ORDER BY i.id ASC
-        """,
-        (order_id,),
-    ).fetchall()
-    return jsonify({"order": dict(order), "items": [dict(r) for r in items]})
+    items = _order_items_with_sample_context(order_id)
+    reconciliation = _serialize_genotyping_reconciliation(order, items)
+    return jsonify({"order": dict(order), "items": items, "reconciliation": reconciliation})
+
+
+@app.get("/api/genotyping/orders/<int:order_id>/reconciliation")
+@require_auth()
+def genotyping_order_reconciliation(order_id: int) -> Response:
+    order = _order_scope_row(order_id, g.user)
+    if not order:
+        return jsonify({"error": "Not found"}), 404
+    items = _order_items_with_sample_context(order_id)
+    return jsonify(_serialize_genotyping_reconciliation(order, items))
+
+
+@app.get("/api/genotyping/orders/<int:order_id>/provider-template.csv")
+@require_auth()
+def genotyping_order_provider_template(order_id: int) -> Response:
+    order = _order_scope_row(order_id, g.user)
+    if not order:
+        return jsonify({"error": "Not found"}), 404
+    items = _order_items_with_sample_context(order_id)
+    output = io.StringIO()
+    writer = csv.DictWriter(
+        output,
+        fieldnames=["order_ref", "provider", "sample_code", "animal_code", "marker_panel", "result"],
+    )
+    writer.writeheader()
+    for item in items:
+        writer.writerow(
+            {
+                "order_ref": order["order_ref"],
+                "provider": order["provider"],
+                "sample_code": item.get("sample_code") or "",
+                "animal_code": item.get("animal_code") or "",
+                "marker_panel": item.get("marker_panel") or "",
+                "result": item.get("result") or "",
+            }
+        )
+    filename = f"{order['order_ref']}_provider_template.csv"
+    return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition": f"attachment; filename={filename}"})
 
 
 @app.post("/api/genotyping/orders/<int:order_id>/submit")
@@ -5109,6 +5421,46 @@ def submit_genotyping_order(order_id: int) -> Response:
     return jsonify({"ok": True})
 
 
+@app.post("/api/genotyping/orders/<int:order_id>/import-results")
+@require_auth(("PI", "Admin"))
+def import_genotyping_order_results(order_id: int) -> Response:
+    order = _order_scope_row(order_id, g.user)
+    if not order:
+        return jsonify({"error": "Not found"}), 404
+    if "file" not in request.files:
+        return jsonify({"error": "Upload a CSV file"}), 400
+    content = request.files["file"].read().decode("utf-8")
+    reader = csv.DictReader(io.StringIO(content))
+    results = []
+    for row in reader:
+        result = str(row.get("result") or row.get("genotype_result") or "").strip()
+        sample_code = str(row.get("sample_code") or "").strip()
+        animal_code = str(row.get("animal_code") or "").strip()
+        if not result or (not sample_code and not animal_code):
+            continue
+        results.append(
+            {
+                "sampleCode": sample_code or None,
+                "animalCode": animal_code or None,
+                "result": result,
+                "markerPanel": str(row.get("marker_panel") or "").strip() or None,
+            }
+        )
+    status = str(request.form.get("status") or "received").strip()
+    if status not in {"received", "closed", "failed"}:
+        return jsonify({"error": "Invalid status"}), 400
+    updated = _apply_order_results(
+        order,
+        results,
+        order_status=status,
+        genotype_source=f"csv_import:{order['order_ref']}",
+        actor_user_id=g.user.user_id,
+    )
+    db().commit()
+    audit_log(g.user.user_id, "genotyping_order", order_id, "import_results", None, {"status": status, "updatedAnimals": updated})
+    return jsonify({"ok": True, "updatedAnimals": updated})
+
+
 @app.post("/api/genotyping/orders/callback")
 def genotyping_order_callback() -> Response:
     expected = os.getenv("MURISPHERE_PROVIDER_CALLBACK_TOKEN", "dev-callback-token")
@@ -5125,51 +5477,13 @@ def genotyping_order_callback() -> Response:
     status = str(payload.get("status", "received")).strip()
     if status not in {"submitted", "received", "closed", "failed"}:
         return jsonify({"error": "Invalid status"}), 400
-    updated = 0
-    for item in payload.get("results", []):
-        result = item.get("result")
-        if not result:
-            continue
-        animal_id = None
-        sample_code = item.get("sampleCode")
-        if sample_code:
-            row = db().execute(
-                """
-                SELECT i.id, i.animal_id
-                FROM genotyping_order_items i
-                JOIN sample_records s ON s.id = i.sample_id
-                WHERE i.order_id = ? AND s.sample_code = ?
-                """,
-                (order["id"], str(sample_code)),
-            ).fetchone()
-            if row:
-                animal_id = row["animal_id"]
-                db().execute(
-                    "UPDATE genotyping_order_items SET result = ?, result_at = ?, marker_panel = COALESCE(?, marker_panel) WHERE id = ?",
-                    (result, now_iso(), item.get("markerPanel"), row["id"]),
-                )
-        if animal_id is None and item.get("animalCode"):
-            arow = db().execute("SELECT id FROM animals WHERE animal_code = ?", (str(item.get("animalCode")),)).fetchone()
-            if not arow:
-                continue
-            animal_id = arow["id"]
-            db().execute(
-                """
-                UPDATE genotyping_order_items
-                SET result = ?, result_at = ?, marker_panel = COALESCE(?, marker_panel)
-                WHERE order_id = ? AND animal_id = ?
-                """,
-                (result, now_iso(), item.get("markerPanel"), order["id"], animal_id),
-            )
-        if animal_id is None:
-            continue
-        db().execute(
-            "INSERT INTO genotype_results (animal_id, result, source, created_at) VALUES (?, ?, ?, ?)",
-            (animal_id, result, f"callback:{order_ref}", now_iso()),
-        )
-        db().execute("UPDATE animals SET genotype = ?, updated_at = ? WHERE id = ?", (result, now_iso(), animal_id))
-        updated += 1
-    db().execute("UPDATE genotyping_orders SET status = ?, updated_at = ? WHERE id = ?", (status, now_iso(), order["id"]))
+    updated = _apply_order_results(
+        order,
+        [dict(item) for item in payload.get("results", [])],
+        order_status=status,
+        genotype_source=f"callback:{order_ref}",
+        actor_user_id=None,
+    )
     db().commit()
     audit_log(None, "genotyping_order", order["id"], "callback", None, {"status": status, "updatedAnimals": updated})
     return jsonify({"ok": True, "updatedAnimals": updated})
