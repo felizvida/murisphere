@@ -267,6 +267,9 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertIn('id="dashboardLearning"', body)
         self.assertIn('id="plannerScenarioForm"', body)
         self.assertIn('id="loadPlannerBtn"', body)
+        self.assertIn('id="sampleCreateForm"', body)
+        self.assertIn('id="loadSamplesBtn"', body)
+        self.assertIn('id="genotypingCallbackForm"', body)
 
     def test_learning_routes_serve_tutorial_assets(self) -> None:
         redirect_res = self.client.get("/learn", follow_redirects=False)
@@ -466,6 +469,12 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertIn('el("generateRecommendationsBtn").addEventListener("click"', js)
         self.assertIn('api("/api/planner/scenarios"', js)
         self.assertIn('data-learning-toggle-module', js)
+        self.assertIn('el("sampleCreateForm").addEventListener("submit"', js)
+        self.assertIn('el("genotypingOrderForm").addEventListener("submit"', js)
+        self.assertIn('el("genotypingCallbackForm").addEventListener("submit"', js)
+        self.assertIn('inspectGenotypingOrder(orderId)', js)
+        self.assertIn('"/api/genotyping/orders"', js)
+        self.assertIn('"/api/genotyping/orders/callback"', js)
 
     def test_breeding_calendar_forecast_and_analytics(self) -> None:
         token = self.login("admin@murisphere.local", "admin1234")
@@ -1366,6 +1375,9 @@ class AppIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(sample.status_code, 201)
         sample_id = sample.get_json()["id"]
+        sample_list = self.client.get("/api/samples", headers=self.auth_headers(tech))
+        self.assertEqual(sample_list.status_code, 200)
+        self.assertTrue(any(row["id"] == sample_id and row["animal_id"] == sire_id and row["cage_id"] == 1 for row in sample_list.get_json()))
         sample_status = self.client.post(
             f"/api/samples/{sample_id}/status",
             headers=self.auth_headers(tech),
@@ -1375,6 +1387,9 @@ class AppIntegrationTests(unittest.TestCase):
         sample_events = self.client.get(f"/api/samples/{sample_id}/events", headers=self.auth_headers(tech))
         self.assertEqual(sample_events.status_code, 200)
         self.assertGreaterEqual(len(sample_events.get_json()), 2)
+        genotype_history_before = self.client.get(f"/api/animals/{sire_id}/genotypes", headers=self.auth_headers(tech))
+        self.assertEqual(genotype_history_before.status_code, 200)
+        self.assertEqual(genotype_history_before.get_json(), [])
 
         order = self.client.post(
             "/api/genotyping/orders",
@@ -1384,6 +1399,10 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertEqual(order.status_code, 201)
         order_id = order.get_json()["id"]
         order_ref = order.get_json()["orderRef"]
+        order_detail = self.client.get(f"/api/genotyping/orders/{order_id}", headers=self.auth_headers(tech))
+        self.assertEqual(order_detail.status_code, 200)
+        self.assertEqual(order_detail.get_json()["order"]["order_ref"], order_ref)
+        self.assertEqual(order_detail.get_json()["items"][0]["sample_code"], "SMP-001")
         submit = self.client.post(f"/api/genotyping/orders/{order_id}/submit", headers=self.auth_headers(tech))
         self.assertEqual(submit.status_code, 200)
         callback = self.client.post(
@@ -1393,6 +1412,9 @@ class AppIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(callback.status_code, 200)
         self.assertEqual(callback.get_json()["updatedAnimals"], 1)
+        genotype_history_after = self.client.get(f"/api/animals/{sire_id}/genotypes", headers=self.auth_headers(tech))
+        self.assertEqual(genotype_history_after.status_code, 200)
+        self.assertEqual(genotype_history_after.get_json()[0]["result"], "fl/+")
         animals = self.client.get("/api/animals?q=PAIR-SIRE-001", headers=self.auth_headers(tech))
         self.assertEqual(animals.status_code, 200)
         self.assertEqual(animals.get_json()[0]["genotype"], "fl/+")

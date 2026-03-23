@@ -4880,7 +4880,7 @@ def list_sample_records() -> Response:
     rows = db().execute(
         f"""
         SELECT s.id, s.sample_code, s.sample_type, s.provider, s.status, s.collected_on, s.tracking_number,
-               a.animal_code, c.cage_code
+               s.notes, a.id AS animal_id, a.animal_code, c.id AS cage_id, c.cage_code
         FROM sample_records s
         JOIN animals a ON a.id = s.animal_id
         LEFT JOIN cages c ON c.id = s.cage_id
@@ -4945,6 +4945,25 @@ def sample_event_history(sample_id: int) -> Response:
     rows = db().execute(
         "SELECT id, event_type, event_time, actor_user_id, details_json FROM sample_events WHERE sample_id = ? ORDER BY id ASC",
         (sample_id,),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.get("/api/animals/<int:animal_id>/genotypes")
+@require_auth()
+def animal_genotype_history(animal_id: int) -> Response:
+    animal = ensure_animal_scope(animal_id, g.user)
+    if not animal:
+        return jsonify({"error": "Not found"}), 404
+    rows = db().execute(
+        """
+        SELECT id, result, source, created_at
+        FROM genotype_results
+        WHERE animal_id = ?
+        ORDER BY id DESC
+        LIMIT 100
+        """,
+        (animal_id,),
     ).fetchall()
     return jsonify([dict(r) for r in rows])
 
@@ -5040,6 +5059,37 @@ def list_genotyping_orders() -> Response:
         params,
     ).fetchall()
     return jsonify([dict(r) for r in rows])
+
+
+@app.get("/api/genotyping/orders/<int:order_id>")
+@require_auth()
+def genotyping_order_detail(order_id: int) -> Response:
+    order = db().execute(
+        """
+        SELECT o.*, l.name AS lab_name, p.project_code
+        FROM genotyping_orders o
+        JOIN labs l ON l.id = o.lab_id
+        LEFT JOIN projects p ON p.id = o.project_id
+        WHERE o.id = ?
+        """
+        + ("" if is_admin(g.user) else " AND o.lab_id = ?"),
+        (order_id,) if is_admin(g.user) else (order_id, g.user.lab_id),
+    ).fetchone()
+    if not order:
+        return jsonify({"error": "Not found"}), 404
+    items = db().execute(
+        """
+        SELECT i.id, i.sample_id, i.animal_id, i.marker_panel, i.result, i.result_at,
+               s.sample_code, a.animal_code
+        FROM genotyping_order_items i
+        LEFT JOIN sample_records s ON s.id = i.sample_id
+        LEFT JOIN animals a ON a.id = i.animal_id
+        WHERE i.order_id = ?
+        ORDER BY i.id ASC
+        """,
+        (order_id,),
+    ).fetchall()
+    return jsonify({"order": dict(order), "items": [dict(r) for r in items]})
 
 
 @app.post("/api/genotyping/orders/<int:order_id>/submit")

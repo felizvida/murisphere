@@ -25,6 +25,10 @@ const state = {
   learning: null,
   plannerScenarios: [],
   selectedPlannerScenarioId: null,
+  samples: [],
+  selectedSampleIds: [],
+  genotypingOrders: [],
+  selectedGenotypingOrderId: null,
 };
 const PENDING_SCAN_KEY = "murisphere_pending_scan";
 const SCAN_BASE_KEY = "murisphere_scan_base_url";
@@ -57,6 +61,13 @@ function handleSessionExpired(message = "Session expired. Please sign in again."
   state.cards = [];
   state.alerts = [];
   state.alertsByCage = {};
+  state.learning = null;
+  state.plannerScenarios = [];
+  state.selectedPlannerScenarioId = null;
+  state.samples = [];
+  state.selectedSampleIds = [];
+  state.genotypingOrders = [];
+  state.selectedGenotypingOrderId = null;
   showMessage(message, "warn");
 }
 
@@ -732,6 +743,382 @@ function renderRecommendationPanel(recommendations, outcomes) {
       </article>
     </div>
   `;
+}
+
+function sampleSelected(sampleId) {
+  return state.selectedSampleIds.includes(Number(sampleId));
+}
+
+function setSampleSelected(sampleId, selected) {
+  const id = Number(sampleId);
+  const next = new Set(state.selectedSampleIds.map(Number));
+  if (selected) next.add(id);
+  else next.delete(id);
+  state.selectedSampleIds = Array.from(next.values());
+  renderSampleSelectionBanner();
+}
+
+function renderSampleSelectionBanner() {
+  const banner = el("sampleSelectionBanner");
+  if (!banner) return;
+  if (!state.selectedSampleIds.length) {
+    banner.classList.add("hidden");
+    banner.textContent = "";
+    return;
+  }
+  banner.classList.remove("hidden");
+  banner.textContent = `${state.selectedSampleIds.length} sample${state.selectedSampleIds.length > 1 ? "s" : ""} selected for genotyping order creation.`;
+}
+
+function populateOrderControls() {
+  const projectSelect = el("orderProjectSelect");
+  const orderSelect = el("callbackOrderSelect");
+  const projects = state.projects || [];
+  projectSelect.innerHTML =
+    `<option value="">No project / lab-level order</option>` +
+    projects
+      .map((project) => `<option value="${esc(project.id)}">${esc(project.project_code)} · ${esc(project.title)}</option>`)
+      .join("");
+  orderSelect.innerHTML = state.genotypingOrders.length
+    ? state.genotypingOrders
+        .map((order) => `<option value="${esc(order.id)}">${esc(order.order_ref)} · ${esc(order.status)} · ${esc(order.provider)}</option>`)
+        .join("")
+    : `<option value="">No orders available</option>`;
+  if (!state.selectedGenotypingOrderId && state.genotypingOrders.length) {
+    state.selectedGenotypingOrderId = Number(state.genotypingOrders[0].id);
+  }
+  if (state.selectedGenotypingOrderId) {
+    orderSelect.value = String(state.selectedGenotypingOrderId);
+  }
+}
+
+function renderSampleList(samples) {
+  const host = el("sampleList");
+  if (!samples.length) {
+    host.innerHTML = `<p class="hint">No samples yet. Create one from an animal code to start chain-of-custody tracking.</p>`;
+    renderSampleSelectionBanner();
+    return;
+  }
+  host.innerHTML = `
+    <div class="sample-list">
+      ${samples
+        .map(
+          (sample) => `
+            <article class="sample-item">
+              <div class="sample-item-head">
+                <div>
+                  <strong>${esc(sample.sample_code)}</strong>
+                  <div class="learning-copy">${esc(sample.sample_type)} · ${esc(sample.provider || "provider not set")} · animal ${esc(
+                    sample.animal_code
+                  )}</div>
+                </div>
+                <span class="alert-pill ${esc(sample.status === "rejected" ? "high" : sample.status === "resulted" ? "low" : "medium")}">${esc(
+                  sample.status
+                )}</span>
+              </div>
+              <div class="sample-meta">
+                <span class="legend-item">Collected ${esc(fmtDate(sample.collected_on))}</span>
+                <span class="legend-item">Cage ${esc(sample.cage_code || "N/A")}</span>
+                <span class="legend-item">Tracking ${esc(sample.tracking_number || "pending")}</span>
+              </div>
+              <div class="learning-actions">
+                <button type="button" class="table-link" data-sample-id="${esc(sample.id)}">Inspect</button>
+                <button type="button" class="table-link" data-sample-toggle="${esc(sample.id)}">${sampleSelected(sample.id) ? "Deselect" : "Select For Order"}</button>
+                <button type="button" class="table-link" data-sample-cage-id="${esc(sample.cage_id)}">Open Cage</button>
+                <button type="button" class="table-link" data-sample-animal-id="${esc(sample.animal_id)}">Open Pedigree</button>
+              </div>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+  renderSampleSelectionBanner();
+}
+
+function renderSampleInspector(sample, events = [], genotypes = []) {
+  const host = el("sampleInspector");
+  if (!sample) {
+    host.innerHTML = "";
+    return;
+  }
+  const eventBars = drawBars(
+    events.map((event, idx) => ({
+      label: `${idx + 1}`.padStart(2, "0"),
+      value: idx + 1,
+      color: event.event_type === "resulted" ? "#18a172" : event.event_type === "rejected" ? "#ca513d" : "#4f8ef7",
+    })),
+    { height: 110 }
+  );
+  host.innerHTML = `
+    <div class="detail-shell">
+      <div class="detail-head">
+        <h4>${esc(sample.sample_code)}</h4>
+        <span class="detail-pill">${esc(sample.status)}</span>
+      </div>
+      <div class="detail-grid">
+        ${chartCard(
+          "Sample Timeline",
+          `${esc(sample.sample_type)} · ${esc(sample.provider || "provider not set")}`,
+          events.length ? eventBars : `<p class="hint">No sample events yet.</p>`,
+          events.map((event) => `<span class="legend-item">${esc(event.event_type)} ${esc(fmtDate(event.event_time))}</span>`).join("")
+        )}
+        ${chartCard(
+          "Genotype History",
+          `Animal ${esc(sample.animal_code)}`,
+          genotypes.length
+            ? `<div class="timeline-list">${genotypes
+                .slice(0, 6)
+                .map((row) => `<div class="timeline-item"><strong>${esc(row.result)}</strong><span>${esc(fmtDate(row.created_at))}</span></div>`)
+                .join("")}</div>`
+            : `<p class="hint">No genotype results recorded yet for this animal.</p>`,
+          genotypes.map((row) => `<span class="legend-item">${esc(row.source)} ${esc(row.result)}</span>`).join("")
+        )}
+      </div>
+      <div class="detail-grid">
+        <article class="viz-card">
+          <h4>Event History</h4>
+          <div class="timeline-list">
+            ${
+              events
+                .map(
+                  (event) =>
+                    `<div class="timeline-item"><strong>${esc(event.event_type)}</strong><span>${esc(fmtDate(event.event_time))}</span></div>`
+                )
+                .join("") || `<div class="hint">No events yet.</div>`
+            }
+          </div>
+        </article>
+        <article class="viz-card">
+          <h4>Quick Actions</h4>
+          <div class="learning-actions">
+            <button type="button" class="table-link" data-sample-update-id="${esc(sample.id)}" data-sample-next-status="shipped">Mark Shipped</button>
+            <button type="button" class="table-link" data-sample-update-id="${esc(sample.id)}" data-sample-next-status="received">Mark Received</button>
+            <button type="button" class="table-link" data-sample-update-id="${esc(sample.id)}" data-sample-next-status="resulted">Mark Resulted</button>
+            <button type="button" class="table-link" data-sample-animal-id="${esc(sample.animal_id)}">Open Pedigree</button>
+          </div>
+          <p class="learning-copy">Use these to move the sample through the chain-of-custody while keeping the timeline and genotype history visible.</p>
+        </article>
+      </div>
+    </div>
+  `;
+}
+
+function renderOrderList(orders) {
+  const host = el("orderList");
+  if (!orders.length) {
+    host.innerHTML = `<p class="hint">No genotyping orders yet. Select one or more samples and create an order.</p>`;
+    return;
+  }
+  host.innerHTML = `
+    <div class="order-list">
+      ${orders
+        .map(
+          (order) => `
+            <article class="order-item">
+              <div class="order-item-head">
+                <div>
+                  <strong>${esc(order.order_ref)}</strong>
+                  <div class="learning-copy">${esc(order.provider)} · ${esc(order.item_count)} items · ${esc(order.resulted_count || 0)} resulted</div>
+                </div>
+                <span class="detail-pill">${esc(order.status)}</span>
+              </div>
+              <div class="order-meta">
+                <span class="legend-item">Created ${esc(fmtDate(order.created_at))}</span>
+                <span class="legend-item">Updated ${esc(fmtDate(order.updated_at))}</span>
+              </div>
+              <div class="learning-actions">
+                <button type="button" class="table-link" data-order-id="${esc(order.id)}">Inspect Order</button>
+                ${
+                  order.status === "draft"
+                    ? `<button type="button" class="table-link" data-submit-order-id="${esc(order.id)}">Submit Order</button>`
+                    : ``
+                }
+              </div>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderOrderInspector(detail) {
+  const host = el("orderInspector");
+  if (!detail?.order) {
+    host.innerHTML = "";
+    return;
+  }
+  const order = detail.order;
+  const items = detail.items || [];
+  const resultBars = drawBars(
+    [
+      { label: "Items", value: items.length, color: "#4f8ef7" },
+      { label: "Resulted", value: items.filter((item) => item.result).length, color: "#18a172" },
+    ],
+    { height: 110 }
+  );
+  host.innerHTML = `
+    <div class="detail-shell">
+      <div class="detail-head">
+        <h4>${esc(order.order_ref)}</h4>
+        <span class="detail-pill">${esc(order.status)}</span>
+      </div>
+      <div class="detail-grid">
+        ${chartCard(
+          "Order Throughput",
+          `${esc(order.provider)} · ${esc(order.lab_name || "Lab")}${order.project_code ? ` · ${esc(order.project_code)}` : ""}`,
+          resultBars,
+          `<span class="legend-item">${esc(items.length)} items</span><span class="legend-item">${esc(
+            items.filter((item) => item.result).length
+          )} resulted</span>`
+        )}
+        ${chartCard(
+          "Callback Ready",
+          "Use the simulation form below for seeded/demo workflows",
+          `<p class="learning-copy">Current status: ${esc(order.status)}. If you are testing seeded workflows, select this order in the callback form and post provider results directly from the UI.</p>`,
+          `<span class="legend-item">Updated ${esc(fmtDate(order.updated_at))}</span>`
+        )}
+      </div>
+      <article class="viz-card">
+        <h4>Order Items</h4>
+        <table class="table compact-table">
+          <thead><tr><th>Sample</th><th>Animal</th><th>Marker Panel</th><th>Result</th><th>Resulted At</th></tr></thead>
+          <tbody>
+            ${
+              items
+                .map(
+                  (item) => `<tr>
+                    <td><button type="button" class="table-link" data-sample-id="${esc(item.sample_id)}">${esc(item.sample_code || `#${item.sample_id}`)}</button></td>
+                    <td><button type="button" class="table-link" data-sample-animal-id="${esc(item.animal_id)}">${esc(item.animal_code || `#${item.animal_id}`)}</button></td>
+                    <td>${esc(item.marker_panel || "N/A")}</td>
+                    <td>${esc(item.result || "Pending")}</td>
+                    <td>${esc(fmtDate(item.result_at))}</td>
+                  </tr>`
+                )
+                .join("") || `<tr><td colspan="5">No items in this order.</td></tr>`
+            }
+          </tbody>
+        </table>
+      </article>
+    </div>
+  `;
+}
+
+function renderGenotypeAnalytics(mendelian, alerts) {
+  const host = el("genotypeAnalytics");
+  const alertBars = (alerts || []).map((row) => ({
+    label: row.cageCode || `L${row.litterId}`,
+    value: Math.round(toNum(row.maxDeviation || 0) * 100),
+    color: "#ca513d",
+  }));
+  const mendelianCards = (mendelian || [])
+    .slice(0, 6)
+    .map((row) => {
+      const observed = row.observed || {};
+      return `
+        <article class="sample-item">
+          <div class="sample-item-head">
+            <div>
+              <strong>${esc(row.cageCode || `Litter ${row.litterId}`)}</strong>
+              <div class="learning-copy">Born ${esc(fmtDate(row.birthDate))} · ${esc(row.totalGenotyped)} genotyped</div>
+            </div>
+            <span class="detail-pill">ratio</span>
+          </div>
+          <div class="sample-meta">
+            ${Object.entries(observed)
+              .map(([key, value]) => `<span class="legend-item">${esc(key)} ${esc(value)}</span>`)
+              .join("")}
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+  host.innerHTML = `
+    <div class="detail-grid">
+      <article class="viz-card">
+        <h4>Mendelian Tracking</h4>
+        ${
+          mendelian.length
+            ? `<div class="sample-list">${mendelianCards}</div>`
+            : `<p class="hint">No genotyped litters available yet.</p>`
+        }
+      </article>
+      <article class="viz-card">
+        <h4>Genotype Alerts</h4>
+        ${
+          alerts.length
+            ? `${drawBars(alertBars.slice(0, 10), { height: 130 })}<div class="viz-legend">${alerts
+                .slice(0, 8)
+                .map((row) => `<span class="legend-item">${esc(row.cageCode || `L${row.litterId}`)} dev ${Math.round(
+                    toNum(row.maxDeviation || 0) * 100
+                  )}%</span>`)
+                .join("")}</div>`
+            : `<p class="hint">No genotype-deviation alerts at the current threshold.</p>`
+        }
+      </article>
+    </div>
+  `;
+}
+
+async function resolveAnimalCode(animalCode) {
+  const rows = await api(`/api/animals?q=${encodeURIComponent(animalCode)}`, { headers: headers(false) });
+  const exact = rows.find((row) => String(row.animal_code).toLowerCase() === String(animalCode).trim().toLowerCase());
+  return exact || rows[0] || null;
+}
+
+async function inspectSample(sampleId) {
+  const sample = state.samples.find((row) => Number(row.id) === Number(sampleId));
+  if (!sample) {
+    renderSampleInspector(null, [], []);
+    return;
+  }
+  const [events, genotypes] = await Promise.all([
+    api(`/api/samples/${sampleId}/events`, { headers: headers(false) }),
+    api(`/api/animals/${sample.animal_id}/genotypes`, { headers: headers(false) }),
+  ]);
+  renderSampleInspector(sample, events, genotypes);
+}
+
+async function inspectGenotypingOrder(orderId) {
+  if (!orderId) {
+    renderOrderInspector(null);
+    return;
+  }
+  state.selectedGenotypingOrderId = Number(orderId);
+  populateOrderControls();
+  const detail = await api(`/api/genotyping/orders/${orderId}`, { headers: headers(false) });
+  renderOrderInspector(detail);
+}
+
+async function loadSampleWorkspace() {
+  if (!state.projects.length) {
+    try {
+      await loadProjects();
+    } catch {
+      state.projects = [];
+    }
+  }
+  const [samples, orders, mendelian, alerts] = await Promise.all([
+    api("/api/samples", { headers: headers(false) }),
+    api("/api/genotyping/orders", { headers: headers(false) }),
+    api("/api/genotyping/mendelian", { headers: headers(false) }),
+    api("/api/genotyping/alerts?threshold=0.1", { headers: headers(false) }),
+  ]);
+  state.samples = samples;
+  state.genotypingOrders = orders;
+  state.selectedSampleIds = state.selectedSampleIds.filter((id) => samples.some((row) => Number(row.id) === Number(id)));
+  if (!state.selectedGenotypingOrderId || !orders.some((row) => Number(row.id) === Number(state.selectedGenotypingOrderId))) {
+    state.selectedGenotypingOrderId = orders.length ? Number(orders[0].id) : null;
+  }
+  populateOrderControls();
+  renderSampleList(samples);
+  renderOrderList(orders);
+  renderGenotypeAnalytics(mendelian, alerts);
+  if (samples.length) await inspectSample(samples[0].id);
+  else renderSampleInspector(null, [], []);
+  if (state.selectedGenotypingOrderId) await inspectGenotypingOrder(state.selectedGenotypingOrderId);
+  else renderOrderInspector(null);
 }
 
 async function loadPlannerScenarioInspector(scenarioId) {
@@ -1852,11 +2239,13 @@ function applyRoleAccess() {
   const canManageProjects = roleAllows(["PI", "Admin"]);
   const isAdminUser = roleAllows(["Admin"]);
   const canPlan = roleAllows(["PI", "Admin"]);
+  const canHandleSamples = roleAllows(["Technician", "PI", "Admin"]);
   setButtonEnabled("dispatchAlertsBtn", canManageProjects, "Requires PI/Admin role");
   setButtonEnabled("loadSlaBtn", canManageProjects, "Requires PI/Admin role");
   setButtonEnabled("loadQuotasBtn", canManageProjects, "Requires PI/Admin role");
   setButtonEnabled("generateRecommendationsBtn", canPlan, "Requires PI/Admin role");
   setButtonEnabled("evaluatePlannerBtn", canPlan, "Requires PI/Admin role");
+  setButtonEnabled("simulateCallbackBtn", isAdminUser, "Requires Admin role");
 
   const projectSubmit = el("projectForm")?.querySelector("button[type='submit']");
   if (projectSubmit) {
@@ -1887,6 +2276,24 @@ function applyRoleAccess() {
     plannerProjectSubmit.disabled = !canPlan;
     plannerProjectSubmit.title = canPlan ? "" : "Requires PI/Admin role";
   }
+
+  const sampleSubmit = el("sampleCreateForm")?.querySelector("button[type='submit']");
+  if (sampleSubmit) {
+    sampleSubmit.disabled = !canHandleSamples;
+    sampleSubmit.title = canHandleSamples ? "" : "Requires Technician/PI/Admin role";
+  }
+
+  const orderSubmit = el("genotypingOrderForm")?.querySelector("button[type='submit']");
+  if (orderSubmit) {
+    orderSubmit.disabled = !canHandleSamples;
+    orderSubmit.title = canHandleSamples ? "" : "Requires Technician/PI/Admin role";
+  }
+
+  const callbackSubmit = el("genotypingCallbackForm")?.querySelector("button[type='submit']");
+  if (callbackSubmit) {
+    callbackSubmit.disabled = !isAdminUser;
+    callbackSubmit.title = isAdminUser ? "" : "Requires Admin role";
+  }
 }
 
 async function handleTabOpen(tab) {
@@ -1895,6 +2302,7 @@ async function handleTabOpen(tab) {
   if (tab === "analytics") await loadAnalytics();
   if (tab === "breeding") await loadCalendar();
   if (tab === "scan") await loadPedigreeViz();
+  if (tab === "reports") await loadSampleWorkspace();
   if (tab === "compliance") await loadActiveAlertFeed();
   if (tab === "projects") {
     await loadProjects();
@@ -2074,6 +2482,103 @@ async function init() {
     withAction("Planner scenario load failed", () => loadPlannerScenarioInspector(nextId)).catch(() => undefined);
   });
 
+  el("loadSamplesBtn").addEventListener("click", () => withAction("Sample workspace load failed", loadSampleWorkspace).catch(() => undefined));
+  el("loadOrdersBtn").addEventListener("click", () => withAction("Order load failed", loadSampleWorkspace).catch(() => undefined));
+  el("loadGenotypeAnalyticsBtn").addEventListener("click", () => withAction("Genotype analytics load failed", loadSampleWorkspace).catch(() => undefined));
+
+  el("sampleCreateForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await withAction("Sample creation failed", async () => {
+      const animal = await resolveAnimalCode(el("sampleAnimalCode").value.trim());
+      if (!animal) throw new Error("Animal code not found");
+      const payload = {
+        animalId: Number(animal.id),
+        sampleType: el("sampleType").value,
+        provider: el("sampleProvider").value.trim(),
+        status: el("sampleStatus").value,
+      };
+      const sampleCode = el("sampleCode").value.trim();
+      if (sampleCode) payload.sampleCode = sampleCode;
+      const created = await api("/api/samples", {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify(payload),
+      });
+      el("sampleAnimalCode").value = "";
+      el("sampleCode").value = "";
+      await loadSampleWorkspace();
+      await inspectSample(created.id);
+      showMessage(`Created sample ${created.sampleCode}.`, "success");
+    }).catch(() => undefined);
+  });
+
+  el("genotypingOrderForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await withAction("Genotyping order creation failed", async () => {
+      if (!state.selectedSampleIds.length) throw new Error("Select at least one sample");
+      const projectId = Number(el("orderProjectSelect").value || 0);
+      const payload = {
+        provider: el("orderProvider").value.trim(),
+        sampleIds: state.selectedSampleIds,
+        markerPanel: el("orderMarkerPanel").value.trim(),
+      };
+      if (projectId) payload.projectId = projectId;
+      const created = await api("/api/genotyping/orders", {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify(payload),
+      });
+      state.selectedSampleIds = [];
+      state.selectedGenotypingOrderId = Number(created.id);
+      await loadSampleWorkspace();
+      await inspectGenotypingOrder(created.id);
+      showMessage(`Created genotyping order ${created.orderRef}.`, "success");
+    }).catch(() => undefined);
+  });
+
+  el("genotypingCallbackForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    await withAction("Provider callback simulation failed", async () => {
+      const orderId = Number(el("callbackOrderSelect").value || 0);
+      if (!orderId) throw new Error("Select an order first");
+      const order = state.genotypingOrders.find((row) => Number(row.id) === orderId);
+      if (!order) throw new Error("Selected order is not loaded");
+      const sampleCode = el("callbackSampleCode").value.trim();
+      const resultValue = el("callbackResult").value.trim();
+      if (!sampleCode || !resultValue) throw new Error("Sample code and result are required");
+      const res = await fetch("/api/genotyping/orders/callback", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Provider-Token": "dev-callback-token",
+        },
+        body: JSON.stringify({
+          orderRef: order.order_ref,
+          status: el("callbackStatus").value,
+          results: [
+            {
+              sampleCode,
+              result: resultValue,
+              markerPanel: el("callbackMarkerPanel").value.trim() || null,
+            },
+          ],
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Callback failed");
+      await loadSampleWorkspace();
+      await inspectGenotypingOrder(orderId);
+      showMessage(`Callback applied. updatedAnimals=${data.updatedAnimals}.`, "success");
+    }).catch(() => undefined);
+  });
+
+  el("callbackOrderSelect").addEventListener("change", () => {
+    const orderId = Number(el("callbackOrderSelect").value || 0);
+    if (!orderId) return;
+    withAction("Order detail load failed", () => inspectGenotypingOrder(orderId)).catch(() => undefined);
+  });
+
   el("genoUploadForm").addEventListener("submit", async (e) => {
     e.preventDefault();
     await withAction("Genotyping upload failed", async () => {
@@ -2193,6 +2698,82 @@ async function init() {
     const projectNode = evt.target.closest("button[data-project-id]");
     if (!projectNode) return;
     withAction("Project detail load failed", () => openProjectInspector(Number(projectNode.getAttribute("data-project-id")))).catch(() => undefined);
+  });
+
+  el("sampleList").addEventListener("click", (evt) => {
+    const sampleNode = evt.target.closest("button[data-sample-id]");
+    if (sampleNode) {
+      withAction("Sample detail load failed", () => inspectSample(Number(sampleNode.getAttribute("data-sample-id")))).catch(() => undefined);
+      return;
+    }
+    const toggleNode = evt.target.closest("button[data-sample-toggle]");
+    if (toggleNode) {
+      const sampleId = Number(toggleNode.getAttribute("data-sample-toggle"));
+      setSampleSelected(sampleId, !sampleSelected(sampleId));
+      renderSampleList(state.samples);
+      return;
+    }
+    const cageNode = evt.target.closest("button[data-sample-cage-id]");
+    if (cageNode) {
+      withAction("Cage detail load failed", () => openCageInspector(Number(cageNode.getAttribute("data-sample-cage-id")))).catch(() => undefined);
+      return;
+    }
+    const animalNode = evt.target.closest("button[data-sample-animal-id]");
+    if (!animalNode) return;
+    withAction("Animal pedigree load failed", () => openLearningPedigree(Number(animalNode.getAttribute("data-sample-animal-id")))).catch(() => undefined);
+  });
+
+  el("sampleInspector").addEventListener("click", (evt) => {
+    const updateNode = evt.target.closest("button[data-sample-update-id]");
+    if (updateNode) {
+      const sampleId = Number(updateNode.getAttribute("data-sample-update-id"));
+      const status = updateNode.getAttribute("data-sample-next-status");
+      withAction("Sample status update failed", async () => {
+        await api(`/api/samples/${sampleId}/status`, {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify({ status }),
+        });
+        await loadSampleWorkspace();
+        await inspectSample(sampleId);
+        showMessage(`Sample marked ${status}.`, "success");
+      }).catch(() => undefined);
+      return;
+    }
+    const animalNode = evt.target.closest("button[data-sample-animal-id]");
+    if (!animalNode) return;
+    withAction("Animal pedigree load failed", () => openLearningPedigree(Number(animalNode.getAttribute("data-sample-animal-id")))).catch(() => undefined);
+  });
+
+  el("orderList").addEventListener("click", (evt) => {
+    const inspectNode = evt.target.closest("button[data-order-id]");
+    if (inspectNode) {
+      withAction("Order detail load failed", () => inspectGenotypingOrder(Number(inspectNode.getAttribute("data-order-id")))).catch(() => undefined);
+      return;
+    }
+    const submitNode = evt.target.closest("button[data-submit-order-id]");
+    if (!submitNode) return;
+    const orderId = Number(submitNode.getAttribute("data-submit-order-id"));
+    withAction("Order submission failed", async () => {
+      await api(`/api/genotyping/orders/${orderId}/submit`, {
+        method: "POST",
+        headers: headers(),
+      });
+      await loadSampleWorkspace();
+      await inspectGenotypingOrder(orderId);
+      showMessage("Genotyping order submitted.", "success");
+    }).catch(() => undefined);
+  });
+
+  el("orderInspector").addEventListener("click", (evt) => {
+    const sampleNode = evt.target.closest("button[data-sample-id]");
+    if (sampleNode) {
+      withAction("Sample detail load failed", () => inspectSample(Number(sampleNode.getAttribute("data-sample-id")))).catch(() => undefined);
+      return;
+    }
+    const animalNode = evt.target.closest("button[data-sample-animal-id]");
+    if (!animalNode) return;
+    withAction("Animal pedigree load failed", () => openLearningPedigree(Number(animalNode.getAttribute("data-sample-animal-id")))).catch(() => undefined);
   });
 
   el("recommendationPanel").addEventListener("click", (evt) => {

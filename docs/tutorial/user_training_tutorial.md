@@ -320,11 +320,12 @@ The tutorial seed includes sample records in multiple states:
 That lets you learn the process as a pipeline instead of a single field.
 
 ## Guided walkthrough
-1. Open the sample workflow and locate `SMP-0004`.
-2. Confirm it belongs to `F1-L01-C0012-P01`.
-3. Review the event history from collection to result.
-4. Compare it to `SMP-0001`, which is still only `collected`.
-5. Ask what operational step is missing between those two states.
+1. Open the `Reports` tab and use the **Samples & Genotyping Workspace**.
+2. Locate `SMP-0004`.
+3. Confirm it belongs to `F1-L01-C0012-P01`.
+4. Review the event history from collection to result.
+5. Compare it to `SMP-0001`, which is still only `collected`.
+6. Ask what operational step is missing between those two states.
 
 ## Exercise
 Choose one `resulted` sample and one `collected` sample.

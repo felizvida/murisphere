@@ -224,6 +224,69 @@
             <input type="file" id="excelFile" accept=".xlsx" required />
             <button type="submit">Import Cages</button>
           </form>
+          <div class="sample-shell">
+            <div class="inline-form between">
+              <h4 class="viz-heading">Samples & Genotyping Workspace</h4>
+              <div class="inline-form planner-toolbar">
+                <button id="loadSamplesBtn" type="button">Load Samples</button>
+                <button id="loadOrdersBtn" type="button">Load Orders</button>
+                <button id="loadGenotypeAnalyticsBtn" type="button">Load Genotype Analytics</button>
+              </div>
+            </div>
+            <form id="sampleCreateForm" class="grid-form">
+              <label>Animal Code<input id="sampleAnimalCode" required placeholder="e.g., F1-L01-C0006-P01" /></label>
+              <label>Sample Type
+                <select id="sampleType">
+                  <option value="tail">tail</option>
+                  <option value="ear">ear</option>
+                  <option value="blood">blood</option>
+                  <option value="tissue">tissue</option>
+                </select>
+              </label>
+              <label>Provider<input id="sampleProvider" value="Transnetyx" /></label>
+              <label>Sample Code<input id="sampleCode" placeholder="optional auto-generated code" /></label>
+              <label>Status
+                <select id="sampleStatus">
+                  <option value="collected">collected</option>
+                  <option value="shipped">shipped</option>
+                  <option value="received">received</option>
+                  <option value="resulted">resulted</option>
+                  <option value="rejected">rejected</option>
+                </select>
+              </label>
+              <button type="submit">Create Sample</button>
+            </form>
+            <form id="genotypingOrderForm" class="grid-form">
+              <label>Provider<input id="orderProvider" value="Transnetyx" required /></label>
+              <label>Marker Panel<input id="orderMarkerPanel" placeholder="e.g., Cre Panel" /></label>
+              <label>Project
+                <select id="orderProjectSelect"></select>
+              </label>
+              <button type="submit">Create Order From Selected Samples</button>
+            </form>
+            <form id="genotypingCallbackForm" class="grid-form">
+              <label>Order
+                <select id="callbackOrderSelect"></select>
+              </label>
+              <label>Status
+                <select id="callbackStatus">
+                  <option value="received">received</option>
+                  <option value="closed">closed</option>
+                  <option value="failed">failed</option>
+                </select>
+              </label>
+              <label>Sample Code<input id="callbackSampleCode" placeholder="e.g., SMP-0004" /></label>
+              <label>Result<input id="callbackResult" placeholder="e.g., fl/+ or WT/WT" /></label>
+              <label>Marker Panel<input id="callbackMarkerPanel" placeholder="e.g., Cre Panel" /></label>
+              <button id="simulateCallbackBtn" type="submit">Simulate Provider Callback</button>
+            </form>
+            <div id="sampleSelectionBanner" class="alert-banner hidden"></div>
+            <div id="sampleList"></div>
+            <div id="sampleInspector"></div>
+            <div id="orderList"></div>
+            <div id="orderInspector"></div>
+            <div id="genotypeAnalytics"></div>
+          </div>
         </section>
 
         <section id="tab-compliance" class="tab-content card">

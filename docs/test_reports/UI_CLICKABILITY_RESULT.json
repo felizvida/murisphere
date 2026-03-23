@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-03-23T15:30:16.279321+00:00",
+  "generatedAt": "2026-03-23T15:50:06.398058+00:00",
   "summary": {
-    "passed": 40,
+    "passed": 47,
     "failed": 0,
-    "skipped": 7,
+    "skipped": 9,
     "score": 100.0
   },
   "results": [
@@ -46,6 +46,24 @@
     {
       "category": "form",
       "item": "#excelImportForm",
+      "status": "pass",
+      "detail": "submit listener found"
+    },
+    {
+      "category": "form",
+      "item": "#sampleCreateForm",
+      "status": "pass",
+      "detail": "submit listener found"
+    },
+    {
+      "category": "form",
+      "item": "#genotypingOrderForm",
+      "status": "pass",
+      "detail": "submit listener found"
+    },
+    {
+      "category": "form",
+      "item": "#genotypingCallbackForm",
       "status": "pass",
       "detail": "submit listener found"
     },
@@ -210,6 +228,42 @@
       "item": "<button(no-id)>",
       "status": "skip",
       "detail": "no stable id; skipped explicit wiring check"
+    },
+    {
+      "category": "button",
+      "item": "#loadSamplesBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "#loadOrdersBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "#loadGenotypeAnalyticsBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "<button(no-id)>",
+      "status": "skip",
+      "detail": "no stable id; skipped explicit wiring check"
+    },
+    {
+      "category": "button",
+      "item": "<button(no-id)>",
+      "status": "skip",
+      "detail": "no stable id; skipped explicit wiring check"
+    },
+    {
+      "category": "button",
+      "item": "#simulateCallbackBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
     },
     {
       "category": "button",

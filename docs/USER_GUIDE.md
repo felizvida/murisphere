@@ -22,6 +22,16 @@ Then keep these two documents open together:
 - PI: colony oversight, planning, reports.
 - Admin: user governance, imports, facility-level administration.
 
+## Samples And Genotyping
+Use the `Reports` tab for the samples/genotyping workspace.
+
+- create samples from animal codes
+- inspect sample event history
+- select samples into genotyping orders
+- submit draft orders
+- review order items and results
+- inspect Mendelian summaries and genotype alerts
+
 ## What The Tutorial-Ready Seed Includes
 - 20 labs and 3,000 cages
 - 73 projects across small, medium, and large labs

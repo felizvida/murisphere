@@ -611,6 +611,12 @@ button:disabled,
   gap: 0.72rem;
 }
 
+.sample-shell {
+  margin-top: 1rem;
+  display: grid;
+  gap: 0.72rem;
+}
+
 .planner-toolbar > * {
   flex: 1 1 150px;
 }
@@ -626,13 +632,17 @@ button:disabled,
 }
 
 .planner-list,
-.recommendation-list {
+.recommendation-list,
+.sample-list,
+.order-list {
   display: grid;
   gap: 0.55rem;
 }
 
 .planner-item,
-.recommendation-item {
+.recommendation-item,
+.sample-item,
+.order-item {
   border: 1px solid #d6e8df;
   border-radius: 14px;
   padding: 0.72rem;
@@ -640,7 +650,9 @@ button:disabled,
 }
 
 .planner-item-head,
-.recommendation-item-head {
+.recommendation-item-head,
+.sample-item-head,
+.order-item-head {
   display: flex;
   justify-content: space-between;
   gap: 0.45rem;
@@ -648,7 +660,9 @@ button:disabled,
 }
 
 .planner-meta,
-.recommendation-meta {
+.recommendation-meta,
+.sample-meta,
+.order-meta {
   display: flex;
   flex-wrap: wrap;
   gap: 0.36rem;
@@ -656,12 +670,16 @@ button:disabled,
 }
 
 .planner-meta .legend-item,
-.recommendation-meta .legend-item {
+.recommendation-meta .legend-item,
+.sample-meta .legend-item,
+.order-meta .legend-item {
   font-size: 0.67rem;
 }
 
 .planner-item .learning-actions,
-.recommendation-item .learning-actions {
+.recommendation-item .learning-actions,
+.sample-item .learning-actions,
+.order-item .learning-actions {
   margin-top: 0.55rem;
 }
 
