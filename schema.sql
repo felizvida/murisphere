@@ -243,6 +243,18 @@ CREATE TABLE IF NOT EXISTS project_cohort_closeouts (
     FOREIGN KEY(closed_by) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS project_handoff_slas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL UNIQUE,
+    assigned_max_days INTEGER NOT NULL DEFAULT 2,
+    shipped_max_days INTEGER NOT NULL DEFAULT 5,
+    repeat_breach_threshold INTEGER NOT NULL DEFAULT 2,
+    updated_by INTEGER,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(project_id) REFERENCES projects(id),
+    FOREIGN KEY(updated_by) REFERENCES users(id)
+);
+
 CREATE TABLE IF NOT EXISTS lifecycle_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     cage_id INTEGER NOT NULL,
@@ -863,6 +875,7 @@ CREATE INDEX IF NOT EXISTS idx_genotype_target_templates_lab ON genotype_target_
 CREATE INDEX IF NOT EXISTS idx_genotype_target_template_rules_template ON genotype_target_template_rules(template_id);
 CREATE INDEX IF NOT EXISTS idx_project_animal_assignments_project ON project_animal_assignments(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_animal_assignments_status ON project_animal_assignments(status);
+CREATE INDEX IF NOT EXISTS idx_project_handoff_slas_project ON project_handoff_slas(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_assignment_events_project ON project_animal_assignment_events(project_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_project_assignment_events_animal ON project_animal_assignment_events(animal_id);
 CREATE INDEX IF NOT EXISTS idx_project_closeouts_project ON project_cohort_closeouts(project_id, closed_at);

@@ -43,6 +43,8 @@ Use the `Reports` tab for the samples/genotyping workspace.
 - review downstream completion and disposition summaries to see how much of a cohort has actually finished experimental use
 - record project cohort closeouts with outcome notes and optional attachments
 - classify closeouts with a structured outcome reason such as `Met Goal`, `Partial Data`, or `Welfare/Compliance Stop`
+- define project-specific handoff SLAs for `assigned` and `shipped` stages plus a repeat-breach threshold
+- export closeout and stalled-handoff reports as CSV or PDF directly from the analytics workspace
 - inspect breeder decision signals that connect genotyping output back to colony planning
 - review order items and results
 - inspect Mendelian summaries and genotype alerts
@@ -85,8 +87,8 @@ Notes:
 ## Visual Dashboards (Fast Situational Awareness)
 - `Cages` tab: room density, breeding status mix, alerted cage ranking.
 - `Breeding` tab: event timeline density, breeder productivity/survivor trend.
-- `Analytics` tab: projected capacity bars, reminder pressure curve, sex balance donut, cross-lab cohort flow, stalled handoff age buckets, and closeout outcome mix.
-- `Projects` tab: project cohort closeout panel with completion summary and attachment-backed closeout records.
+- `Analytics` tab: projected capacity bars, reminder pressure curve, sex balance donut, cross-lab cohort flow, stalled handoff age buckets, repeat-breach project watchlist, closeout outcome mix, and export controls.
+- `Projects` tab: project cohort closeout panel plus per-project handoff SLA settings with live breach status.
 - `Compliance` tab: alert severity stack, category mix donut, protocol expiration watch.
 - `Scan/Edit` tab: pedigree explorer (interactive lineage chart by animal ID).
 
@@ -95,7 +97,10 @@ Notes:
 - Review analytics and demand forecasts.
 - Review facility-wide cohort flow by lab to see where assignments are still in flight versus already completed.
 - Watch the alert feed for stalled cohort assignments, especially animals that remain in `assigned` or `shipped` too long.
+- Configure project handoff SLAs when one study has tighter timelines than the facility default.
+- Watch for `Project Handoff SLA Repeatedly Breached` alerts to catch projects that are missing handoffs again and again.
 - Filter cohort analytics by closeout status and outcome reason when you need to understand why studies ended early or finished partially.
+- Export filtered closeout summaries or current stalled-handoff lists before PI reviews, audits, or weekly operations meetings.
 - Build planner scenarios and evaluate projected deficits/risk.
 - Generate recommendations and apply decisions (accept/adjust/ignore/complete).
 - Submit genotyping orders and ingest callback results automatically.

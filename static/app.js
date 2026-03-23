@@ -571,7 +571,19 @@ function renderCohortHandoffAnalytics(data) {
     .map(
       (row) => `<div class="timeline-item">
         <strong>${esc(row.projectCode)}</strong>
-        <span>${esc(row.animalCode)} · ${esc(row.status)} · ${esc(row.ageDays)}d · ${esc(row.labName)}</span>
+        <span>${esc(row.animalCode)} · ${esc(row.status)} · age ${esc(row.ageDays)}d · overdue ${esc(row.overdueDays || 0)}d · ${esc(
+          row.labName
+        )}</span>
+      </div>`
+    )
+    .join("");
+  const repeatRows = (data.repeatBreachProjects || [])
+    .map(
+      (row) => `<div class="timeline-item">
+        <strong>${esc(row.projectCode)}</strong>
+        <span>${esc(row.breachCount)} active breaches · threshold ${esc(row.repeatBreachThreshold)} · oldest ${esc(
+          row.oldestAgeDays
+        )}d · ${esc(row.labName)}</span>
       </div>`
     )
     .join("");
@@ -610,6 +622,10 @@ function renderCohortHandoffAnalytics(data) {
       <article class="viz-card">
         <h4>Stalled By Project</h4>
         <div class="timeline-list">${projectRows || `<div class="hint">No stalled project handoffs right now.</div>`}</div>
+      </article>
+      <article class="viz-card">
+        <h4>Repeat-Breach Projects</h4>
+        <div class="timeline-list">${repeatRows || `<div class="hint">No projects are above their repeat-breach threshold.</div>`}</div>
       </article>
     </div>
     <article class="viz-card">
@@ -1086,6 +1102,27 @@ function setCohortAnimalSelected(animalId, selected) {
 
 function closeoutOutcomeLabel(code) {
   return CLOSEOUT_OUTCOME_OPTIONS.find((row) => row.code === code)?.label || "Other";
+}
+
+function cohortCloseoutFilterParams() {
+  const qs = new URLSearchParams();
+  const status = el("cohortCloseoutStatusFilter")?.value || "";
+  const outcome = el("cohortCloseoutOutcomeFilter")?.value || "";
+  if (status) qs.set("status", status);
+  if (outcome) qs.set("outcomeCode", outcome);
+  return qs;
+}
+
+function openCohortReport(kind, format) {
+  let path = "";
+  if (kind === "closeouts") {
+    const qs = cohortCloseoutFilterParams();
+    path = `/api/reports/cohort-closeouts.${format}${qs.toString() ? `?${qs.toString()}` : ""}`;
+  } else if (kind === "stalled") {
+    path = `/api/reports/stalled-handoffs.${format}`;
+  }
+  if (!path) return;
+  window.open(path, "_blank", "noopener");
 }
 
 function activeCohortProject() {
@@ -2154,7 +2191,7 @@ function renderCageInspector(detail) {
   `;
 }
 
-function renderProjectInspector(project, cages, targets = [], assignments = [], timeline = null, closeouts = []) {
+function renderProjectInspector(project, cages, targets = [], assignments = [], timeline = null, closeouts = [], handoffSla = null) {
   if (!project) {
     el("projectInspector").innerHTML = "";
     return;
@@ -2180,6 +2217,18 @@ function renderProjectInspector(project, cages, targets = [], assignments = [], 
     color: row.color || "#64748b",
   }));
   const completion = timeline?.completion || null;
+  const sla = handoffSla || {
+    assignedMaxDays: 2,
+    shippedMaxDays: 5,
+    repeatBreachThreshold: 2,
+    source: "default",
+    activeBreaches: 0,
+    assignedBreaches: 0,
+    shippedBreaches: 0,
+    oldestAgeDays: 0,
+    maxOverdueDays: 0,
+    repeatAlertTriggered: false,
+  };
   const closeoutRows = (closeouts || [])
     .slice(0, 6)
     .map(
@@ -2266,6 +2315,41 @@ function renderProjectInspector(project, cages, targets = [], assignments = [], 
                     .join("")
                 : `<div class="hint">No genotype rules saved for this project yet.</div>`
             }
+          </div>
+        </article>
+        <article class="viz-card">
+          <h4>Handoff SLA</h4>
+          <div class="viz-sub">
+            Assigned within ${esc(sla.assignedMaxDays)} day(s) · shipped within ${esc(sla.shippedMaxDays)} day(s) · repeat alert at
+            ${esc(sla.repeatBreachThreshold)} active breach(es)
+          </div>
+          <div class="timeline-list">
+            <div class="timeline-item">
+              <strong>${esc(sla.source === "custom" ? "Custom Project SLA" : "Default Facility SLA")}</strong>
+              <span>${esc(sla.activeBreaches || 0)} active breaches · ${esc(sla.assignedBreaches || 0)} assigned · ${esc(
+                sla.shippedBreaches || 0
+              )} shipped</span>
+            </div>
+            <div class="timeline-item">
+              <strong>${esc(sla.repeatAlertTriggered ? "Repeat-Breach Alert Triggered" : "Repeat-Breach Alert Idle")}</strong>
+              <span>Oldest age ${esc(sla.oldestAgeDays || 0)}d · max overdue ${esc(sla.maxOverdueDays || 0)}d</span>
+            </div>
+          </div>
+          <div class="grid-form compact-form cohort-toolbar">
+            <label>Assigned Max Days<input id="projectSlaAssignedDays" type="number" min="1" max="30" value="${esc(
+              sla.assignedMaxDays
+            )}" /></label>
+            <label>Shipped Max Days<input id="projectSlaShippedDays" type="number" min="1" max="30" value="${esc(
+              sla.shippedMaxDays
+            )}" /></label>
+            <label>Repeat Breach Threshold<input id="projectSlaRepeatThreshold" type="number" min="1" max="25" value="${esc(
+              sla.repeatBreachThreshold
+            )}" /></label>
+            <div class="learning-actions">
+              <button type="button" id="saveProjectHandoffSlaBtn" data-project-handoff-sla-project-id="${esc(project.id)}" ${
+                roleAllows(["PI", "Admin"]) ? "" : "disabled title='Requires PI/Admin role'"
+              }>Save SLA</button>
+            </div>
           </div>
         </article>
         <article class="viz-card">
@@ -2357,15 +2441,16 @@ async function openCageInspector(cageId) {
 async function openProjectInspector(projectId) {
   if (!projectId) return;
   const project = state.projects.find((p) => Number(p.id) === Number(projectId));
-  const [cages, targets, assignments, timeline, closeouts] = await Promise.all([
+  const [cages, targets, assignments, timeline, closeouts, handoffSla] = await Promise.all([
     api(`/api/projects/${projectId}/cages`, { headers: headers(false) }),
     api(`/api/projects/${projectId}/genotype-targets`, { headers: headers(false) }),
     api(`/api/projects/${projectId}/assignments`, { headers: headers(false) }),
     api(`/api/projects/${projectId}/assignment-timeline`, { headers: headers(false) }),
     api(`/api/projects/${projectId}/closeouts`, { headers: headers(false) }),
+    api(`/api/projects/${projectId}/handoff-sla`, { headers: headers(false) }),
   ]);
   activateTab("projects");
-  renderProjectInspector(project, cages, targets, assignments, timeline, closeouts);
+  renderProjectInspector(project, cages, targets, assignments, timeline, closeouts, handoffSla);
   showMessage(`Loaded project ${project?.project_code || projectId}`, "success");
 }
 
@@ -2944,6 +3029,7 @@ async function loadAnalytics() {
     <div class="kpi"><div>Projected Over-Cap Rooms (30d)</div><div class="value">${projectedOverCap}</div></div>
     <div class="kpi"><div>Consolidation Opportunities</div><div class="value">${consolidation.length}</div></div>
     <div class="kpi"><div>Stalled Cohort Handoffs</div><div class="value">${a.stalledCohortAssignments || 0}</div></div>
+    <div class="kpi"><div>Repeat-Breach Projects</div><div class="value">${a.repeatBreachProjects || 0}</div></div>
     <div class="kpi"><div>Recorded Closeouts</div><div class="value">${a.cohortCloseouts || 0}</div></div>
   `;
   renderAnalyticsVisuals(a, nonProd, reminders, space, consolidation);
@@ -3245,6 +3331,10 @@ async function init() {
   el("cohortCloseoutOutcomeFilter").addEventListener("change", () =>
     withAction("Cohort handoff analytics load failed", loadCohortHandoffAnalytics).catch(() => undefined)
   );
+  el("exportCohortCloseoutsCsvBtn").addEventListener("click", () => openCohortReport("closeouts", "csv"));
+  el("exportCohortCloseoutsPdfBtn").addEventListener("click", () => openCohortReport("closeouts", "pdf"));
+  el("exportStalledHandoffsCsvBtn").addEventListener("click", () => openCohortReport("stalled", "csv"));
+  el("exportStalledHandoffsPdfBtn").addEventListener("click", () => openCohortReport("stalled", "pdf"));
   el("generateRecommendationsBtn").addEventListener("click", () => {
     withAction("Recommendation generation failed", async () => {
       const result = await api("/api/recommendations/generate", { method: "POST", headers: headers() });
@@ -3540,6 +3630,26 @@ async function init() {
   });
 
   el("projectInspector").addEventListener("click", (evt) => {
+    const slaNode = evt.target.closest("button#saveProjectHandoffSlaBtn");
+    if (slaNode) {
+      withAction("Project handoff SLA save failed", async () => {
+        const projectId = Number(slaNode.getAttribute("data-project-handoff-sla-project-id") || 0);
+        if (!projectId) throw new Error("Select a project first");
+        await api(`/api/projects/${projectId}/handoff-sla`, {
+          method: "PUT",
+          headers: headers(),
+          body: JSON.stringify({
+            assignedMaxDays: Number(el("projectSlaAssignedDays")?.value || 0),
+            shippedMaxDays: Number(el("projectSlaShippedDays")?.value || 0),
+            repeatBreachThreshold: Number(el("projectSlaRepeatThreshold")?.value || 0),
+          }),
+        });
+        await openProjectInspector(projectId);
+        await loadCohortHandoffAnalytics();
+        showMessage("Project handoff SLA saved.", "success");
+      }).catch(() => undefined);
+      return;
+    }
     const closeoutNode = evt.target.closest("button#saveProjectCloseoutBtn");
     if (closeoutNode) {
       withAction("Project closeout save failed", async () => {

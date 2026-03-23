@@ -495,8 +495,12 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertIn("/assignment-status", js)
         self.assertIn("/assignment-timeline", js)
         self.assertIn("/closeouts", js)
+        self.assertIn("/handoff-sla", js)
         self.assertIn('/api/analytics/cohort-handoffs', js)
         self.assertIn("loadCohortHandoffsBtn", js)
+        self.assertIn("saveProjectHandoffSlaBtn", js)
+        self.assertIn("exportCohortCloseoutsCsvBtn", js)
+        self.assertIn("exportStalledHandoffsPdfBtn", js)
         self.assertIn('inspectGenotypingOrder(orderId)', js)
         self.assertIn('"/api/genotyping/orders"', js)
         self.assertIn('"/api/genotyping/orders/callback"', js)
@@ -536,6 +540,7 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertIn("cohortLabs", analytics_payload)
         self.assertIn("cohortCompletion", analytics_payload)
         self.assertIn("stalledCohortAssignments", analytics_payload)
+        self.assertIn("repeatBreachProjects", analytics_payload)
         self.assertIn("cohortCloseouts", analytics_payload)
 
         handoffs = self.client.get("/api/analytics/cohort-handoffs", headers=self.auth_headers(token))
@@ -544,6 +549,7 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertIn("taxonomy", handoff_payload)
         self.assertIn("stalledAgeBuckets", handoff_payload)
         self.assertIn("recentCloseouts", handoff_payload)
+        self.assertIn("repeatBreachProjects", handoff_payload)
 
     def test_reports_imports_genotyping_facility_audit(self) -> None:
         token = self.login("admin@murisphere.local", "admin1234")
@@ -560,6 +566,24 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertEqual(pdf_res.status_code, 200)
         self.assertIn("application/pdf", pdf_res.content_type)
         self.assertTrue(pdf_res.data.startswith(b"%PDF-"))
+
+        closeout_csv = self.client.get("/api/reports/cohort-closeouts.csv", headers=self.auth_headers(token))
+        self.assertEqual(closeout_csv.status_code, 200)
+        self.assertIn("text/csv", closeout_csv.content_type)
+
+        closeout_pdf = self.client.get("/api/reports/cohort-closeouts.pdf", headers=self.auth_headers(token))
+        self.assertEqual(closeout_pdf.status_code, 200)
+        self.assertIn("application/pdf", closeout_pdf.content_type)
+        self.assertTrue(closeout_pdf.data.startswith(b"%PDF-"))
+
+        stalled_csv = self.client.get("/api/reports/stalled-handoffs.csv", headers=self.auth_headers(token))
+        self.assertEqual(stalled_csv.status_code, 200)
+        self.assertIn("text/csv", stalled_csv.content_type)
+
+        stalled_pdf = self.client.get("/api/reports/stalled-handoffs.pdf", headers=self.auth_headers(token))
+        self.assertEqual(stalled_pdf.status_code, 200)
+        self.assertIn("application/pdf", stalled_pdf.content_type)
+        self.assertTrue(stalled_pdf.data.startswith(b"%PDF-"))
 
         with sqlite3.connect(appmod.DB_PATH) as conn:
             conn.execute(
@@ -1743,6 +1767,21 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertEqual(status_update.status_code, 200)
         self.assertEqual(status_update.get_json()["updated"], 1)
 
+        default_sla = self.client.get(f"/api/projects/{project_id}/handoff-sla", headers=self.auth_headers(tech))
+        self.assertEqual(default_sla.status_code, 200)
+        self.assertEqual(default_sla.get_json()["assignedMaxDays"], 2)
+        self.assertEqual(default_sla.get_json()["source"], "default")
+
+        custom_sla = self.client.put(
+            f"/api/projects/{project_id}/handoff-sla",
+            headers=self.auth_headers(admin),
+            json={"assignedMaxDays": 3, "shippedMaxDays": 2, "repeatBreachThreshold": 1},
+        )
+        self.assertEqual(custom_sla.status_code, 200)
+        self.assertEqual(custom_sla.get_json()["assignedMaxDays"], 3)
+        self.assertEqual(custom_sla.get_json()["repeatBreachThreshold"], 1)
+        self.assertEqual(custom_sla.get_json()["source"], "custom")
+
         timeline = self.client.get(f"/api/projects/{project_id}/assignment-timeline", headers=self.auth_headers(tech))
         self.assertEqual(timeline.status_code, 200)
         timeline_payload = timeline.get_json()
@@ -1865,6 +1904,11 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertEqual(alert_feed.status_code, 200)
         stalled_alert = next(row for row in alert_feed.get_json() if row["category"] == "cohort" and "COHORT-STALLED-001" in row["message"])
         self.assertEqual(stalled_alert["severity"], "low")
+        self.assertEqual(stalled_alert["meta"]["thresholdDays"], 3)
+        self.assertEqual(stalled_alert["meta"]["overdueDays"], 1)
+        repeat_alert = next(row for row in alert_feed.get_json() if row["title"] == "Project Handoff SLA Repeatedly Breached")
+        self.assertEqual(repeat_alert["meta"]["projectCode"], "PRJ-GENO-001")
+        self.assertEqual(repeat_alert["meta"]["repeatBreachThreshold"], 1)
 
         handoff_analytics = self.client.get("/api/analytics/cohort-handoffs?outcomeCode=partial_data", headers=self.auth_headers(admin))
         self.assertEqual(handoff_analytics.status_code, 200)
@@ -1872,6 +1916,22 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertEqual(analytics_payload["recentCloseouts"][0]["outcomeCode"], "partial_data")
         self.assertTrue(any(row["label"] == "2-4d" and row["value"] >= 1 for row in analytics_payload["stalledAgeBuckets"]))
         self.assertTrue(any(row["labName"] == "Neurogenetics Lab" for row in analytics_payload["stalledByLab"]))
+        self.assertTrue(any(row["projectCode"] == "PRJ-GENO-001" and row["breachCount"] >= 1 for row in analytics_payload["repeatBreachProjects"]))
+
+        closeout_report = self.client.get(
+            "/api/reports/cohort-closeouts.csv?outcomeCode=partial_data",
+            headers=self.auth_headers(admin),
+        )
+        self.assertEqual(closeout_report.status_code, 200)
+        closeout_report_text = closeout_report.data.decode("utf-8")
+        self.assertIn("PRJ-GENO-001", closeout_report_text)
+        self.assertIn("Partial Data", closeout_report_text)
+
+        stalled_report = self.client.get("/api/reports/stalled-handoffs.csv", headers=self.auth_headers(admin))
+        self.assertEqual(stalled_report.status_code, 200)
+        stalled_report_text = stalled_report.data.decode("utf-8")
+        self.assertIn("COHORT-STALLED-001", stalled_report_text)
+        self.assertIn(",3,1,low,1,", stalled_report_text)
 
 
 if __name__ == "__main__":

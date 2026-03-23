@@ -860,13 +860,20 @@ the result, such as <code>Met Goal</code>, <code>Partial Data</code>, or
 <code>Design Change</code>.</li>
 <li>If you have a sample file handy, attach it to the closeout
 record.</li>
+<li>In the same project inspector, set a handoff SLA for that project.
+For practice, choose a tighter <code>assigned</code> limit and a
+repeat-breach threshold that would be meaningful for a fast pilot
+study.</li>
 <li>If you are practicing as an admin, switch to <code>Analytics</code>,
 filter the cohort handoff view by outcome reason, and compare cross-lab
 cohort flow so you can see which labs still have animals in flight
 versus already completed.</li>
-<li>Check the alert feed and confirm that stalled cohort states would
-surface there if an animal sat too long in <code>assigned</code> or
-<code>shipped</code>.</li>
+<li>Use the export buttons to download a filtered closeout report and
+the current stalled-handoff report. This is the fastest way to prepare a
+PI update or operations meeting packet.</li>
+<li>Check the alert feed and confirm that stalled cohort states and
+repeated project breaches would surface there if an animal sat too long
+in <code>assigned</code> or <code>shipped</code>.</li>
 <li>If you are practicing as an admin, import a result CSV or use
 callback simulation and watch the order move toward completion.</li>
 </ol>
@@ -1050,8 +1057,9 @@ cohort</h2>
 <p>A lab needs animals in four weeks. Use
 <code>Neurogenetics Lab Cohort Plan</code> and the breeder cages in lab
 1 to decide whether current supply is enough, which genotype template
-best fits the study, and whether any reserved animals are already stuck
-in <code>assigned</code> or <code>shipped</code>.</p>
+best fits the study, whether any reserved animals are already stuck in
+<code>assigned</code> or <code>shipped</code>, and whether that project
+needs a tighter handoff SLA than the facility default.</p>
 <h2 id="mission-2-find-the-highest-risk-welfare-pattern">Mission 2: Find
 the highest-risk welfare pattern</h2>
 <p>Review high-severity alerts and decide whether the issue is isolated
@@ -1103,6 +1111,9 @@ saved.</li>
 <li>Review unresolved deviations and necropsy items.</li>
 <li>Export any summaries needed for handoff, audit, or PI
 discussion.</li>
+<li>If a project keeps slipping between <code>assigned</code> and
+<code>shipped</code>, set or review its SLA before the next day
+starts.</li>
 </ol>
 <h1 id="troubleshooting-and-learning-support">Troubleshooting and
 Learning Support</h1>

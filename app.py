@@ -212,6 +212,12 @@ CLOSEOUT_OUTCOME_TAXONOMY: list[dict[str, str]] = [
     },
 ]
 
+DEFAULT_PROJECT_HANDOFF_SLA = {
+    "assignedMaxDays": 2,
+    "shippedMaxDays": 5,
+    "repeatBreachThreshold": 2,
+}
+
 
 def now_iso() -> str:
     return datetime.now(UTC).isoformat()
@@ -239,6 +245,24 @@ def _closeout_outcome_option(code: str | None) -> dict[str, str]:
         if normalized == option["code"]:
             return option
     return CLOSEOUT_OUTCOME_TAXONOMY[-1]
+
+
+def _normalize_project_handoff_sla(payload: dict[str, Any] | None) -> dict[str, int]:
+    data = payload or {}
+    assigned = int(data.get("assignedMaxDays") or DEFAULT_PROJECT_HANDOFF_SLA["assignedMaxDays"])
+    shipped = int(data.get("shippedMaxDays") or DEFAULT_PROJECT_HANDOFF_SLA["shippedMaxDays"])
+    repeat = int(data.get("repeatBreachThreshold") or DEFAULT_PROJECT_HANDOFF_SLA["repeatBreachThreshold"])
+    if assigned < 1 or assigned > 30:
+        raise ValueError("assignedMaxDays must be between 1 and 30")
+    if shipped < 1 or shipped > 30:
+        raise ValueError("shippedMaxDays must be between 1 and 30")
+    if repeat < 1 or repeat > 25:
+        raise ValueError("repeatBreachThreshold must be between 1 and 25")
+    return {
+        "assignedMaxDays": assigned,
+        "shippedMaxDays": shipped,
+        "repeatBreachThreshold": repeat,
+    }
 
 
 def _csv_pick(row: dict[str, Any], keys: list[str]) -> str:
@@ -585,6 +609,74 @@ def _project_closeouts(project_id: int) -> list[dict[str, Any]]:
     return payload
 
 
+def _project_handoff_sla_map(project_ids: list[int]) -> dict[int, dict[str, Any]]:
+    if not project_ids:
+        return {}
+    unique_ids = sorted({int(project_id) for project_id in project_ids})
+    rows = db().execute(
+        """
+        SELECT project_id, assigned_max_days, shipped_max_days, repeat_breach_threshold, updated_by, updated_at
+        FROM project_handoff_slas
+        WHERE project_id IN ("""
+        + ", ".join(["?"] * len(unique_ids))
+        + """)
+        """,
+        unique_ids,
+    ).fetchall()
+    mapping: dict[int, dict[str, Any]] = {
+        project_id: {
+            "projectId": project_id,
+            "assignedMaxDays": int(DEFAULT_PROJECT_HANDOFF_SLA["assignedMaxDays"]),
+            "shippedMaxDays": int(DEFAULT_PROJECT_HANDOFF_SLA["shippedMaxDays"]),
+            "repeatBreachThreshold": int(DEFAULT_PROJECT_HANDOFF_SLA["repeatBreachThreshold"]),
+            "source": "default",
+            "updatedBy": None,
+            "updatedAt": None,
+        }
+        for project_id in unique_ids
+    }
+    for row in rows:
+        project_id = int(row["project_id"])
+        mapping[project_id] = {
+            "projectId": project_id,
+            "assignedMaxDays": int(row["assigned_max_days"] or DEFAULT_PROJECT_HANDOFF_SLA["assignedMaxDays"]),
+            "shippedMaxDays": int(row["shipped_max_days"] or DEFAULT_PROJECT_HANDOFF_SLA["shippedMaxDays"]),
+            "repeatBreachThreshold": int(row["repeat_breach_threshold"] or DEFAULT_PROJECT_HANDOFF_SLA["repeatBreachThreshold"]),
+            "source": "custom",
+            "updatedBy": row["updated_by"],
+            "updatedAt": row["updated_at"],
+        }
+    return mapping
+
+
+def _project_handoff_sla_payload(project_id: int, user: AuthContext) -> dict[str, Any]:
+    config = _project_handoff_sla_map([project_id]).get(
+        project_id,
+        {
+            "projectId": project_id,
+            "assignedMaxDays": int(DEFAULT_PROJECT_HANDOFF_SLA["assignedMaxDays"]),
+            "shippedMaxDays": int(DEFAULT_PROJECT_HANDOFF_SLA["shippedMaxDays"]),
+            "repeatBreachThreshold": int(DEFAULT_PROJECT_HANDOFF_SLA["repeatBreachThreshold"]),
+            "source": "default",
+            "updatedBy": None,
+            "updatedAt": None,
+        },
+    )
+    stalled_rows = [row for row in _stalled_assignment_rows(user) if int(row["projectId"]) == int(project_id)]
+    alert_active = len(stalled_rows) >= int(config["repeatBreachThreshold"])
+    oldest = max([int(row["ageDays"]) for row in stalled_rows], default=0)
+    max_overdue = max([int(row["overdueDays"]) for row in stalled_rows], default=0)
+    return {
+        **config,
+        "activeBreaches": len(stalled_rows),
+        "assignedBreaches": sum(1 for row in stalled_rows if row["status"] == "assigned"),
+        "shippedBreaches": sum(1 for row in stalled_rows if row["status"] == "shipped"),
+        "oldestAgeDays": oldest,
+        "maxOverdueDays": max_overdue,
+        "repeatAlertTriggered": alert_active,
+    }
+
+
 def _stalled_assignment_bucket(age_days: int) -> str:
     if age_days <= 4:
         return "2-4d"
@@ -611,6 +703,7 @@ def _stalled_assignment_rows(user: AuthContext) -> list[dict[str, Any]]:
         + ("" if is_admin(user) else " AND p.lab_id = ? "),
         () if is_admin(user) else (user.lab_id,),
     ).fetchall()
+    sla_map = _project_handoff_sla_map([int(row["project_id"]) for row in rows])
     current_dt = datetime.now(UTC)
     stalled: list[dict[str, Any]] = []
     for row in rows:
@@ -619,14 +712,25 @@ def _stalled_assignment_rows(user: AuthContext) -> list[dict[str, Any]]:
         except ValueError:
             continue
         age_days = max(0, (current_dt - assigned_at).days)
-        threshold = 2 if row["status"] == "assigned" else 5
+        project_id = int(row["project_id"])
+        sla = sla_map.get(
+            project_id,
+            {
+                "assignedMaxDays": int(DEFAULT_PROJECT_HANDOFF_SLA["assignedMaxDays"]),
+                "shippedMaxDays": int(DEFAULT_PROJECT_HANDOFF_SLA["shippedMaxDays"]),
+                "repeatBreachThreshold": int(DEFAULT_PROJECT_HANDOFF_SLA["repeatBreachThreshold"]),
+                "source": "default",
+            },
+        )
+        threshold = int(sla["assignedMaxDays"] if row["status"] == "assigned" else sla["shippedMaxDays"])
         if age_days < threshold:
             continue
-        severity = "high" if age_days >= 8 else ("medium" if age_days >= 5 else "low")
+        overdue_days = max(0, age_days - threshold)
+        severity = "high" if overdue_days >= 6 else ("medium" if overdue_days >= 3 else "low")
         stalled.append(
             {
                 "assignmentId": int(row["id"]),
-                "projectId": int(row["project_id"]),
+                "projectId": project_id,
                 "projectCode": row["project_code"],
                 "projectTitle": row["project_title"],
                 "labId": int(row["lab_id"]),
@@ -637,21 +741,65 @@ def _stalled_assignment_rows(user: AuthContext) -> list[dict[str, Any]]:
                 "cageCode": row["cage_code"],
                 "status": row["status"],
                 "ageDays": age_days,
+                "overdueDays": overdue_days,
                 "ageBucket": _stalled_assignment_bucket(age_days),
                 "thresholdDays": threshold,
                 "severity": severity,
                 "assignedAt": row["assigned_at"],
+                "repeatBreachThreshold": int(sla["repeatBreachThreshold"]),
+                "slaSource": sla.get("source", "default"),
             }
         )
     return stalled
 
 
-def _cohort_handoff_analytics(
+def _repeat_breach_projects(user: AuthContext, stalled_rows: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    rows = stalled_rows if stalled_rows is not None else _stalled_assignment_rows(user)
+    by_project: dict[int, dict[str, Any]] = {}
+    for row in rows:
+        entry = by_project.setdefault(
+            int(row["projectId"]),
+            {
+                "projectId": int(row["projectId"]),
+                "projectCode": row["projectCode"],
+                "projectTitle": row["projectTitle"],
+                "labId": int(row["labId"]),
+                "labName": row["labName"],
+                "breachCount": 0,
+                "assignedBreaches": 0,
+                "shippedBreaches": 0,
+                "highSeverityCount": 0,
+                "oldestAgeDays": 0,
+                "maxOverdueDays": 0,
+                "repeatBreachThreshold": int(row["repeatBreachThreshold"]),
+            },
+        )
+        entry["breachCount"] += 1
+        if row["status"] == "assigned":
+            entry["assignedBreaches"] += 1
+        if row["status"] == "shipped":
+            entry["shippedBreaches"] += 1
+        if row["severity"] == "high":
+            entry["highSeverityCount"] += 1
+        entry["oldestAgeDays"] = max(int(entry["oldestAgeDays"]), int(row["ageDays"]))
+        entry["maxOverdueDays"] = max(int(entry["maxOverdueDays"]), int(row["overdueDays"]))
+    repeated: list[dict[str, Any]] = []
+    for entry in by_project.values():
+        if int(entry["breachCount"]) < int(entry["repeatBreachThreshold"]):
+            continue
+        entry["severity"] = "high" if int(entry["highSeverityCount"]) > 0 or int(entry["maxOverdueDays"]) >= 6 else "medium"
+        repeated.append(entry)
+    repeated.sort(key=lambda row: (SEVERITY_RANK.get(str(row["severity"]), 0), int(row["breachCount"]), int(row["oldestAgeDays"])), reverse=True)
+    return repeated
+
+
+def _cohort_closeout_rows(
     user: AuthContext,
     *,
     closeout_status: str = "",
     outcome_code: str = "",
-) -> dict[str, Any]:
+    limit: int | None = None,
+) -> list[dict[str, Any]]:
     clauses: list[str] = []
     params: list[Any] = []
     if not is_admin(user):
@@ -664,8 +812,8 @@ def _cohort_handoff_analytics(
         clauses.append("COALESCE(pc.outcome_code, 'other') = ?")
         params.append(outcome_code)
     where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
-
-    closeout_rows = db().execute(
+    limit_sql = f" LIMIT {int(limit)}" if limit else ""
+    rows = db().execute(
         f"""
         SELECT pc.id, pc.project_id, pc.status, COALESCE(pc.outcome_code, 'other') AS outcome_code,
                pc.completed_animals, pc.summary, pc.notes, pc.closed_at,
@@ -676,13 +824,13 @@ def _cohort_handoff_analytics(
         JOIN labs l ON l.id = p.lab_id
         {where_sql}
         ORDER BY pc.closed_at DESC, pc.id DESC
-        LIMIT 40
+        {limit_sql}
         """,
         params,
     ).fetchall()
     attachment_counts: dict[str, int] = {}
-    if closeout_rows:
-        closeout_ids = [str(int(row["id"])) for row in closeout_rows]
+    if rows:
+        closeout_ids = [str(int(row["id"])) for row in rows]
         attachment_rows = db().execute(
             """
             SELECT entity_id, COUNT(*) AS count
@@ -695,25 +843,18 @@ def _cohort_handoff_analytics(
             closeout_ids,
         ).fetchall()
         attachment_counts = {str(row["entity_id"]): int(row["count"] or 0) for row in attachment_rows}
-
-    status_mix: dict[str, int] = {}
-    outcome_mix: dict[str, int] = {}
-    recent_closeouts: list[dict[str, Any]] = []
-    for row in closeout_rows:
-        status = str(row["status"] or "completed")
-        outcome = str(row["outcome_code"] or "other")
-        status_mix[status] = status_mix.get(status, 0) + 1
-        outcome_mix[outcome] = outcome_mix.get(outcome, 0) + 1
-        option = _closeout_outcome_option(outcome)
-        recent_closeouts.append(
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        option = _closeout_outcome_option(row["outcome_code"])
+        result.append(
             {
                 "id": int(row["id"]),
                 "projectId": int(row["project_id"]),
                 "projectCode": row["project_code"],
                 "projectTitle": row["project_title"],
                 "labName": row["lab_name"],
-                "status": status,
-                "outcomeCode": outcome,
+                "status": row["status"],
+                "outcomeCode": option["code"],
                 "outcomeLabel": option["label"],
                 "outcomeDescription": option["description"],
                 "completedAnimals": int(row["completed_animals"] or 0),
@@ -723,8 +864,25 @@ def _cohort_handoff_analytics(
                 "attachmentCount": attachment_counts.get(str(row["id"]), 0),
             }
         )
+    return result
 
+
+def _cohort_handoff_analytics(
+    user: AuthContext,
+    *,
+    closeout_status: str = "",
+    outcome_code: str = "",
+) -> dict[str, Any]:
+    closeout_rows = _cohort_closeout_rows(user, closeout_status=closeout_status, outcome_code=outcome_code, limit=40)
+    status_mix: dict[str, int] = {}
+    outcome_mix: dict[str, int] = {}
+    for row in closeout_rows:
+        status = str(row["status"] or "completed")
+        outcome = str(row["outcomeCode"] or "other")
+        status_mix[status] = status_mix.get(status, 0) + 1
+        outcome_mix[outcome] = outcome_mix.get(outcome, 0) + 1
     stalled_rows = _stalled_assignment_rows(user)
+    repeat_breach_projects = _repeat_breach_projects(user, stalled_rows)
     bucket_counts: dict[str, int] = {}
     by_lab: dict[int, dict[str, Any]] = {}
     by_project: list[dict[str, Any]] = []
@@ -766,14 +924,27 @@ def _cohort_handoff_analytics(
             }
             for option in CLOSEOUT_OUTCOME_TAXONOMY
         ],
-        "recentCloseouts": recent_closeouts,
+        "recentCloseouts": closeout_rows,
         "stalledAgeBuckets": [
             {"label": label, "value": int(bucket_counts.get(label, 0)), "color": color}
             for label, color in [("2-4d", "#4f8ef7"), ("5-7d", "#eb9c44"), ("8d+", "#ca513d")]
         ],
         "stalledByLab": sorted(by_lab.values(), key=lambda row: (row["highSeverityCount"], row["stalledCount"]), reverse=True)[:12],
         "stalledByProject": by_project[:12],
+        "repeatBreachProjects": repeat_breach_projects[:12],
     }
+
+
+def _validated_closeout_filters(req: Any) -> tuple[str, str]:
+    closeout_status = str(req.args.get("closeoutStatus") or req.args.get("status") or "").strip().lower()
+    outcome_code = str(req.args.get("outcomeCode") or "").strip().lower()
+    valid_statuses = {"", "completed", "partial", "cancelled"}
+    valid_outcomes = {"", *[item["code"] for item in CLOSEOUT_OUTCOME_TAXONOMY]}
+    if closeout_status not in valid_statuses:
+        raise ValueError("Invalid closeoutStatus")
+    if outcome_code not in valid_outcomes:
+        raise ValueError("Invalid outcomeCode")
+    return closeout_status, outcome_code
 
 
 def db_target() -> str:
@@ -1002,6 +1173,35 @@ def _apply_schema_migrations(conn: storage.Connection) -> None:
         closeout_cols = set(storage.table_columns(conn, "project_cohort_closeouts"))
         if "outcome_code" not in closeout_cols:
             conn.execute("ALTER TABLE project_cohort_closeouts ADD COLUMN outcome_code TEXT NOT NULL DEFAULT 'other'")
+    if not storage.table_columns(conn, "project_handoff_slas"):
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS project_handoff_slas (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL UNIQUE,
+                assigned_max_days INTEGER NOT NULL DEFAULT 2,
+                shipped_max_days INTEGER NOT NULL DEFAULT 5,
+                repeat_breach_threshold INTEGER NOT NULL DEFAULT 2,
+                updated_by INTEGER,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(project_id) REFERENCES projects(id),
+                FOREIGN KEY(updated_by) REFERENCES users(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_project_handoff_slas_project ON project_handoff_slas(project_id);
+            """
+        )
+    else:
+        sla_cols = set(storage.table_columns(conn, "project_handoff_slas"))
+        if "assigned_max_days" not in sla_cols:
+            conn.execute("ALTER TABLE project_handoff_slas ADD COLUMN assigned_max_days INTEGER NOT NULL DEFAULT 2")
+        if "shipped_max_days" not in sla_cols:
+            conn.execute("ALTER TABLE project_handoff_slas ADD COLUMN shipped_max_days INTEGER NOT NULL DEFAULT 5")
+        if "repeat_breach_threshold" not in sla_cols:
+            conn.execute("ALTER TABLE project_handoff_slas ADD COLUMN repeat_breach_threshold INTEGER NOT NULL DEFAULT 2")
+        if "updated_by" not in sla_cols:
+            conn.execute("ALTER TABLE project_handoff_slas ADD COLUMN updated_by INTEGER")
+        if "updated_at" not in sla_cols:
+            conn.execute("ALTER TABLE project_handoff_slas ADD COLUMN updated_at TEXT")
 
 
 def audit_log(actor_id: int | None, entity_type: str, entity_id: int | str, action: str, before: Any, after: Any) -> None:
@@ -1318,7 +1518,8 @@ def derive_active_alerts(user: AuthContext) -> list[dict[str, Any]]:
             }
         )
 
-    for r in _stalled_assignment_rows(user):
+    stalled_rows = _stalled_assignment_rows(user)
+    for r in stalled_rows:
         alerts.append(
             {
                 "alert_key": f"cohort_stalled:{r['assignmentId']}:{r['status']}",
@@ -1338,8 +1539,35 @@ def derive_active_alerts(user: AuthContext) -> list[dict[str, Any]]:
                     "animalCode": r["animalCode"],
                     "status": r["status"],
                     "ageDays": r["ageDays"],
+                    "overdueDays": r["overdueDays"],
                     "ageBucket": r["ageBucket"],
                     "thresholdDays": r["thresholdDays"],
+                },
+                "seen_at": now,
+            }
+        )
+
+    for row in _repeat_breach_projects(user, stalled_rows):
+        alerts.append(
+            {
+                "alert_key": f"cohort_repeat_breach:{row['projectId']}",
+                "lab_id": row["labId"],
+                "cage_id": None,
+                "severity": row["severity"],
+                "category": "cohort",
+                "title": "Project Handoff SLA Repeatedly Breached",
+                "message": (
+                    f"Project {row['projectCode']} has {row['breachCount']} active handoff SLA breaches "
+                    f"(alert threshold {row['repeatBreachThreshold']})."
+                ),
+                "meta": {
+                    "projectId": row["projectId"],
+                    "projectCode": row["projectCode"],
+                    "breachCount": row["breachCount"],
+                    "assignedBreaches": row["assignedBreaches"],
+                    "shippedBreaches": row["shippedBreaches"],
+                    "repeatBreachThreshold": row["repeatBreachThreshold"],
+                    "maxOverdueDays": row["maxOverdueDays"],
                 },
                 "seen_at": now,
             }
@@ -2093,6 +2321,68 @@ def project_assignment_timeline(project_id: int) -> Response:
     if not project:
         return jsonify({"error": "Not found"}), 404
     return jsonify(_project_assignment_timeline_payload(project_id))
+
+
+@app.get("/api/projects/<int:project_id>/handoff-sla")
+@require_auth()
+def project_handoff_sla(project_id: int) -> Response:
+    project = ensure_project_scope(project_id, g.user)
+    if not project:
+        return jsonify({"error": "Not found"}), 404
+    return jsonify(_project_handoff_sla_payload(project_id, g.user))
+
+
+@app.put("/api/projects/<int:project_id>/handoff-sla")
+@require_auth(("PI", "Admin"))
+def update_project_handoff_sla(project_id: int) -> Response:
+    project = ensure_project_scope(project_id, g.user)
+    if not project:
+        return jsonify({"error": "Not found"}), 404
+    try:
+        normalized = _normalize_project_handoff_sla(request.get_json(force=True))
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    before = _project_handoff_sla_payload(project_id, g.user)
+    existing = db().execute(
+        "SELECT id FROM project_handoff_slas WHERE project_id = ?",
+        (project_id,),
+    ).fetchone()
+    if existing:
+        db().execute(
+            """
+            UPDATE project_handoff_slas
+            SET assigned_max_days = ?, shipped_max_days = ?, repeat_breach_threshold = ?, updated_by = ?, updated_at = ?
+            WHERE project_id = ?
+            """,
+            (
+                normalized["assignedMaxDays"],
+                normalized["shippedMaxDays"],
+                normalized["repeatBreachThreshold"],
+                g.user.user_id,
+                now_iso(),
+                project_id,
+            ),
+        )
+    else:
+        db().execute(
+            """
+            INSERT INTO project_handoff_slas
+                (project_id, assigned_max_days, shipped_max_days, repeat_breach_threshold, updated_by, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                project_id,
+                normalized["assignedMaxDays"],
+                normalized["shippedMaxDays"],
+                normalized["repeatBreachThreshold"],
+                g.user.user_id,
+                now_iso(),
+            ),
+        )
+    db().commit()
+    after = _project_handoff_sla_payload(project_id, g.user)
+    audit_log(g.user.user_id, "project_handoff_sla", project_id, "update", before, after)
+    return jsonify(after)
 
 
 @app.get("/api/projects/<int:project_id>/closeouts")
@@ -3929,6 +4219,7 @@ def analytics_summary() -> Response:
         else (datetime.now(UTC).date().isoformat(), (datetime.now(UTC).date() + timedelta(days=14)).isoformat(), g.user.lab_id),
     ).fetchall()
     stalled_rows = _stalled_assignment_rows(g.user)
+    repeat_breach_projects = _repeat_breach_projects(g.user, stalled_rows)
     closeout_filters = "" if is_admin(g.user) else " WHERE p.lab_id = ? "
     closeout_count = db().execute(
         """
@@ -4011,6 +4302,7 @@ def analytics_summary() -> Response:
             "roomCapacity": [dict(r) for r in room_capacity],
             "upcomingTasks": [dict(r) for r in upcoming_tasks],
             "stalledCohortAssignments": len(stalled_rows),
+            "repeatBreachProjects": len(repeat_breach_projects),
             "cohortCloseouts": int(closeout_count),
             "cohortFlow": [
                 {"key": step["key"], "label": step["label"], "value": int(cohort_counts.get(step["key"], 0)), "color": step["color"]}
@@ -4033,15 +4325,165 @@ def analytics_summary() -> Response:
 @app.get("/api/analytics/cohort-handoffs")
 @require_auth()
 def analytics_cohort_handoffs() -> Response:
-    closeout_status = str(request.args.get("closeoutStatus") or "").strip().lower()
-    outcome_code = str(request.args.get("outcomeCode") or "").strip().lower()
-    valid_statuses = {"", "completed", "partial", "cancelled"}
-    valid_outcomes = {"", *[item["code"] for item in CLOSEOUT_OUTCOME_TAXONOMY]}
-    if closeout_status not in valid_statuses:
-        return jsonify({"error": "Invalid closeoutStatus"}), 400
-    if outcome_code not in valid_outcomes:
-        return jsonify({"error": "Invalid outcomeCode"}), 400
+    try:
+        closeout_status, outcome_code = _validated_closeout_filters(request)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     return jsonify(_cohort_handoff_analytics(g.user, closeout_status=closeout_status, outcome_code=outcome_code))
+
+
+@app.get("/api/reports/cohort-closeouts.csv")
+@require_auth()
+def report_cohort_closeouts_csv() -> Response:
+    try:
+        closeout_status, outcome_code = _validated_closeout_filters(request)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    rows = _cohort_closeout_rows(g.user, closeout_status=closeout_status, outcome_code=outcome_code)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "project_code",
+            "project_title",
+            "lab_name",
+            "status",
+            "outcome_code",
+            "outcome_label",
+            "completed_animals",
+            "attachment_count",
+            "closed_at",
+            "summary",
+            "notes",
+        ]
+    )
+    for row in rows:
+        writer.writerow(
+            [
+                row["projectCode"],
+                row["projectTitle"],
+                row["labName"],
+                row["status"],
+                row["outcomeCode"],
+                row["outcomeLabel"],
+                row["completedAnimals"],
+                row["attachmentCount"],
+                row["closedAt"],
+                row["summary"],
+                row["notes"] or "",
+            ]
+        )
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=cohort_closeouts.csv"},
+    )
+
+
+@app.get("/api/reports/cohort-closeouts.pdf")
+@require_auth()
+def report_cohort_closeouts_pdf() -> Response:
+    try:
+        closeout_status, outcome_code = _validated_closeout_filters(request)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    rows = _cohort_closeout_rows(g.user, closeout_status=closeout_status, outcome_code=outcome_code)
+    lines = [f"Murisphere Cohort Closeout Report - generated {datetime.now(UTC).date().isoformat()}"]
+    if closeout_status or outcome_code:
+        lines.append(f"Filters: status={closeout_status or 'all'} | outcome={outcome_code or 'all'}")
+    lines.append("")
+    if not rows:
+        lines.append("No cohort closeouts match the current filter set.")
+    for row in rows:
+        lines.append(
+            f"{row['projectCode']} | {row['labName']} | {row['status']} | {row['outcomeLabel']} | "
+            f"completed {row['completedAnimals']} | {row['closedAt']}"
+        )
+        lines.append(f"Summary: {row['summary']}")
+        if row["notes"]:
+            lines.append(f"Notes: {row['notes']}")
+        if row["attachmentCount"]:
+            lines.append(f"Attachments: {row['attachmentCount']}")
+        lines.append("")
+    return Response(
+        simple_pdf(lines),
+        mimetype="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=cohort_closeouts.pdf"},
+    )
+
+
+@app.get("/api/reports/stalled-handoffs.csv")
+@require_auth()
+def report_stalled_handoffs_csv() -> Response:
+    rows = _stalled_assignment_rows(g.user)
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "project_code",
+            "project_title",
+            "lab_name",
+            "animal_code",
+            "cage_code",
+            "status",
+            "age_days",
+            "threshold_days",
+            "overdue_days",
+            "severity",
+            "repeat_breach_threshold",
+            "assigned_at",
+        ]
+    )
+    for row in rows:
+        writer.writerow(
+            [
+                row["projectCode"],
+                row["projectTitle"],
+                row["labName"],
+                row["animalCode"],
+                row["cageCode"] or "",
+                row["status"],
+                row["ageDays"],
+                row["thresholdDays"],
+                row["overdueDays"],
+                row["severity"],
+                row["repeatBreachThreshold"],
+                row["assignedAt"],
+            ]
+        )
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=stalled_handoffs.csv"},
+    )
+
+
+@app.get("/api/reports/stalled-handoffs.pdf")
+@require_auth()
+def report_stalled_handoffs_pdf() -> Response:
+    rows = _stalled_assignment_rows(g.user)
+    repeat_breaches = _repeat_breach_projects(g.user, rows)
+    lines = [f"Murisphere Stalled Handoff Report - generated {datetime.now(UTC).date().isoformat()}", ""]
+    if repeat_breaches:
+        lines.append("Projects currently exceeding repeat-breach thresholds:")
+        for row in repeat_breaches:
+            lines.append(
+                f"{row['projectCode']} | {row['labName']} | breaches {row['breachCount']} / threshold {row['repeatBreachThreshold']} | "
+                f"oldest {row['oldestAgeDays']}d"
+            )
+        lines.append("")
+    if not rows:
+        lines.append("No stalled handoffs are active right now.")
+    for row in rows:
+        lines.append(
+            f"{row['projectCode']} | {row['animalCode']} | {row['status']} | age {row['ageDays']}d | "
+            f"SLA {row['thresholdDays']}d | overdue {row['overdueDays']}d | {row['severity']}"
+        )
+    return Response(
+        simple_pdf(lines),
+        mimetype="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=stalled_handoffs.pdf"},
+    )
 
 
 @app.post("/api/forecast/demand")
@@ -6157,7 +6599,7 @@ def alerts_feed() -> Response:
     rows = db().execute(
         f"""
         SELECT a.id, a.alert_key, a.cage_id, a.severity, a.category, a.title, a.message, a.status,
-               a.first_seen_at, a.last_seen_at, a.escalation_level, a.next_notify_at, c.cage_code
+               a.first_seen_at, a.last_seen_at, a.escalation_level, a.next_notify_at, a.meta_json, c.cage_code
         FROM alert_notifications a
         LEFT JOIN cages c ON c.id = a.cage_id
         {where_sql}
@@ -6168,7 +6610,16 @@ def alerts_feed() -> Response:
         """,
         params,
     ).fetchall()
-    return jsonify([dict(r) for r in rows])
+    payload = []
+    for row in rows:
+        item = dict(row)
+        try:
+            item["meta"] = json.loads(item.pop("meta_json") or "{}")
+        except json.JSONDecodeError:
+            item["meta"] = {}
+            item.pop("meta_json", None)
+        payload.append(item)
+    return jsonify(payload)
 
 
 @app.post("/api/alerts/<int:alert_id>/ack")

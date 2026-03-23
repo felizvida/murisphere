@@ -339,9 +339,11 @@ That lets you learn the process as a pipeline instead of a single field.
 17. Review **Breeder Decisions** and decide whether the active pair should keep producing, pause soon, or be reviewed for low output.
 18. Open the project inspector and record a cohort closeout with a short outcome summary. Choose the structured outcome reason that best explains the result, such as `Met Goal`, `Partial Data`, or `Design Change`.
 19. If you have a sample file handy, attach it to the closeout record.
-20. If you are practicing as an admin, switch to `Analytics`, filter the cohort handoff view by outcome reason, and compare cross-lab cohort flow so you can see which labs still have animals in flight versus already completed.
-21. Check the alert feed and confirm that stalled cohort states would surface there if an animal sat too long in `assigned` or `shipped`.
-22. If you are practicing as an admin, import a result CSV or use callback simulation and watch the order move toward completion.
+20. In the same project inspector, set a handoff SLA for that project. For practice, choose a tighter `assigned` limit and a repeat-breach threshold that would be meaningful for a fast pilot study.
+21. If you are practicing as an admin, switch to `Analytics`, filter the cohort handoff view by outcome reason, and compare cross-lab cohort flow so you can see which labs still have animals in flight versus already completed.
+22. Use the export buttons to download a filtered closeout report and the current stalled-handoff report. This is the fastest way to prepare a PI update or operations meeting packet.
+23. Check the alert feed and confirm that stalled cohort states and repeated project breaches would surface there if an animal sat too long in `assigned` or `shipped`.
+24. If you are practicing as an admin, import a result CSV or use callback simulation and watch the order move toward completion.
 
 ## Exercise
 Choose one `resulted` sample and one `collected` sample.
@@ -522,7 +524,7 @@ Keep this reference near any cage-card printing station.
 These are good for paired learning, onboarding, or team huddles.
 
 ## Mission 1: Rescue a delayed cohort
-A lab needs animals in four weeks. Use `Neurogenetics Lab Cohort Plan` and the breeder cages in lab 1 to decide whether current supply is enough, which genotype template best fits the study, and whether any reserved animals are already stuck in `assigned` or `shipped`.
+A lab needs animals in four weeks. Use `Neurogenetics Lab Cohort Plan` and the breeder cages in lab 1 to decide whether current supply is enough, which genotype template best fits the study, whether any reserved animals are already stuck in `assigned` or `shipped`, and whether that project needs a tighter handoff SLA than the facility default.
 
 ## Mission 2: Find the highest-risk welfare pattern
 Review high-severity alerts and decide whether the issue is isolated or repeated across one lab or room.
@@ -557,6 +559,7 @@ Use a real seeded example such as `fl/fl`, `Cre/+`, or `WT/WT` and explain what 
 2. Review scenario risk that may affect study timing.
 3. Review unresolved deviations and necropsy items.
 4. Export any summaries needed for handoff, audit, or PI discussion.
+5. If a project keeps slipping between `assigned` and `shipped`, set or review its SLA before the next day starts.
 
 # Troubleshooting and Learning Support
 - **The QR opens the wrong host:** fix `Scan Base URL`, then reprint cards.

@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-03-23T19:35:34.986883+00:00",
+  "generatedAt": "2026-03-23T20:01:40.510687+00:00",
   "summary": {
-    "passed": 51,
+    "passed": 55,
     "failed": 0,
     "skipped": 9,
     "score": 100.0
@@ -196,6 +196,30 @@
     {
       "category": "button",
       "item": "#loadCohortHandoffsBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "#exportCohortCloseoutsCsvBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "#exportCohortCloseoutsPdfBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "#exportStalledHandoffsCsvBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "button",
+      "item": "#exportStalledHandoffsPdfBtn",
       "status": "pass",
       "detail": "clickable via direct or form submit listener"
     },
