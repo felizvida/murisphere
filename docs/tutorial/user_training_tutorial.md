@@ -1,9 +1,9 @@
 ---
-title: "Murisphere Workflow Tutorial"
-subtitle: "Technician, Facility Manager, and Admin Workflow Guide"
+title: "Murisphere Self-Paced Tutorial"
+subtitle: "Mouse Colony Management, Biology Background, and Hands-On Practice"
 author: "Murisphere Operations"
-date: "2026-03-19"
-geometry: margin=0.75in
+date: "2026-03-23"
+geometry: margin=0.72in
 fontsize: 11pt
 colorlinks: true
 toc: true
@@ -11,241 +11,533 @@ toc-depth: 3
 ---
 
 # Purpose
-This tutorial is organized by **real vivarium workflows** so technicians, PIs, and facility managers can move through daily work quickly, accurately, and consistently.
+This tutorial is designed for **self-paced learning**. It teaches Murisphere as an operational system and as a biological thinking tool.
 
-Murisphere is built around one operating rule:
+The goal is not only to click through screens. The goal is to learn how a mouse colony actually behaves over time:
+
+- how breeding status changes what a technician should do next
+- how strain and genotype shape experimental meaning
+- how litter survival, sex balance, and timing affect research supply
+- how compliance and welfare workflows protect both animals and science
+
+The core operating rule remains simple:
 
 **Print the cage card -> scan the QR with a phone -> open the cage in the browser -> complete the task immediately.**
 
-# Roles
-- Technician
-- PI / Facility Manager
-- Admin
+# How To Use This Tutorial
+You can complete the entire guide in one sitting or in short modules.
 
-# Training Environment Used In This Guide
-The sample screenshots and examples in this tutorial assume a realistic demo environment:
+## Suggested learning pace
+- **Quick orientation:** 20-30 minutes
+- **Technician essentials:** 45-60 minutes
+- **Biology and breeding module:** 30-45 minutes
+- **Research support and planning module:** 30-45 minutes
+- **Manager and compliance module:** 30-45 minutes
 
-- 20 labs
-- 3,000 cages
-- multiple projects per lab
-- variable lab sizes (small, medium, large)
-- active alerts, planner scenarios, breeding pairs, samples, and compliance records
+## Best practice for self-paced learning
+1. Work in a dedicated training database, not in your production database.
+2. Keep the tutorial open on a laptop or tablet while scanning and editing on a phone.
+3. Pause after each module and complete the short exercise before moving on.
+4. Treat the screenshots as orientation, not as a substitute for touching the workflow yourself.
 
-# 1. Quick Start and Required Setup
-## 1.1 First login and landing dashboard
-1. Log in from phone, tablet, laptop browser, or the optional desktop companion.
-2. After login, review the landing dashboard first.
-3. Check alert severity, overdue work, room pressure, and planner risk before starting rounds.
-4. Use clickable cage, project, and lab names to open the detailed view directly.
+# Training Environment and Data Readiness
+## Recommended training command sequence
+Use the tutorial-ready seed, not the plain scale-only seed.
 
-## 1.2 Card printing preflight
-1. Open the cage card center.
-2. Confirm the `Scan Base URL` points to a phone-reachable host or domain.
-3. Print cards at **100% scale**.
-4. Use the QR square for phone scanning.
-5. Treat the 1D barcode strip as optional hardware-scanner support only.
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+./.venv/bin/python seed_tutorial_demo.py --db training_demo.db --force
+MURISPHERE_DB=training_demo.db ./.venv/bin/python app.py
+```
 
-## 1.3 Phone scan verification
-1. Use the phone camera, not a separate mobile app.
-2. Scan the printed QR code on a real card.
-3. Tap the browser prompt.
-4. Confirm cage ID and location before editing.
-5. Save one test update and verify it appears immediately in cage history.
+## What the tutorial-ready seed gives you
+The tutorial seed is deterministic and creates a stable practice environment with:
 
-## 1.4 Optional desktop companion usage
-Use the Tauri desktop companion for:
-- batch card printing
-- reporting and exports
-- office workstations
-- managed desktop environments
+| Category | Ready at start |
+|---|---:|
+| Labs | 20 |
+| Cages | 3,000 |
+| Projects | 73 |
+| Animals | 372 |
+| Litters | 48 |
+| Breeding pairs | 48 |
+| Sample records | 48 |
+| Planner scenarios | 6 |
+| Alert-driving tasks | 80 |
 
-Use the web workflow for:
-- phone scanning in rooms
-- quick cage edits
-- tablet rounds
-- anywhere zero-install access matters
+The seeded environment also includes:
+- variable lab sizes: 8 small, 8 medium, 4 large
+- strong cage-status diversity: `Breeding`, `Timed Mating`, `Holding`, `Wean Pending`
+- active welfare and compliance pressure: overdue tasks, protocol deviations, necropsy items, and open vet cases
+- pedigree-ready families with sire, dam, and pups linked together
+- sample chain-of-custody states from `collected` through `resulted`
 
-# 2. Mouse Technician Daily Workflows
-## 2.1 Start-of-shift dashboard triage
-1. Open the dashboard.
-2. Review high-severity alerts first.
-3. Review overdue tasks and protocol blocks.
-4. Prioritize rooms with dense alert clusters or urgent welfare events.
+## Training accounts
+- Admin: `admin@murisphere.local` / `admin1234`
+- Technician: `tech@murisphere.local` / `tech1234`
+- PI: `pi@murisphere.local` / `pi1234`
 
-## 2.2 Print or reprint cage cards
-1. Search for the target cages.
-2. Open the card center.
-3. Batch-print selected cards.
-4. Inspect print quality before placing cards in service.
-5. Verify the QR is sharp, square, and fully visible.
+## Recommended example records used in this tutorial
+These records are seeded intentionally so a learner can follow specific examples.
 
-## 2.3 Scan a printed cage card and quick-edit in room
-1. Scan the printed QR with the phone camera.
-2. Open the cage record in the browser.
-3. Verify cage code, room, rack, and breeding status.
-4. Update counts, notes, litter events, or status.
-5. Save and confirm the audit trail entry appears.
+| Workflow | Example |
+|---|---|
+| Breeding cage with litter and pedigree | `F1-L01-C0006` |
+| Breeding cage with a larger pup set | `F1-L01-C0008` |
+| Sample chain-of-custody example | `SMP-0004` on `F1-L01-C0012-P01` |
+| Planner scenario example | `Neurogenetics Lab Cohort Plan` |
+| Lab for beginner exercises | `Neurogenetics Lab` |
 
-## 2.4 Census and reconciliation
-1. Start a census session for the room.
-2. Scan each cage in sequence.
-3. Reconcile observed M/F counts with the system totals.
-4. Record mismatch notes before leaving the room.
-5. Complete the session and verify all scans are synced.
+# Mouse Colony Biology Primer
+This section is here so a new learner can understand **why** Murisphere tracks what it tracks.
 
-## 2.5 Breeding operations
-1. Create or review breeding pairs.
-2. Record timed mating, plug check, litter, weaning, and transfer events.
-3. Review pair productivity before keeping older breeders active.
-4. Retire non-productive pairs when criteria are met.
+## Why mouse colony data matters biologically
+A colony is not just inventory. It is a living, time-dependent system.
 
-## 2.6 Health, welfare, mortality, and euthanasia
-1. Record welfare concerns during rounds.
-2. Open vet cases and treatment schedules when needed.
-3. Record mortality with necropsy requirement if appropriate.
-4. Record euthanasia method, reason, and disposition.
-5. Confirm critical welfare events raise alerts.
+- A breeding delay changes when pups are available for experiments.
+- A poor litter survival trend can signal husbandry, genetic, or maternal issues.
+- A skewed sex ratio can make it hard to hit a study design target.
+- A genotype mismatch can invalidate an experimental cohort.
+- An expired protocol or unresolved welfare issue can halt work entirely.
 
-## 2.7 Tagging, samples, and genotyping logistics
-1. Add ear tag, chip, tube, or well identifiers to animals.
-2. Create sample records with unique sample codes.
-3. Advance sample state through collection, shipment, receipt, and result.
-4. Confirm chain-of-custody events are complete before handoff.
+Murisphere helps teams see those facts early, while the colony is still manageable.
 
-## 2.8 End-of-shift sync discipline
-1. Confirm offline or queued writes are fully synced.
-2. Close open census sessions and unfinished round notes.
-3. Escalate unresolved high-severity findings before leaving.
+## Key biological terms
+| Term | What it means | Why the software tracks it |
+|---|---|---|
+| Strain | The genetic background, such as `C57BL/6J` or `BALB/c` | Background strain changes phenotype, breeding behavior, and interpretation |
+| Genotype | The allele combination carried by the animal | Determines whether an animal fits the project need |
+| `WT/WT` | Wild-type at the tracked locus | Often a control or non-carrier |
+| `Cre/+` or `+/tg` | Heterozygous carrier of a transgene or driver | Common in conditional breeding strategies |
+| `fl/fl` | Homozygous floxed allele | Often paired with a Cre driver to generate tissue-specific knockouts |
+| Timed mating | Breeder setup with a known breeding window | Makes plug checks and embryo timing meaningful |
+| Plug check | Inspection for a vaginal plug after mating | Helps estimate embryonic age and downstream harvest timing |
+| Litter | A birth event and its pups | Core unit for survival, genotype yield, and weaning workload |
+| Weaning | Separation of pups from dam at the appropriate age | A high-frequency operational milestone |
+| Pedigree | Parent-child lineage relationships | Needed for breeding strategy and genotype interpretation |
+| Necropsy | Post-mortem examination | Important for welfare review and root-cause learning |
 
-# 3. Facility Manager Daily Workflows
-## 3.1 Morning operations dashboard review
-1. Open the landing dashboard.
-2. Review alert counts by severity and category.
-3. Review room density, cage pressure, and open task volume.
-4. Open high-risk cages directly from dashboard links.
+## Why cage-centric work wins in real vivaria
+Technicians act on **cages**, not spreadsheets.
 
-## 3.2 Capacity, quota, and chargeback review
-1. Review facility capacity and room/rack utilization.
-2. Review lab quotas and projected cage load.
-3. Review chargeback and per-diem outputs for the current billing window.
-4. Investigate overloaded rooms or underutilized allocations.
+A good cage workflow should answer these questions immediately:
+- Where is the cage?
+- Who owns it?
+- Which protocol covers it?
+- What is in it biologically?
+- What is the next action?
+- Is anything abnormal or blocked?
 
-## 3.3 Alert ownership and notification dispatch
-1. Review active alerts.
-2. Acknowledge items that are known and assigned.
-3. Dispatch notifications for unresolved urgent items.
-4. Confirm escalation channels are configured correctly.
+That is why Murisphere centers the cage card and QR scan workflow.
 
-## 3.4 Recommendation and consolidation workflows
-1. Generate recommendations.
-2. Review each item with cage, lab, and risk context.
-3. Decide: accept, adjust, ignore, or complete.
-4. Track outcomes so the system can show operational value over time.
+# Learning Map
+## Module 1: Orientation and safe setup
+Learn the dashboard, training users, and printing/scanning rules.
 
-## 3.5 Planner scenarios and supply risk
-1. Create planner scenarios with demand targets and needed-by dates.
-2. Attach project-level demand where required.
-3. Evaluate projected animal deficits, cage demand, and risk level.
-4. Assign action owners for high-risk scenarios.
+## Module 2: Cage card literacy
+Learn how to read a cage card as both an operational label and a biological summary.
 
-## 3.6 Desktop companion and office workflows
-Use the optional desktop companion for:
-- high-volume cage card printing
-- long report review sessions
-- export administration
-- office or front-desk workstation use
+## Module 3: Scan-to-edit and audit trail
+Learn the phone workflow that matters most for daily technician work.
 
-# 4. Regulatory and Compliance Workflows
-1. Monitor protocol expiration and hard-stop blocked edits.
-2. Record deviations, CAPA items, and closure state.
-3. Track quarantine intake, hold, release, and overdue cases.
-4. Track qualification requirements for assigned procedures.
-5. Capture attachments and e-signature evidence where required.
-6. Use audit history to answer who changed what and when.
+## Module 4: Breeding, litters, and pedigree
+Learn how breeders become litters, how litters become animals, and how lineage affects decisions.
 
-# 5. Research Support Workflows
-1. Explore pedigree trees for breeding decisions.
-2. Submit genotyping orders and receive provider callbacks.
-3. Review Mendelian ratio and genotype deviation alerts.
-4. Review planner scenarios tied to project demand.
-5. Export CSV, PDF, and workflow job outputs for downstream systems.
+## Module 5: Samples, genotyping, and research readiness
+Learn how samples move from collection to result and why that matters for project supply.
 
-# 6. Visual Walkthrough
+## Module 6: Compliance, welfare, and abnormal conditions
+Learn how to recognize and respond to alerts that protect animal welfare and scientific quality.
 
-## 6.1 Login Screen
+## Module 7: Planner and manager workflows
+Learn how colony operations connect to project demand, cage space, and facility risk.
+
+# Module 1. Orientation and Safe Setup
+## Learning goal
+Be able to log in, identify the main views, and prepare a phone-reachable QR workflow.
+
+## Steps
+1. Log in as the technician.
+2. Pause on the landing dashboard before clicking anywhere else.
+3. Note the alert count, room pressure, and overdue workload.
+4. Open the cage card center.
+5. Confirm `Scan Base URL` points to a host your phone can reach.
+6. Print one test card at **100% scale**.
+7. Scan the QR with your phone camera.
+8. Confirm the cage opens directly in the browser.
+
+## Why this matters biologically
+Bad scan setup causes delayed data entry. Delayed data entry turns real biological events into memory-based guesses.
+
+That is especially risky for:
+- plug checks
+- birth timing
+- weaning date
+- mortality and welfare observations
+
+## Exercise
+- Log in as technician.
+- Find the dashboard tile that would make you investigate first.
+- Write down why that item would change your room order.
+
+# Module 2. Cage Card Literacy
+## Learning goal
+Read a cage card as an at-a-glance biological and operational summary.
+
+## Recommended example
+Use cage `F1-L01-C0006`.
+
+## What to look for on the card
+- cage code and location
+- lab ownership and linked projects
+- protocol number and expiration context
+- strain and genotype summary
+- breeding status
+- full population counts (`M/F/T`)
+- tracked animal rows
+- litter rows including `DoW` when present
+
+## Biology background
+A cage card is a compressed biological story.
+
+For `F1-L01-C0006`:
+- `Rosa26-LSL` tells you the background line is designed for conditional activation or deletion studies.
+- `fl/fl` tells you both alleles are floxed.
+- `Breeding` tells you this cage is producing future animals, not merely holding existing ones.
+- a litter row tells you there is recent reproductive output to evaluate.
+
+## Exercise
+1. Open `F1-L01-C0006`.
+2. Compare the card-level genotype summary to the animal-level genotypes.
+3. Ask yourself: if this cage were for a conditional knockout study, which additional genotype information would a researcher still need before assigning animals to an experiment?
+
+# Module 3. Scan-To-Edit and Audit Trail
+## Learning goal
+Perform the main technician workflow quickly and correctly on a phone.
+
+## Steps
+1. Print or open the card for `F1-L01-C0006`.
+2. Scan the QR with the phone camera.
+3. Confirm the browser opens to the correct cage.
+4. Add a note such as `Tutorial note - verified scan workflow`.
+5. Save.
+6. Open the audit history and verify the note was captured with the right user and time.
+
+## Why this matters biologically
+If room edits happen later at a desk, the risk rises that you lose precise observation timing.
+
+Examples:
+- a plug seen today but entered tomorrow is already lower-quality data
+- a welfare observation entered late is harder to interpret and escalate
+- a litter note entered from memory may miss real survival changes
+
+## Exercise
+Repeat the scan workflow for `F1-L01-C0008` and compare how many taps it takes from card to saved update.
+
+# Module 4. Breeding, Litters, and Pedigree
+## Learning goal
+Understand how Murisphere represents reproduction over time and why that matters.
+
+## Recommended examples
+- Breeding cage: `F1-L01-C0006`
+- Larger litter example: `F1-L01-C0008`
+- Sample-linked pup: `F1-L01-C0012-P01`
+
+## Biology background
+A good breeding record answers four questions:
+1. Which animals were paired?
+2. When did the breeding window start?
+3. Was there evidence of mating or pregnancy?
+4. What was the output: litter size, survival, sex mix, and genotype yield?
+
+In real colony management, breeder productivity is not just a convenience metric. It directly affects:
+- experimental timelines
+- cage pressure
+- animal cost
+- whether older breeders should be retired or replaced
+
+## What the seeded tutorial data includes
+- 48 breeding pairs with named sire and dam records
+- 48 litters
+- parent-linked pups for pedigree viewing
+- breeding events such as timed mating and plug checks
+
+## Guided walkthrough
+1. Open `F1-L01-C0006`.
+2. Review the litter row and note the birth date and survival.
+3. Open the animal list and identify the sire, dam, and pups.
+4. Open the pedigree for `F1-L01-C0006-P01`.
+5. Observe that the pup links back to both seeded parents.
+6. Open breeding pair productivity for the cage and note how litter output connects to operational decisions.
+
+## Exercise
+Compare `F1-L01-C0006` and `F1-L01-C0008`.
+
+Questions to answer:
+- Which cage currently has the larger effective breeding output?
+- Which one would you prioritize if a project urgently needed genotype-confirmed pups?
+- What extra information would help you decide whether to keep the pair active?
+
+## Fun application
+Imagine you are supporting a neuroscience lab that needs a balanced-sex cohort of conditional animals in four weeks.
+
+Using these cages, decide:
+- whether current breeder output seems sufficient
+- whether a new breeding pair should be started now
+- whether weaning pressure will become the real bottleneck before genotype confirmation does
+
+# Module 5. Samples, Genotyping, and Research Readiness
+## Learning goal
+See how colony records connect to molecular confirmation and project assignment.
+
+## Recommended examples
+- `SMP-0001` on `F1-L01-C0006-P01`
+- `SMP-0004` on `F1-L01-C0012-P01`
+
+## Biology background
+A colony is only useful to research when the right animals can be identified confidently.
+
+Genotyping helps answer:
+- Is the animal a carrier, homozygote, or wild-type control?
+- Is the animal appropriate for breeding, experiment, or exclusion?
+- Are observed genotype ratios biologically plausible?
+
+Sample tracking matters because a genotype result without chain-of-custody confidence is weaker evidence.
+
+## What to observe
+The tutorial seed includes sample records in multiple states:
+- `collected`
+- `shipped`
+- `received`
+- `resulted`
+
+That lets you learn the process as a pipeline instead of a single field.
+
+## Guided walkthrough
+1. Open the sample workflow and locate `SMP-0004`.
+2. Confirm it belongs to `F1-L01-C0012-P01`.
+3. Review the event history from collection to result.
+4. Compare it to `SMP-0001`, which is still only `collected`.
+5. Ask what operational step is missing between those two states.
+
+## Exercise
+Choose one `resulted` sample and one `collected` sample.
+
+Write down:
+- which one is research-ready now
+- which one still carries operational risk
+- what the next handoff should be
+
+## Fun application
+Pretend a PI needs to start a pilot cohort tomorrow. Your job is to identify which animals are closest to assignment.
+
+Use sample status, genotype results, and cage context together. This is how good colony software becomes a research acceleration tool rather than a record archive.
+
+# Module 6. Compliance, Welfare, and Abnormal Conditions
+## Learning goal
+Respond to alerts in a way that is biologically meaningful and operationally disciplined.
+
+## What the training data guarantees
+The tutorial dataset includes:
+- expired-protocol alerts
+- overdue task alerts
+- open protocol deviations
+- necropsy-pending mortality records
+- open vet cases
+
+## Why this matters biologically
+An abnormal condition is not just an administrative inconvenience.
+
+It may indicate:
+- an unperformed required action
+- a welfare problem
+- a quality problem in the breeding program
+- a compliance block that can invalidate downstream work
+
+## Guided walkthrough
+1. Open the landing dashboard as the technician.
+2. Open the alert feed.
+3. Filter by high severity.
+4. Open one protocol deviation and one vet case.
+5. Identify what information is missing before closure would be defensible.
+6. Acknowledge one alert and note the state change.
+
+## Exercise
+The seeded dataset contains both `high` and `moderate` deviations.
+
+Practice triage by answering:
+- Which conditions need immediate room action?
+- Which need documentation and owner assignment?
+- Which should stop breeding or experimental assignment until resolved?
+
+## Fun application
+Treat this as a case-based learning session:
+- a welfare concern appears in one cage
+- a necropsy is pending in another
+- a protocol deviation exists in the same lab
+
+Ask whether these are independent events or a pattern worth escalating.
+
+# Module 7. Planner, Capacity, and Facility Thinking
+## Learning goal
+Understand how colony data supports forecasting and facility-level decisions.
+
+## Recommended example scenarios
+- `Neurogenetics Lab Cohort Plan`
+- `Synaptic Circuits Group Cohort Plan`
+- `Behavioral Neuroscience Team Cohort Plan`
+
+## Biology background
+Research demand planning is really a timing problem.
+
+You need to know:
+- how many animals are active now
+- how many litters are likely soon
+- whether breeder output can meet the needed-by date
+- whether cage space can absorb that plan without stressing the facility
+
+## Guided walkthrough
+1. Open planner scenarios.
+2. Start with `Neurogenetics Lab Cohort Plan`.
+3. Review needed-by date, target animals, and linked projects.
+4. Review the generated risk level and projected deficit.
+5. Compare it with `Behavioral Neuroscience Team Cohort Plan`, which requests more animals.
+6. Ask whether the limiting factor is breeders, cages, or time.
+
+## Exercise
+Pick two planner scenarios and answer:
+- Which one is the higher operational risk?
+- Which one is the better candidate for immediate breeder expansion?
+- Which one might be solved by better project prioritization instead of more cages?
+
+## Fun application
+Pretend your institute just approved a new pilot study. Use Murisphere to estimate whether the colony can support it **without** compromising existing commitments. This is the bridge between facility management and scientific program management.
+
+# Role-Based Learning Paths
+## Technician path
+If you have only 45 minutes:
+1. Module 1
+2. Module 2
+3. Module 3
+4. Module 6
+
+## PI / Researcher path
+If your focus is study readiness:
+1. Mouse Colony Biology Primer
+2. Module 4
+3. Module 5
+4. Module 7
+
+## Facility manager path
+If your focus is operational control:
+1. Module 1
+2. Module 6
+3. Module 7
+4. Review the visual walkthrough sections for dashboard and compliance views
+
+# Visual Walkthrough
+## Login Screen
 ![Login screen with role-aware access controls](assets/screenshot_login.svg){ width=95% }
+Use the seeded tutorial database so the examples in this guide match what you see.
 
-## 6.2 Landing Dashboard, Cage Alerts, and Density View
+## Landing Dashboard, Cage Alerts, and Density View
 ![Dashboard-style cage alerts and room density visualization](assets/screenshot_cages_alerts.svg){ width=95% }
-Use this screen immediately after login to prioritize work.
+Use this view first every session. It teaches prioritization, not just navigation.
 
-## 6.3 Cage Card Center and Batch Printing
+## Cage Card Center and Batch Printing
 ![Card center and printing workflow](assets/screenshot_cards.svg){ width=95% }
-Use this workflow to generate or reprint cards before rounds.
+The tutorial workflow begins with correct print setup.
 
-## 6.4 Complete Cage Card
+## Complete Cage Card
 ![Complete cage card with owner, protocol, animal table, litter table, QR and barcode](assets/cage_card_complete.svg){ width=95% }
-Population is the full cage total (M/F/T). `Tracked IDs Listed` shows how many individual records are printed. Litters include `DoW` (date of weaning).
+Population is the cage-level total. The animal and litter rows explain where that population came from biologically.
 
-## 6.5 Scan Base URL Setup
+## Scan Base URL Setup
 ![Scan base URL configuration](assets/scan_base_url.svg){ width=95% }
-Never print cards with `localhost` or another non-phone-reachable address.
+A perfect QR image still fails operationally if it points to the wrong host.
 
-## 6.6 Phone Camera Scan of Printed QR
+## Phone Camera Scan of Printed QR
 ![Phone scanning a printed QR cage card](assets/scan_phone.svg){ width=95% }
-The phone camera should open the browser directly from the printed QR.
+The phone should open the browser directly. No mobile app is required.
 
-## 6.7 Scan-to-Edit Cage Workflow
+## Scan-to-Edit Cage Workflow
 ![Phone scan flow from printed QR to cage browser view](assets/screenshot_scan.svg){ width=95% }
-Use this flow for in-room edits with minimal taps.
+This is the most important high-frequency workflow in the product.
 
-## 6.8 Breeding Pair Productivity
+## Breeding Pair Productivity
 ![Breeding pair management and productivity tracking](assets/screenshot_breeding_pairs.svg){ width=95% }
-Review productivity before continuing or retiring a pair.
+Use this after learning the breeding and litter modules.
 
-## 6.9 Samples and Genotyping Workflow
+## Samples and Genotyping Workflow
 ![Sample chain-of-custody and genotyping result workflow](assets/screenshot_samples_genotyping.svg){ width=95% }
-Sample and callback history should be complete and traceable.
+This connects colony operations to actual research assignment.
 
-## 6.10 Recommendations and Outcomes
+## Recommendations and Outcomes
 ![Recommendation lifecycle and decision outcomes](assets/screenshot_recommendations.svg){ width=95% }
-Recommendations should become assigned actions, not passive dashboards.
+Use recommendations as discussion starters, not autopilot.
 
-## 6.11 Planner Scenario Evaluation
+## Planner Scenario Evaluation
 ![Planner scenario risk and deficit evaluation](assets/screenshot_planner.svg){ width=95% }
-Use the planner to understand supply gaps before they become operational failures.
+Good planners help labs avoid both shortages and avoidable cage growth.
 
-## 6.12 Compliance Dashboard
+## Compliance Dashboard
 ![Compliance dashboard with alerts and open actions](assets/screenshot_compliance.svg){ width=95% }
-Use this view for protocol, deviation, and evidence review.
+The best compliance workflow is fast, visible, and routine.
 
-## 6.13 Pedigree Explorer
+## Pedigree Explorer
 ![Multi-generation pedigree explorer](assets/screenshot_pedigree.svg){ width=95% }
-Pedigree visualization is useful for breeding strategy and genotype interpretation.
+Pedigree is where breeding history becomes biologically interpretable.
 
-## 6.14 Scan Troubleshooting Reference
+## Scan Troubleshooting Reference
 ![Scan troubleshooting reference](assets/scan_troubleshooting.svg){ width=95% }
-Keep this guidance available anywhere cards are printed.
+Keep this reference near any cage-card printing station.
 
-# 7. End-of-Shift and End-of-Day Checklists
+# Mini Missions You Can Learn Together
+These are good for paired learning, onboarding, or team huddles.
+
+## Mission 1: Rescue a delayed cohort
+A lab needs animals in four weeks. Use `Neurogenetics Lab Cohort Plan` and the breeder cages in lab 1 to decide whether current supply is enough.
+
+## Mission 2: Find the highest-risk welfare pattern
+Review high-severity alerts and decide whether the issue is isolated or repeated across one lab or room.
+
+## Mission 3: Trace inheritance from card to pedigree
+Start at `F1-L01-C0006`, open a pup, and follow the lineage back to sire and dam.
+
+## Mission 4: Choose a sample that is experiment-ready
+Compare `SMP-0001` and `SMP-0004`. Explain why one is still operationally incomplete.
+
+## Mission 5: Explain a genotype to a new trainee
+Use a real seeded example such as `fl/fl`, `Cre/+`, or `WT/WT` and explain what experiment or breeding decision it could support.
+
+# Glossary for New Learners
+- **Breeder productivity:** how effectively a pair or cage generates usable litters over time
+- **Cohort:** a group of animals assembled for one experimental purpose
+- **Conditional allele:** an allele designed to change function only under a specific genetic trigger such as Cre
+- **Hard-stop:** a workflow block that prevents action until a compliance problem is fixed
+- **Pedigree:** parent-child lineage map
+- **Protocol deviation:** a documented departure from approved procedure or protocol expectations
+- **Self-paced learning:** a training style in which the learner can stop after any module and resume later without losing context
+
+# End-of-Shift and End-of-Day Checklists
 ## Technician
 1. Confirm all queued writes are synced.
-2. Confirm mortality, necropsy, euthanasia, and vet notes are complete.
-3. Confirm all required room sessions are closed.
-4. Hand off unresolved urgent issues before leaving.
+2. Confirm new notes, welfare events, and mortality records are saved.
+3. Close open room tasks or hand them off.
+4. Leave a clear audit trail for anything unresolved.
 
-## Facility Manager / Admin
-1. Clear or owner-assign all high-severity alerts.
-2. Review unresolved deviations and quarantine holds.
-3. Review planner and recommendation items that remain high risk.
-4. Export required summaries for audit, PI review, or operational handoff.
+## PI / Facility Manager / Admin
+1. Assign owners for high-severity alerts.
+2. Review scenario risk that may affect study timing.
+3. Review unresolved deviations and necropsy items.
+4. Export any summaries needed for handoff, audit, or PI discussion.
 
-# 8. Troubleshooting and Escalation
-- **No scan prompt appears:** improve lighting, flatten the card, and try the QR square again.
-- **The phone reads only the barcode strip:** scan the QR square, not the 1D barcode.
-- **Wrong page opens:** correct the `Scan Base URL` and reprint the card.
-- **QR appears blank or broken:** verify the QR asset endpoint and regenerate the card.
-- **Save appears queued:** reconnect and confirm sync before leaving the room.
-- **Protocol hard-stop prevents edit:** assign a valid active protocol first.
-- **Callback or sample mismatch occurs:** verify callback token, sample code, and animal mapping.
-- **Planner risk remains high:** assign an owner and create a corrective action immediately.
+# Troubleshooting and Learning Support
+- **The QR opens the wrong host:** fix `Scan Base URL`, then reprint cards.
+- **The phone camera does not react:** improve lighting, flatten the card, and scan the QR square rather than the 1D barcode.
+- **The tutorial data does not match this guide:** reseed with `seed_tutorial_demo.py --db training_demo.db --force` and relaunch the app with `MURISPHERE_DB=training_demo.db`.
+- **You cannot find pedigree/sample/planner examples:** you are probably using the scale-only seed instead of the tutorial-ready seed.
+- **A workflow feels biologically confusing:** return to the Mouse Colony Biology Primer, then repeat the module using a named example cage.
+- **You are training with another person:** read the exercise question aloud before clicking the next screen. Murisphere becomes much easier to understand when the biological reason for each action is spoken, not just performed.

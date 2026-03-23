@@ -89,7 +89,7 @@ GitHub desktop bundle workflow:
 ## Release Validation Commands
 ```bash
 pip install -r requirements-dev.txt
-python -m py_compile app.py storage.py storage_sqlite.py storage_postgres.py generate_postgres_schema.py seed_large_demo.py seed_alert_conditions.py alert_coverage_verifier.py qrcode_diagnostic.py ui_clickability_audit.py cage_card_layout_audit.py docs/tutorial/build_tutorial_pdf.py postgres_export_bundle.py postgres_readiness_audit.py
+python -m py_compile app.py storage.py storage_sqlite.py storage_postgres.py generate_postgres_schema.py seed_large_demo.py seed_tutorial_demo.py seed_alert_conditions.py alert_coverage_verifier.py qrcode_diagnostic.py ui_clickability_audit.py cage_card_layout_audit.py docs/tutorial/build_tutorial_pdf.py postgres_export_bundle.py postgres_readiness_audit.py
 python -m coverage erase
 python -m coverage run -m unittest discover -s tests -v
 python -m coverage run --append qrcode_diagnostic.py
@@ -158,12 +158,35 @@ Seed profile:
 - 2-6 projects per lab
 - Variable lab sizes (small/medium/large tiers)
 
+## Self-Paced Tutorial Seed
+For training, onboarding, and screenshot parity with the tutorial, use the dedicated tutorial-ready seed:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+./.venv/bin/python seed_tutorial_demo.py --db training_demo.db --force
+MURISPHERE_DB=training_demo.db ./.venv/bin/python app.py
+```
+
+Tutorial-ready profile:
+- 20 labs
+- 3,000 cages
+- 73 projects
+- 372 animals
+- 48 litters
+- 48 breeding pairs
+- 48 sample records
+- 6 planner scenarios
+- 80 alert-driving tasks
+
 ## Demo Users
 - Admin: `admin@murisphere.local` / `admin1234`
 - Technician: `tech@murisphere.local` / `tech1234`
 - PI: `pi@murisphere.local` / `pi1234`
 
 ## Documentation
+- Start here for onboarding: [Self-paced tutorial](docs/tutorial/user_training_tutorial.md)
 - [Documentation index](docs/DOCUMENTATION_INDEX.md)
 - [User guide](docs/USER_GUIDE.md)
 - [Workflow coverage matrix](docs/WORKFLOW_COVERAGE_MATRIX.md)

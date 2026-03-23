@@ -1,5 +1,11 @@
 # Documentation Index
 
+Recommended starting order for self-paced learning:
+1. `docs/tutorial/user_training_tutorial.md`
+2. `docs/USER_GUIDE.md`
+3. `docs/WORKFLOW_COVERAGE_MATRIX.md`
+4. `docs/API_REFERENCE.md`
+
 - `docs/CHECKPOINT_2026-03-04.md` - historical checkpoint from pre-hardening phase
 - `docs/CHECKPOINT_2026-03-05.md` - current checkpoint with resume-from-zero-memory release state
 - `docs/CODE_AUDIT_REPORT.md` - formal audit findings and remediation priorities
@@ -14,9 +20,9 @@
 - `docs/SECURITY_COMPLIANCE.md` - implemented controls, residual risks, governance practices
 - `docs/TESTING_STRATEGY.md` - automated, diagnostic, and release-gate testing strategy
 - `docs/USER_GUIDE.md` - role-based operating guide with phone scan workflow
-- `docs/tutorial/user_training_tutorial.md` - source markdown for tutorial content
-- `docs/tutorial/user_training_tutorial.html` - tutorial web version (screenshot-rich)
-- `docs/tutorial/user_training_tutorial.pdf` - tutorial PDF for distribution/training
+- `docs/tutorial/user_training_tutorial.md` - primary self-paced tutorial with biology primer, guided exercises, and tutorial-ready data map
+- `docs/tutorial/user_training_tutorial.html` - tutorial web version for browser-based training
+- `docs/tutorial/user_training_tutorial.pdf` - tutorial PDF for distribution, classroom use, and self-study
 - `docs/releases/v0.2.0.md` - release notes for QR/barcode server-side rendering fix
 - `docs/releases/v0.3.0.md` - release notes for workflow/compliance/visualization expansion
 - `docs/releases/v0.3.1.md` - release notes for cage-card refinement and LaTeX tutorial PDF pipeline

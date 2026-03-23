@@ -1,9 +1,32 @@
 # User Guide
 
+## Recommended Training Setup
+If you are learning Murisphere for the first time, use the tutorial-ready seed and the self-paced tutorial.
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+./.venv/bin/python seed_tutorial_demo.py --db training_demo.db --force
+MURISPHERE_DB=training_demo.db ./.venv/bin/python app.py
+```
+
+Then keep these two documents open together:
+- `docs/tutorial/user_training_tutorial.md`
+- `docs/USER_GUIDE.md`
+
 ## Roles
 - Technician: in-room cage updates, routine events.
 - PI: colony oversight, planning, reports.
 - Admin: user governance, imports, facility-level administration.
+
+## What The Tutorial-Ready Seed Includes
+- 20 labs and 3,000 cages
+- 73 projects across small, medium, and large labs
+- active alerts for compliance and welfare practice
+- pedigree-ready families with sire, dam, and pup relationships
+- sample records in multiple chain-of-custody states
+- planner scenarios for facility and project forecasting
 
 ## Critical Workflow: Print and Phone Scan
 1. Login and open `Cages`.
@@ -52,6 +75,7 @@ Notes:
 - Import large onboarding files when needed.
 
 ## Common Troubleshooting
+- Tutorial examples missing: you are likely using the scale-only seed instead of `seed_tutorial_demo.py`.
 - Scan opens wrong host: set `Scan Base URL` to phone-reachable host (never localhost on printed cards).
 - Phone camera cannot detect code: ensure the printed card contains a QR square and sufficient contrast.
 - Camera detects only barcode app, not browser link: scan the QR square, not the CODE128 bar pattern.

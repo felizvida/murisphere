@@ -20,6 +20,7 @@ import sqlite3
 from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 DB_PATH = os.getenv("MURISPHERE_DB", "murisphere.db")
 TOTAL_LABS = 20
@@ -336,26 +337,38 @@ def insert_cages_and_links(
     )
 
 
-def print_summary(conn: sqlite3.Connection) -> None:
+def summary(conn: sqlite3.Connection) -> dict[str, Any]:
     labs = conn.execute("SELECT COUNT(*) FROM labs").fetchone()[0]
     cages = conn.execute("SELECT COUNT(*) FROM cages").fetchone()[0]
     projects = conn.execute("SELECT COUNT(*) FROM projects").fetchone()[0]
-    by_size = conn.execute(
+    by_size_rows = conn.execute(
         "SELECT size_tier, COUNT(*) FROM lab_profiles GROUP BY size_tier ORDER BY size_tier"
     ).fetchall()
+    by_size = {str(row[0]): int(row[1]) for row in by_size_rows}
 
-    print(f"labs={labs}")
-    print(f"cages={cages}")
-    print(f"projects={projects}")
-    print("lab_size_distribution=" + ", ".join([f"{row[0]}:{row[1]}" for row in by_size]))
+    return {
+        "labs": int(labs),
+        "cages": int(cages),
+        "projects": int(projects),
+        "labSizeDistribution": by_size,
+    }
 
 
-def main() -> None:
-    if not Path(DB_PATH).exists():
-        raise SystemExit(f"Database not found: {DB_PATH}. Start app once to initialize schema, then rerun.")
+def print_summary(payload: dict[str, Any]) -> None:
+    print(f"labs={payload['labs']}")
+    print(f"cages={payload['cages']}")
+    print(f"projects={payload['projects']}")
+    dist = payload["labSizeDistribution"]
+    print("lab_size_distribution=" + ", ".join([f"{key}:{dist[key]}" for key in sorted(dist)]))
+
+
+def seed_database(db_path: str | Path = DB_PATH) -> dict[str, Any]:
+    target = Path(db_path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.touch(exist_ok=True)
 
     rng = random.Random(SEED)
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(str(target))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
 
@@ -370,9 +383,14 @@ def main() -> None:
     counts = cage_distribution(labs, profile_map, TOTAL_CAGES)
     insert_cages_and_links(conn, labs, protocols_by_lab, projects_by_lab, counts, rng)
 
+    payload = summary(conn)
     conn.commit()
-    print_summary(conn)
     conn.close()
+    return payload
+
+
+def main() -> None:
+    print_summary(seed_database(DB_PATH))
 
 
 if __name__ == "__main__":

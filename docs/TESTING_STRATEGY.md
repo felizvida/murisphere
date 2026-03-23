@@ -6,20 +6,22 @@
 - PostgreSQL migration/tooling tests: `tests/test_postgres_tools.py`
 - Desktop scaffold tests: `tests/test_desktop_scaffold.py`
 - Scale seed test (20 labs / 3,000 cages): `tests/test_seed_large_demo.py`
+- Tutorial-ready seed test: `tests/test_seed_tutorial_demo.py`
 - Alert fixture seed tests: `tests/test_seed_alert_conditions.py`
 - Alert verifier unit tests: `tests/test_alert_coverage_verifier.py`
 - Alert fixture enrichment utility: `seed_alert_conditions.py`
+- Tutorial-ready learning/demo seed utility: `seed_tutorial_demo.py`
 - QR/Barcode diagnostic: `qrcode_diagnostic.py`
 - UI clickability contract + visual report: `ui_clickability_audit.py`
 - Synthesized alert breadth verification: `alert_coverage_verifier.py`
 - Cage-card table alignment/overflow audit: `cage_card_layout_audit.py`
 - Tutorial PDF build validation: `docs/tutorial/build_tutorial_pdf.py`
 - Syntax checks:
-  - `python -m py_compile app.py storage.py storage_sqlite.py storage_postgres.py generate_postgres_schema.py seed_large_demo.py seed_alert_conditions.py alert_coverage_verifier.py qrcode_diagnostic.py ui_clickability_audit.py cage_card_layout_audit.py docs/tutorial/build_tutorial_pdf.py postgres_export_bundle.py postgres_readiness_audit.py`
+  - `python -m py_compile app.py storage.py storage_sqlite.py storage_postgres.py generate_postgres_schema.py seed_large_demo.py seed_tutorial_demo.py seed_alert_conditions.py alert_coverage_verifier.py qrcode_diagnostic.py ui_clickability_audit.py cage_card_layout_audit.py docs/tutorial/build_tutorial_pdf.py postgres_export_bundle.py postgres_readiness_audit.py`
   - `node --check static/app.js`
 
 Current baseline:
-- `50` Python tests in the local suite
+- `52` Python tests in the local suite
 - branch-aware source coverage gate at `>=72%`
 - container smoke validation in CD before image publish
 
@@ -33,7 +35,7 @@ Current baseline:
 
 ## Release Gate Commands
 ```bash
-python -m py_compile app.py storage.py storage_sqlite.py storage_postgres.py generate_postgres_schema.py seed_large_demo.py seed_alert_conditions.py alert_coverage_verifier.py qrcode_diagnostic.py ui_clickability_audit.py cage_card_layout_audit.py docs/tutorial/build_tutorial_pdf.py postgres_export_bundle.py postgres_readiness_audit.py
+python -m py_compile app.py storage.py storage_sqlite.py storage_postgres.py generate_postgres_schema.py seed_large_demo.py seed_tutorial_demo.py seed_alert_conditions.py alert_coverage_verifier.py qrcode_diagnostic.py ui_clickability_audit.py cage_card_layout_audit.py docs/tutorial/build_tutorial_pdf.py postgres_export_bundle.py postgres_readiness_audit.py
 python -m coverage erase
 python -m coverage run -m unittest discover -s tests -v
 python -m coverage run --append qrcode_diagnostic.py
