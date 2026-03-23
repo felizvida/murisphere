@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-03-23T19:21:54.878957+00:00",
+  "generatedAt": "2026-03-23T19:35:34.986883+00:00",
   "summary": {
-    "passed": 50,
+    "passed": 51,
     "failed": 0,
     "skipped": 9,
     "score": 100.0
@@ -192,6 +192,12 @@
       "item": "<button(no-id)>",
       "status": "skip",
       "detail": "no stable id; skipped explicit wiring check"
+    },
+    {
+      "category": "button",
+      "item": "#loadCohortHandoffsBtn",
+      "status": "pass",
+      "detail": "clickable via direct or form submit listener"
     },
     {
       "category": "button",

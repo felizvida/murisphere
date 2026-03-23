@@ -167,6 +167,35 @@
           <div id="analyticsVisuals" class="viz-grid"></div>
           <div class="planner-shell">
             <div class="inline-form between">
+              <h4 class="viz-heading">Cohort Handoff Analytics</h4>
+              <div class="inline-form planner-toolbar">
+                <label>Closeout Status
+                  <select id="cohortCloseoutStatusFilter">
+                    <option value="">All</option>
+                    <option value="completed">Completed</option>
+                    <option value="partial">Partial</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </label>
+                <label>Outcome
+                  <select id="cohortCloseoutOutcomeFilter">
+                    <option value="">All</option>
+                    <option value="met_goal">Met Goal</option>
+                    <option value="partial_data">Partial Data</option>
+                    <option value="genotype_shortfall">Genotype Shortfall</option>
+                    <option value="capacity_constraint">Capacity Constraint</option>
+                    <option value="welfare_or_compliance">Welfare/Compliance Stop</option>
+                    <option value="design_change">Design Change</option>
+                    <option value="other">Other</option>
+                  </select>
+                </label>
+                <button id="loadCohortHandoffsBtn" type="button">Refresh Cohort Analytics</button>
+              </div>
+            </div>
+            <div id="cohortHandoffPanel"></div>
+          </div>
+          <div class="planner-shell">
+            <div class="inline-form between">
               <h4 class="viz-heading">Planner Workspace</h4>
               <div class="inline-form planner-toolbar">
                 <button id="loadPlannerBtn" type="button">Load Planner</button>

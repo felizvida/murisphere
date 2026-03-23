@@ -234,6 +234,7 @@ CREATE TABLE IF NOT EXISTS project_cohort_closeouts (
     id SERIAL PRIMARY KEY,
     project_id INTEGER NOT NULL,
     status TEXT NOT NULL CHECK (status IN ('completed', 'partial', 'cancelled')),
+    outcome_code TEXT NOT NULL DEFAULT 'other',
     completed_animals INTEGER NOT NULL DEFAULT 0,
     summary TEXT NOT NULL,
     notes TEXT,

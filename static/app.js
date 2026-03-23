@@ -32,6 +32,7 @@ const state = {
   genotypingDashboard: null,
   providerPresets: [],
   genotypeTargetTemplates: [],
+  cohortHandoffAnalytics: null,
   cohortInsights: null,
   cohortTimeline: null,
   selectedCohortAnimalIds: [],
@@ -42,6 +43,15 @@ const SCAN_BASE_KEY = "murisphere_scan_base_url";
 const MUTATION_QUEUE_KEY = "murisphere_mutation_queue";
 const LEARNING_PROGRESS_KEY = "murisphere_learning_progress";
 const SEVERITY_RANK = { high: 3, medium: 2, low: 1 };
+const CLOSEOUT_OUTCOME_OPTIONS = [
+  { code: "met_goal", label: "Met Goal" },
+  { code: "partial_data", label: "Partial Data" },
+  { code: "genotype_shortfall", label: "Genotype Shortfall" },
+  { code: "capacity_constraint", label: "Capacity Constraint" },
+  { code: "welfare_or_compliance", label: "Welfare/Compliance Stop" },
+  { code: "design_change", label: "Design Change" },
+  { code: "other", label: "Other" },
+];
 
 const el = (id) => document.getElementById(id);
 
@@ -78,6 +88,7 @@ function handleSessionExpired(message = "Session expired. Please sign in again."
   state.genotypingDashboard = null;
   state.providerPresets = [];
   state.genotypeTargetTemplates = [];
+  state.cohortHandoffAnalytics = null;
   state.cohortInsights = null;
   state.cohortTimeline = null;
   state.selectedCohortAnimalIds = [];
@@ -527,6 +538,97 @@ function renderAnalyticsVisuals(summary, nonProd, reminders, space, consolidatio
         cohortDispositionParts.map((row) => `<span class="legend-item">${esc(row.label)} ${esc(row.value)}</span>`).join("")
     ),
   ].join("");
+}
+
+function renderCohortHandoffAnalytics(data) {
+  const host = el("cohortHandoffPanel");
+  if (!host) return;
+  if (!data) {
+    host.innerHTML = "";
+    return;
+  }
+  const outcomeParts = (data.closeoutOutcomeMix || [])
+    .filter((row) => Number(row.value || 0) > 0)
+    .map((row, idx) => ({
+      label: row.label,
+      value: Number(row.value || 0),
+      color: ["#18a172", "#4f8ef7", "#eb9c44", "#ca513d", "#7c6cf2", "#64748b", "#0f766e"][idx % 7],
+    }));
+  const ageBars = (data.stalledAgeBuckets || []).map((row) => ({
+    label: row.label,
+    value: Number(row.value || 0),
+    color: row.color || "#64748b",
+  }));
+  const labRows = (data.stalledByLab || [])
+    .map(
+      (row) => `<div class="timeline-item">
+        <strong>${esc(row.labName)}</strong>
+        <span>${esc(row.stalledCount)} stalled · ${esc(row.highSeverityCount)} high-severity · oldest ${esc(row.oldestAgeDays)}d</span>
+      </div>`
+    )
+    .join("");
+  const projectRows = (data.stalledByProject || [])
+    .map(
+      (row) => `<div class="timeline-item">
+        <strong>${esc(row.projectCode)}</strong>
+        <span>${esc(row.animalCode)} · ${esc(row.status)} · ${esc(row.ageDays)}d · ${esc(row.labName)}</span>
+      </div>`
+    )
+    .join("");
+  const closeoutRows = (data.recentCloseouts || [])
+    .map(
+      (row) => `<div class="timeline-item">
+        <strong>${esc(row.projectCode)}</strong>
+        <span>${esc(row.status)} · ${esc(row.outcomeLabel)} · ${esc(row.completedAnimals)} animals · ${esc(row.labName)}</span>
+        <span>${esc(row.summary)}${row.attachmentCount ? ` · ${esc(row.attachmentCount)} attachment(s)` : ""}</span>
+      </div>`
+    )
+    .join("");
+  host.innerHTML = `
+    <div class="detail-grid">
+      ${chartCard(
+        "Closeout Outcomes",
+        "Why cohorts ended across the current filter set",
+        outcomeParts.length ? drawDonut(outcomeParts) : `<p class="hint">No closeout records match the current filters.</p>`,
+        (data.closeoutOutcomeMix || [])
+          .filter((row) => Number(row.value || 0) > 0)
+          .map((row) => `<span class="legend-item">${esc(row.label)} ${esc(row.value)}</span>`)
+          .join("")
+      )}
+      ${chartCard(
+        "Stalled Handoff Age",
+        "Assignments currently stuck in active handoff states",
+        ageBars.length ? drawBars(ageBars, { height: 132 }) : `<p class="hint">No stalled assignments are visible.</p>`,
+        ageBars.map((row) => `<span class="legend-item">${esc(row.label)} ${esc(row.value)}</span>`).join("")
+      )}
+    </div>
+    <div class="detail-grid">
+      <article class="viz-card">
+        <h4>Stalled By Lab</h4>
+        <div class="timeline-list">${labRows || `<div class="hint">No stalled cohort handoffs by lab.</div>`}</div>
+      </article>
+      <article class="viz-card">
+        <h4>Stalled By Project</h4>
+        <div class="timeline-list">${projectRows || `<div class="hint">No stalled project handoffs right now.</div>`}</div>
+      </article>
+    </div>
+    <article class="viz-card">
+      <h4>Recent Closeouts</h4>
+      <div class="timeline-list">${closeoutRows || `<div class="hint">No closeouts match the current filter set.</div>`}</div>
+    </article>
+  `;
+}
+
+async function loadCohortHandoffAnalytics() {
+  const status = el("cohortCloseoutStatusFilter")?.value || "";
+  const outcome = el("cohortCloseoutOutcomeFilter")?.value || "";
+  const qs = new URLSearchParams();
+  if (status) qs.set("closeoutStatus", status);
+  if (outcome) qs.set("outcomeCode", outcome);
+  const ref = qs.toString() ? `/api/analytics/cohort-handoffs?${qs.toString()}` : "/api/analytics/cohort-handoffs";
+  const data = await api(ref, { headers: headers(false) });
+  state.cohortHandoffAnalytics = data;
+  renderCohortHandoffAnalytics(data);
 }
 
 function plannerRiskClass(level) {
@@ -980,6 +1082,10 @@ function setCohortAnimalSelected(animalId, selected) {
   if (selected) next.add(id);
   else next.delete(id);
   state.selectedCohortAnimalIds = Array.from(next.values());
+}
+
+function closeoutOutcomeLabel(code) {
+  return CLOSEOUT_OUTCOME_OPTIONS.find((row) => row.code === code)?.label || "Other";
 }
 
 function activeCohortProject() {
@@ -2079,7 +2185,9 @@ function renderProjectInspector(project, cages, targets = [], assignments = [], 
     .map(
       (row) => `<div class="timeline-item">
         <strong>${esc(row.status)}</strong>
-        <span>${esc(row.completed_animals)} animals · ${esc(row.closed_by_name || "Unknown")} · ${esc(fmtDate(row.closed_at))}</span>
+        <span>${esc(row.completed_animals)} animals · ${esc(closeoutOutcomeLabel(row.outcome_code || "other"))} · ${esc(
+          row.closed_by_name || "Unknown"
+        )} · ${esc(fmtDate(row.closed_at))}</span>
         <span>${esc(row.summary)}</span>
         ${
           row.attachments?.length
@@ -2191,6 +2299,11 @@ function renderProjectInspector(project, cages, targets = [], assignments = [], 
               <option value="completed">Completed</option>
               <option value="partial">Partial</option>
               <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
+          <label>Outcome
+            <select id="projectCloseoutOutcome">
+              ${CLOSEOUT_OUTCOME_OPTIONS.map((row) => `<option value="${esc(row.code)}">${esc(row.label)}</option>`).join("")}
             </select>
           </label>
           <label>Completed Animals<input id="projectCloseoutCompletedAnimals" type="number" min="0" value="${esc(
@@ -2812,12 +2925,13 @@ async function openPendingScanIfAny() {
 }
 
 async function loadAnalytics() {
-  const [a, nonProd, reminders, space, consolidation] = await Promise.all([
+  const [a, nonProd, reminders, space, consolidation, handoffs] = await Promise.all([
     api("/api/analytics/summary", { headers: headers(false) }),
     api("/api/breeding/non-productive?staleDays=45", { headers: headers(false) }),
     api("/api/tasks/reminders?windowDays=14", { headers: headers(false) }),
     api("/api/forecast/cage-space?days=30", { headers: headers(false) }),
     api("/api/forecast/consolidation?maxAnimals=2", { headers: headers(false) }),
+    api("/api/analytics/cohort-handoffs", { headers: headers(false) }),
   ]);
   const projectedOverCap = (space.rooms || []).filter((r) => (r.projectedUtilizationPct || 0) > 100).length;
   el("analyticsSummary").innerHTML = `
@@ -2829,8 +2943,12 @@ async function loadAnalytics() {
     <div class="kpi"><div>Upcoming/Overdue Tasks</div><div class="value">${reminders.length}</div></div>
     <div class="kpi"><div>Projected Over-Cap Rooms (30d)</div><div class="value">${projectedOverCap}</div></div>
     <div class="kpi"><div>Consolidation Opportunities</div><div class="value">${consolidation.length}</div></div>
+    <div class="kpi"><div>Stalled Cohort Handoffs</div><div class="value">${a.stalledCohortAssignments || 0}</div></div>
+    <div class="kpi"><div>Recorded Closeouts</div><div class="value">${a.cohortCloseouts || 0}</div></div>
   `;
   renderAnalyticsVisuals(a, nonProd, reminders, space, consolidation);
+  state.cohortHandoffAnalytics = handoffs;
+  renderCohortHandoffAnalytics(handoffs);
   await loadPlannerWorkspace();
 }
 
@@ -3118,6 +3236,15 @@ async function init() {
   el("loadQuotasBtn").addEventListener("click", () => withAction("Quota load failed", loadQuotas).catch(() => undefined));
 
   el("loadPlannerBtn").addEventListener("click", () => withAction("Planner load failed", loadPlannerWorkspace).catch(() => undefined));
+  el("loadCohortHandoffsBtn").addEventListener("click", () =>
+    withAction("Cohort handoff analytics load failed", loadCohortHandoffAnalytics).catch(() => undefined)
+  );
+  el("cohortCloseoutStatusFilter").addEventListener("change", () =>
+    withAction("Cohort handoff analytics load failed", loadCohortHandoffAnalytics).catch(() => undefined)
+  );
+  el("cohortCloseoutOutcomeFilter").addEventListener("change", () =>
+    withAction("Cohort handoff analytics load failed", loadCohortHandoffAnalytics).catch(() => undefined)
+  );
   el("generateRecommendationsBtn").addEventListener("click", () => {
     withAction("Recommendation generation failed", async () => {
       const result = await api("/api/recommendations/generate", { method: "POST", headers: headers() });
@@ -3425,6 +3552,7 @@ async function init() {
           headers: headers(),
           body: JSON.stringify({
             status: el("projectCloseoutStatus")?.value || "completed",
+            outcomeCode: el("projectCloseoutOutcome")?.value || "other",
             completedAnimals: Number(el("projectCloseoutCompletedAnimals")?.value || 0),
             summary,
             notes: el("projectCloseoutNotes")?.value.trim() || "",

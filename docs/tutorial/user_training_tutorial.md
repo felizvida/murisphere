@@ -337,10 +337,11 @@ That lets you learn the process as a pipeline instead of a single field.
 15. Select one or more matching animals and reserve them into the project cohort.
 16. Move one selected animal from `reserved` to `assigned`, then to `consumed`, and inspect the **Assignment Flow** chart plus the downstream completion/disposition summary.
 17. Review **Breeder Decisions** and decide whether the active pair should keep producing, pause soon, or be reviewed for low output.
-18. Open the project inspector and record a cohort closeout with a short outcome summary. If you have a sample file handy, attach it to the closeout record.
-19. If you are practicing as an admin, switch to `Analytics` and compare cross-lab cohort flow so you can see which labs still have animals in flight versus already completed.
-20. Check the alert feed and confirm that stalled cohort states would surface there if an animal sat too long in `assigned` or `shipped`.
-21. If you are practicing as an admin, import a result CSV or use callback simulation and watch the order move toward completion.
+18. Open the project inspector and record a cohort closeout with a short outcome summary. Choose the structured outcome reason that best explains the result, such as `Met Goal`, `Partial Data`, or `Design Change`.
+19. If you have a sample file handy, attach it to the closeout record.
+20. If you are practicing as an admin, switch to `Analytics`, filter the cohort handoff view by outcome reason, and compare cross-lab cohort flow so you can see which labs still have animals in flight versus already completed.
+21. Check the alert feed and confirm that stalled cohort states would surface there if an animal sat too long in `assigned` or `shipped`.
+22. If you are practicing as an admin, import a result CSV or use callback simulation and watch the order move toward completion.
 
 ## Exercise
 Choose one `resulted` sample and one `collected` sample.

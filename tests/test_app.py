@@ -488,12 +488,15 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertIn("applyCohortTemplateBtn", js)
         self.assertIn("advanceCohortStatusBtn", js)
         self.assertIn("saveProjectCloseoutBtn", js)
+        self.assertIn("projectCloseoutOutcome", js)
         self.assertIn("/genotype-targets", js)
         self.assertIn("/apply-target-template", js)
         self.assertIn("/reserve-animals", js)
         self.assertIn("/assignment-status", js)
         self.assertIn("/assignment-timeline", js)
         self.assertIn("/closeouts", js)
+        self.assertIn('/api/analytics/cohort-handoffs', js)
+        self.assertIn("loadCohortHandoffsBtn", js)
         self.assertIn('inspectGenotypingOrder(orderId)', js)
         self.assertIn('"/api/genotyping/orders"', js)
         self.assertIn('"/api/genotyping/orders/callback"', js)
@@ -532,6 +535,15 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertIn("cohortFlow", analytics_payload)
         self.assertIn("cohortLabs", analytics_payload)
         self.assertIn("cohortCompletion", analytics_payload)
+        self.assertIn("stalledCohortAssignments", analytics_payload)
+        self.assertIn("cohortCloseouts", analytics_payload)
+
+        handoffs = self.client.get("/api/analytics/cohort-handoffs", headers=self.auth_headers(token))
+        self.assertEqual(handoffs.status_code, 200)
+        handoff_payload = handoffs.get_json()
+        self.assertIn("taxonomy", handoff_payload)
+        self.assertIn("stalledAgeBuckets", handoff_payload)
+        self.assertIn("recentCloseouts", handoff_payload)
 
     def test_reports_imports_genotyping_facility_audit(self) -> None:
         token = self.login("admin@murisphere.local", "admin1234")
@@ -1758,6 +1770,7 @@ class AppIntegrationTests(unittest.TestCase):
             headers=self.auth_headers(admin),
             json={
                 "status": "partial",
+                "outcomeCode": "partial_data",
                 "completedAnimals": 1,
                 "summary": "Pilot imaging cohort completed for the first subject.",
                 "notes": "Initial microscopy run completed; waiting for second animal.",
@@ -1780,8 +1793,22 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertEqual(closeouts.status_code, 200)
         closeout_payload = closeouts.get_json()
         self.assertEqual(closeout_payload[0]["summary"], "Pilot imaging cohort completed for the first subject.")
+        self.assertEqual(closeout_payload[0]["outcome_code"], "partial_data")
+        self.assertEqual(closeout_payload[0]["outcome_label"], "Partial Data")
         self.assertEqual(closeout_payload[0]["attachment_count"], 1)
         self.assertEqual(closeout_payload[0]["attachments"][0]["filename"], "closeout.txt")
+        filtered_closeouts = self.client.get(
+            f"/api/projects/{project_id}/closeouts?outcomeCode=partial_data",
+            headers=self.auth_headers(tech),
+        )
+        self.assertEqual(filtered_closeouts.status_code, 200)
+        self.assertEqual(len(filtered_closeouts.get_json()), 1)
+        filtered_empty = self.client.get(
+            f"/api/projects/{project_id}/closeouts?outcomeCode=met_goal",
+            headers=self.auth_headers(tech),
+        )
+        self.assertEqual(filtered_empty.status_code, 200)
+        self.assertEqual(filtered_empty.get_json(), [])
 
         cohorts = self.client.get("/api/genotyping/cohorts", headers=self.auth_headers(tech))
         self.assertEqual(cohorts.status_code, 200)
@@ -1836,7 +1863,15 @@ class AppIntegrationTests(unittest.TestCase):
             conn.commit()
         alert_feed = self.client.get("/api/alerts/feed?status=active", headers=self.auth_headers(admin))
         self.assertEqual(alert_feed.status_code, 200)
-        self.assertTrue(any(row["category"] == "cohort" and "COHORT-STALLED-001" in row["message"] for row in alert_feed.get_json()))
+        stalled_alert = next(row for row in alert_feed.get_json() if row["category"] == "cohort" and "COHORT-STALLED-001" in row["message"])
+        self.assertEqual(stalled_alert["severity"], "low")
+
+        handoff_analytics = self.client.get("/api/analytics/cohort-handoffs?outcomeCode=partial_data", headers=self.auth_headers(admin))
+        self.assertEqual(handoff_analytics.status_code, 200)
+        analytics_payload = handoff_analytics.get_json()
+        self.assertEqual(analytics_payload["recentCloseouts"][0]["outcomeCode"], "partial_data")
+        self.assertTrue(any(row["label"] == "2-4d" and row["value"] >= 1 for row in analytics_payload["stalledAgeBuckets"]))
+        self.assertTrue(any(row["labName"] == "Neurogenetics Lab" for row in analytics_payload["stalledByLab"]))
 
 
 if __name__ == "__main__":

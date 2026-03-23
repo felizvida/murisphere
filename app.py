@@ -174,6 +174,44 @@ ASSIGNMENT_STATUS_STEPS: list[dict[str, str]] = [
     {"key": "released", "label": "Released", "color": "#64748b"},
 ]
 
+CLOSEOUT_OUTCOME_TAXONOMY: list[dict[str, str]] = [
+    {
+        "code": "met_goal",
+        "label": "Met Goal",
+        "description": "The cohort reached the planned experimental endpoint and delivered the intended data.",
+    },
+    {
+        "code": "partial_data",
+        "label": "Partial Data",
+        "description": "Some data were collected, but the cohort ended before the full study target was reached.",
+    },
+    {
+        "code": "genotype_shortfall",
+        "label": "Genotype Shortfall",
+        "description": "The required genotype mix could not be assembled in time for the project.",
+    },
+    {
+        "code": "capacity_constraint",
+        "label": "Capacity Constraint",
+        "description": "Housing, staffing, or scheduling constraints prevented completion.",
+    },
+    {
+        "code": "welfare_or_compliance",
+        "label": "Welfare/Compliance Stop",
+        "description": "The cohort stopped because welfare, protocol, or compliance concerns overrode continued use.",
+    },
+    {
+        "code": "design_change",
+        "label": "Design Change",
+        "description": "The project plan changed and the original cohort was no longer needed.",
+    },
+    {
+        "code": "other",
+        "label": "Other",
+        "description": "A different reason ended the cohort and should be described in the summary notes.",
+    },
+]
+
 
 def now_iso() -> str:
     return datetime.now(UTC).isoformat()
@@ -193,6 +231,14 @@ def _genotype_template_preset_by_key(key: str | None) -> dict[str, Any] | None:
         if normalized == str(preset["presetKey"]).strip().lower():
             return preset
     return None
+
+
+def _closeout_outcome_option(code: str | None) -> dict[str, str]:
+    normalized = str(code or "").strip().lower()
+    for option in CLOSEOUT_OUTCOME_TAXONOMY:
+        if normalized == option["code"]:
+            return option
+    return CLOSEOUT_OUTCOME_TAXONOMY[-1]
 
 
 def _csv_pick(row: dict[str, Any], keys: list[str]) -> str:
@@ -500,7 +546,8 @@ def _project_assignment_timeline_payload(project_id: int) -> dict[str, Any]:
 def _project_closeouts(project_id: int) -> list[dict[str, Any]]:
     rows = db().execute(
         """
-        SELECT pc.id, pc.status, pc.completed_animals, pc.summary, pc.notes, pc.closed_at, pc.created_at,
+        SELECT pc.id, pc.status, COALESCE(pc.outcome_code, 'other') AS outcome_code,
+               pc.completed_animals, pc.summary, pc.notes, pc.closed_at, pc.created_at,
                u.full_name AS closed_by_name
         FROM project_cohort_closeouts pc
         LEFT JOIN users u ON u.id = pc.closed_by
@@ -529,10 +576,204 @@ def _project_closeouts(project_id: int) -> list[dict[str, Any]]:
     payload = []
     for row in rows:
         item = dict(row)
+        option = _closeout_outcome_option(item.get("outcome_code"))
+        item["outcome_label"] = option["label"]
+        item["outcome_description"] = option["description"]
         item["attachments"] = by_closeout.get(str(item["id"]), [])
         item["attachment_count"] = len(item["attachments"])
         payload.append(item)
     return payload
+
+
+def _stalled_assignment_bucket(age_days: int) -> str:
+    if age_days <= 4:
+        return "2-4d"
+    if age_days <= 7:
+        return "5-7d"
+    return "8d+"
+
+
+def _stalled_assignment_rows(user: AuthContext) -> list[dict[str, Any]]:
+    rows = db().execute(
+        """
+        SELECT pa.id, pa.project_id, pa.status, pa.assigned_at,
+               p.project_code, p.title AS project_title, p.lab_id,
+               l.name AS lab_name,
+               a.id AS animal_id, a.animal_code,
+               c.id AS cage_id, c.cage_code
+        FROM project_animal_assignments pa
+        JOIN projects p ON p.id = pa.project_id
+        JOIN labs l ON l.id = p.lab_id
+        JOIN animals a ON a.id = pa.animal_id
+        LEFT JOIN cages c ON c.id = a.cage_id
+        WHERE pa.status IN ('assigned', 'shipped')
+        """
+        + ("" if is_admin(user) else " AND p.lab_id = ? "),
+        () if is_admin(user) else (user.lab_id,),
+    ).fetchall()
+    current_dt = datetime.now(UTC)
+    stalled: list[dict[str, Any]] = []
+    for row in rows:
+        try:
+            assigned_at = datetime.fromisoformat(str(row["assigned_at"]))
+        except ValueError:
+            continue
+        age_days = max(0, (current_dt - assigned_at).days)
+        threshold = 2 if row["status"] == "assigned" else 5
+        if age_days < threshold:
+            continue
+        severity = "high" if age_days >= 8 else ("medium" if age_days >= 5 else "low")
+        stalled.append(
+            {
+                "assignmentId": int(row["id"]),
+                "projectId": int(row["project_id"]),
+                "projectCode": row["project_code"],
+                "projectTitle": row["project_title"],
+                "labId": int(row["lab_id"]),
+                "labName": row["lab_name"],
+                "animalId": int(row["animal_id"]),
+                "animalCode": row["animal_code"],
+                "cageId": int(row["cage_id"]) if row["cage_id"] is not None else None,
+                "cageCode": row["cage_code"],
+                "status": row["status"],
+                "ageDays": age_days,
+                "ageBucket": _stalled_assignment_bucket(age_days),
+                "thresholdDays": threshold,
+                "severity": severity,
+                "assignedAt": row["assigned_at"],
+            }
+        )
+    return stalled
+
+
+def _cohort_handoff_analytics(
+    user: AuthContext,
+    *,
+    closeout_status: str = "",
+    outcome_code: str = "",
+) -> dict[str, Any]:
+    clauses: list[str] = []
+    params: list[Any] = []
+    if not is_admin(user):
+        clauses.append("p.lab_id = ?")
+        params.append(user.lab_id)
+    if closeout_status:
+        clauses.append("pc.status = ?")
+        params.append(closeout_status)
+    if outcome_code:
+        clauses.append("COALESCE(pc.outcome_code, 'other') = ?")
+        params.append(outcome_code)
+    where_sql = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+
+    closeout_rows = db().execute(
+        f"""
+        SELECT pc.id, pc.project_id, pc.status, COALESCE(pc.outcome_code, 'other') AS outcome_code,
+               pc.completed_animals, pc.summary, pc.notes, pc.closed_at,
+               p.project_code, p.title AS project_title,
+               l.name AS lab_name
+        FROM project_cohort_closeouts pc
+        JOIN projects p ON p.id = pc.project_id
+        JOIN labs l ON l.id = p.lab_id
+        {where_sql}
+        ORDER BY pc.closed_at DESC, pc.id DESC
+        LIMIT 40
+        """,
+        params,
+    ).fetchall()
+    attachment_counts: dict[str, int] = {}
+    if closeout_rows:
+        closeout_ids = [str(int(row["id"])) for row in closeout_rows]
+        attachment_rows = db().execute(
+            """
+            SELECT entity_id, COUNT(*) AS count
+            FROM record_attachments
+            WHERE entity_type = 'project_closeout' AND entity_id IN ("""
+            + ", ".join(["?"] * len(closeout_ids))
+            + """)
+            GROUP BY entity_id
+            """,
+            closeout_ids,
+        ).fetchall()
+        attachment_counts = {str(row["entity_id"]): int(row["count"] or 0) for row in attachment_rows}
+
+    status_mix: dict[str, int] = {}
+    outcome_mix: dict[str, int] = {}
+    recent_closeouts: list[dict[str, Any]] = []
+    for row in closeout_rows:
+        status = str(row["status"] or "completed")
+        outcome = str(row["outcome_code"] or "other")
+        status_mix[status] = status_mix.get(status, 0) + 1
+        outcome_mix[outcome] = outcome_mix.get(outcome, 0) + 1
+        option = _closeout_outcome_option(outcome)
+        recent_closeouts.append(
+            {
+                "id": int(row["id"]),
+                "projectId": int(row["project_id"]),
+                "projectCode": row["project_code"],
+                "projectTitle": row["project_title"],
+                "labName": row["lab_name"],
+                "status": status,
+                "outcomeCode": outcome,
+                "outcomeLabel": option["label"],
+                "outcomeDescription": option["description"],
+                "completedAnimals": int(row["completed_animals"] or 0),
+                "summary": row["summary"],
+                "notes": row["notes"],
+                "closedAt": row["closed_at"],
+                "attachmentCount": attachment_counts.get(str(row["id"]), 0),
+            }
+        )
+
+    stalled_rows = _stalled_assignment_rows(user)
+    bucket_counts: dict[str, int] = {}
+    by_lab: dict[int, dict[str, Any]] = {}
+    by_project: list[dict[str, Any]] = []
+    for row in stalled_rows:
+        bucket_counts[row["ageBucket"]] = bucket_counts.get(row["ageBucket"], 0) + 1
+        lab_entry = by_lab.setdefault(
+            row["labId"],
+            {
+                "labId": row["labId"],
+                "labName": row["labName"],
+                "stalledCount": 0,
+                "assignedCount": 0,
+                "shippedCount": 0,
+                "highSeverityCount": 0,
+                "oldestAgeDays": 0,
+            },
+        )
+        lab_entry["stalledCount"] += 1
+        if row["status"] == "assigned":
+            lab_entry["assignedCount"] += 1
+        if row["status"] == "shipped":
+            lab_entry["shippedCount"] += 1
+        if row["severity"] == "high":
+            lab_entry["highSeverityCount"] += 1
+        lab_entry["oldestAgeDays"] = max(int(lab_entry["oldestAgeDays"]), int(row["ageDays"]))
+        by_project.append(row)
+    by_project.sort(key=lambda row: ({"high": 3, "medium": 2, "low": 1}.get(row["severity"], 0), row["ageDays"]), reverse=True)
+
+    return {
+        "taxonomy": CLOSEOUT_OUTCOME_TAXONOMY,
+        "filters": {"closeoutStatus": closeout_status, "outcomeCode": outcome_code},
+        "closeoutStatusMix": [{"label": key, "value": value} for key, value in status_mix.items()],
+        "closeoutOutcomeMix": [
+            {
+                "code": option["code"],
+                "label": option["label"],
+                "description": option["description"],
+                "value": int(outcome_mix.get(option["code"], 0)),
+            }
+            for option in CLOSEOUT_OUTCOME_TAXONOMY
+        ],
+        "recentCloseouts": recent_closeouts,
+        "stalledAgeBuckets": [
+            {"label": label, "value": int(bucket_counts.get(label, 0)), "color": color}
+            for label, color in [("2-4d", "#4f8ef7"), ("5-7d", "#eb9c44"), ("8d+", "#ca513d")]
+        ],
+        "stalledByLab": sorted(by_lab.values(), key=lambda row: (row["highSeverityCount"], row["stalledCount"]), reverse=True)[:12],
+        "stalledByProject": by_project[:12],
+    }
 
 
 def db_target() -> str:
@@ -744,6 +985,7 @@ def _apply_schema_migrations(conn: storage.Connection) -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 project_id INTEGER NOT NULL,
                 status TEXT NOT NULL CHECK (status IN ('completed', 'partial', 'cancelled')),
+                outcome_code TEXT NOT NULL DEFAULT 'other',
                 completed_animals INTEGER NOT NULL DEFAULT 0,
                 summary TEXT NOT NULL,
                 notes TEXT,
@@ -756,6 +998,10 @@ def _apply_schema_migrations(conn: storage.Connection) -> None:
             CREATE INDEX IF NOT EXISTS idx_project_closeouts_project ON project_cohort_closeouts(project_id, closed_at);
             """
         )
+    else:
+        closeout_cols = set(storage.table_columns(conn, "project_cohort_closeouts"))
+        if "outcome_code" not in closeout_cols:
+            conn.execute("ALTER TABLE project_cohort_closeouts ADD COLUMN outcome_code TEXT NOT NULL DEFAULT 'other'")
 
 
 def audit_log(actor_id: int | None, entity_type: str, entity_id: int | str, action: str, before: Any, after: Any) -> None:
@@ -1072,51 +1318,28 @@ def derive_active_alerts(user: AuthContext) -> list[dict[str, Any]]:
             }
         )
 
-    stalled_rows = db().execute(
-        """
-        SELECT pa.id, pa.project_id, pa.status, pa.assigned_at,
-               p.project_code, p.lab_id,
-               a.animal_code, a.cage_id, c.cage_code
-        FROM project_animal_assignments pa
-        JOIN projects p ON p.id = pa.project_id
-        JOIN animals a ON a.id = pa.animal_id
-        LEFT JOIN cages c ON c.id = a.cage_id
-        WHERE pa.status IN ('assigned', 'shipped')
-        """
-        + ("" if is_admin(user) else " AND p.lab_id = ? "),
-        () if is_admin(user) else (user.lab_id,),
-    ).fetchall()
-    current_dt = datetime.now(UTC)
-    for r in stalled_rows:
-        try:
-            assigned_at = datetime.fromisoformat(str(r["assigned_at"]))
-        except ValueError:
-            continue
-        age_days = max(0, (current_dt - assigned_at).days)
-        threshold = 2 if r["status"] == "assigned" else 5
-        if age_days < threshold:
-            continue
-        severity = "medium" if r["status"] == "assigned" else "high"
+    for r in _stalled_assignment_rows(user):
         alerts.append(
             {
-                "alert_key": f"cohort_stalled:{r['id']}:{r['status']}",
-                "lab_id": r["lab_id"],
-                "cage_id": r["cage_id"],
-                "severity": severity,
+                "alert_key": f"cohort_stalled:{r['assignmentId']}:{r['status']}",
+                "lab_id": r["labId"],
+                "cage_id": r["cageId"],
+                "severity": r["severity"],
                 "category": "cohort",
                 "title": "Cohort Assignment Stalled",
                 "message": (
-                    f"Project {r['project_code']} has animal {r['animal_code']} stuck in {r['status']} for "
-                    f"{age_days} days."
+                    f"Project {r['projectCode']} has animal {r['animalCode']} stuck in {r['status']} for "
+                    f"{r['ageDays']} days."
                 ),
                 "meta": {
-                    "assignmentId": r["id"],
-                    "projectId": r["project_id"],
-                    "projectCode": r["project_code"],
-                    "animalCode": r["animal_code"],
+                    "assignmentId": r["assignmentId"],
+                    "projectId": r["projectId"],
+                    "projectCode": r["projectCode"],
+                    "animalCode": r["animalCode"],
                     "status": r["status"],
-                    "ageDays": age_days,
-                    "thresholdDays": threshold,
+                    "ageDays": r["ageDays"],
+                    "ageBucket": r["ageBucket"],
+                    "thresholdDays": r["thresholdDays"],
                 },
                 "seen_at": now,
             }
@@ -1878,7 +2101,14 @@ def project_closeouts(project_id: int) -> Response:
     project = ensure_project_scope(project_id, g.user)
     if not project:
         return jsonify({"error": "Not found"}), 404
-    return jsonify(_project_closeouts(project_id))
+    rows = _project_closeouts(project_id)
+    status = str(request.args.get("status") or "").strip().lower()
+    outcome_code = str(request.args.get("outcomeCode") or "").strip().lower()
+    if status:
+        rows = [row for row in rows if str(row.get("status") or "").lower() == status]
+    if outcome_code:
+        rows = [row for row in rows if str(row.get("outcome_code") or "other").lower() == outcome_code]
+    return jsonify(rows)
 
 
 @app.post("/api/projects/<int:project_id>/closeouts")
@@ -1894,14 +2124,15 @@ def create_project_closeout(project_id: int) -> Response:
     summary = str(payload.get("summary") or "").strip()
     if not summary:
         return jsonify({"error": "Provide closeout summary"}), 400
+    outcome_code = _closeout_outcome_option(payload.get("outcomeCode"))["code"]
     completed_animals = max(0, int(payload.get("completedAnimals") or 0))
     cur = db().execute(
         """
         INSERT INTO project_cohort_closeouts
-            (project_id, status, completed_animals, summary, notes, closed_by, closed_at, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (project_id, status, outcome_code, completed_animals, summary, notes, closed_by, closed_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (project_id, status, completed_animals, summary, payload.get("notes"), g.user.user_id, now_iso(), now_iso()),
+        (project_id, status, outcome_code, completed_animals, summary, payload.get("notes"), g.user.user_id, now_iso(), now_iso()),
     )
     closeout_id = int(cur.lastrowid)
     db().commit()
@@ -1914,6 +2145,7 @@ def create_project_closeout(project_id: int) -> Response:
         {
             "projectId": project_id,
             "status": status,
+            "outcomeCode": outcome_code,
             "completedAnimals": completed_animals,
             "summary": summary,
         },
@@ -3696,6 +3928,17 @@ def analytics_summary() -> Response:
         if is_admin(g.user)
         else (datetime.now(UTC).date().isoformat(), (datetime.now(UTC).date() + timedelta(days=14)).isoformat(), g.user.lab_id),
     ).fetchall()
+    stalled_rows = _stalled_assignment_rows(g.user)
+    closeout_filters = "" if is_admin(g.user) else " WHERE p.lab_id = ? "
+    closeout_count = db().execute(
+        """
+        SELECT COUNT(*) AS c
+        FROM project_cohort_closeouts pc
+        JOIN projects p ON p.id = pc.project_id
+        """
+        + closeout_filters,
+        () if is_admin(g.user) else (g.user.lab_id,),
+    ).fetchone()["c"]
 
     cohort_scope = "" if is_admin(g.user) else " WHERE p.lab_id = ? "
     cohort_params: tuple[Any, ...] = () if is_admin(g.user) else (g.user.lab_id,)
@@ -3767,6 +4010,8 @@ def analytics_summary() -> Response:
             "pupSurvivalPct": survival,
             "roomCapacity": [dict(r) for r in room_capacity],
             "upcomingTasks": [dict(r) for r in upcoming_tasks],
+            "stalledCohortAssignments": len(stalled_rows),
+            "cohortCloseouts": int(closeout_count),
             "cohortFlow": [
                 {"key": step["key"], "label": step["label"], "value": int(cohort_counts.get(step["key"], 0)), "color": step["color"]}
                 for step in ASSIGNMENT_STATUS_STEPS
@@ -3783,6 +4028,20 @@ def analytics_summary() -> Response:
             "cohortLabs": cohort_labs,
         }
     )
+
+
+@app.get("/api/analytics/cohort-handoffs")
+@require_auth()
+def analytics_cohort_handoffs() -> Response:
+    closeout_status = str(request.args.get("closeoutStatus") or "").strip().lower()
+    outcome_code = str(request.args.get("outcomeCode") or "").strip().lower()
+    valid_statuses = {"", "completed", "partial", "cancelled"}
+    valid_outcomes = {"", *[item["code"] for item in CLOSEOUT_OUTCOME_TAXONOMY]}
+    if closeout_status not in valid_statuses:
+        return jsonify({"error": "Invalid closeoutStatus"}), 400
+    if outcome_code not in valid_outcomes:
+        return jsonify({"error": "Invalid outcomeCode"}), 400
+    return jsonify(_cohort_handoff_analytics(g.user, closeout_status=closeout_status, outcome_code=outcome_code))
 
 
 @app.post("/api/forecast/demand")
