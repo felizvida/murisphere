@@ -30,6 +30,8 @@ const state = {
   genotypingOrders: [],
   selectedGenotypingOrderId: null,
   genotypingDashboard: null,
+  providerPresets: [],
+  cohortInsights: null,
 };
 const PENDING_SCAN_KEY = "murisphere_pending_scan";
 const SCAN_BASE_KEY = "murisphere_scan_base_url";
@@ -70,6 +72,8 @@ function handleSessionExpired(message = "Session expired. Please sign in again."
   state.genotypingOrders = [];
   state.selectedGenotypingOrderId = null;
   state.genotypingDashboard = null;
+  state.providerPresets = [];
+  state.cohortInsights = null;
   showMessage(message, "warn");
 }
 
@@ -868,6 +872,143 @@ function renderGenotypingOverview(dashboard) {
   `;
 }
 
+function applyProviderPreset(presetKey) {
+  const preset = (state.providerPresets || []).find((row) => row.key === presetKey);
+  if (!preset) return;
+  el("sampleProvider").value = preset.sampleProvider || preset.name;
+  el("orderProvider").value = preset.orderProvider || preset.name;
+  if (preset.defaultSampleType && el("sampleType").querySelector(`option[value="${preset.defaultSampleType}"]`)) {
+    el("sampleType").value = preset.defaultSampleType;
+  }
+  if (!el("orderMarkerPanel").value.trim() && preset.defaultMarkerPanel) {
+    el("orderMarkerPanel").value = preset.defaultMarkerPanel;
+  }
+  if (!el("callbackMarkerPanel").value.trim() && preset.defaultMarkerPanel) {
+    el("callbackMarkerPanel").value = preset.defaultMarkerPanel;
+  }
+  showMessage(`Applied ${preset.name} preset to the sample and order forms.`, "success");
+}
+
+function renderProviderPresets(presets) {
+  const host = el("providerPresetList");
+  if (!host) return;
+  if (!presets?.length) {
+    host.innerHTML = "";
+    return;
+  }
+  host.innerHTML = `
+    <div class="detail-grid">
+      ${presets
+        .map(
+          (preset) => `
+            <article class="learning-card provider-preset-card">
+              <div class="sample-item-head">
+                <div>
+                  <strong>${esc(preset.name)}</strong>
+                  <div class="learning-copy">${esc(preset.notes || "Preset workflow")}</div>
+                </div>
+                <span class="detail-pill">${esc(preset.defaultSampleType || "sample")}</span>
+              </div>
+              <div class="sample-meta">
+                <span class="legend-item">Panel ${esc(preset.defaultMarkerPanel || "custom")}</span>
+                <span class="legend-item">${esc((preset.exportColumns || []).join(" · "))}</span>
+              </div>
+              <div class="learning-actions">
+                <button type="button" class="table-link" data-provider-preset="${esc(preset.key)}">Apply To Forms</button>
+              </div>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+}
+
+function renderCohortInsights(insights) {
+  const host = el("cohortInsights");
+  if (!host) return;
+  if (!insights) {
+    host.innerHTML = "";
+    return;
+  }
+  const projectBars = (insights.projects || []).slice(0, 8).map((row) => ({
+    label: row.projectCode,
+    value: row.readyAnimals,
+    color: row.assignmentPressure > 0 ? "#eb9c44" : "#18a172",
+  }));
+  const readyAnimals = (insights.readyAnimals || [])
+    .slice(0, 8)
+    .map(
+      (animal) => `<div class="timeline-item">
+        <strong><button type="button" class="table-link" data-sample-animal-id="${esc(animal.id)}">${esc(animal.animalCode)}</button></strong>
+        <span><button type="button" class="table-link" data-sample-cage-id="${esc(animal.cageId)}">${esc(animal.cageCode)}</button> · ${esc(
+          animal.genotype
+        )} · ${animal.projects?.length ? esc(animal.projects.map((project) => project.projectCode).join(", ")) : "unassigned"}</span>
+      </div>`
+    )
+    .join("");
+  const breederSignals = (insights.breederSignals || [])
+    .slice(0, 6)
+    .map(
+      (row) => `<article class="sample-item">
+        <div class="sample-item-head">
+          <div>
+            <strong><button type="button" class="table-link" data-sample-cage-id="${esc(row.cageId || "")}">${esc(row.cageCode)}</button></strong>
+            <div class="learning-copy">${esc(row.sireCode)} × ${esc(row.damCode)}</div>
+          </div>
+          <span class="detail-pill">${esc(row.signal)}</span>
+        </div>
+        <div class="sample-meta">
+          <span class="legend-item">${esc(row.readyAnimals)} ready</span>
+          <span class="legend-item">${esc(row.litterCount)} litters</span>
+          <span class="legend-item">avg survived ${esc(row.avgSurvived)}</span>
+        </div>
+        <p class="learning-copy">${esc(row.note)}</p>
+      </article>`
+    )
+    .join("");
+  host.innerHTML = `
+    <div class="detail-grid">
+      ${chartCard(
+        "Project Cohort Readiness",
+        `${esc(insights.unassignedReadyCount || 0)} genotype-ready animals are still unassigned`,
+        projectBars.length ? drawBars(projectBars, { height: 132 }) : `<p class="hint">No active project cohorts are visible yet.</p>`,
+        (insights.projects || [])
+          .slice(0, 8)
+          .map((row) => `<span class="legend-item">${esc(row.projectCode)} ${esc(row.readyAnimals)} ready / ${esc(row.targetAnimals)} target</span>`)
+          .join("")
+      )}
+      <article class="viz-card">
+        <h4>Assignment Candidates</h4>
+        <div class="timeline-list">${readyAnimals || `<div class="hint">No genotype-ready animals are visible yet.</div>`}</div>
+      </article>
+    </div>
+    <div class="detail-grid">
+      <article class="viz-card">
+        <h4>Breeder Decisions</h4>
+        <div class="sample-list">${breederSignals || `<p class="hint">No breeder signals are available yet.</p>`}</div>
+      </article>
+      <article class="viz-card">
+        <h4>Assignment Pressure</h4>
+        <div class="timeline-list">
+          ${
+            (insights.projects || [])
+              .slice(0, 8)
+              .map(
+                (row) => `<div class="timeline-item"><strong><button type="button" class="table-link" data-project-id="${esc(row.id)}">${esc(
+                  row.projectCode
+                )}</button></strong><span>${esc(row.recommendedAction)} · deficit ${esc(
+                  row.assignmentPressure
+                )}</span></div>`
+              )
+              .join("") || `<div class="hint">No project demand context is visible yet.</div>`
+          }
+        </div>
+      </article>
+    </div>
+  `;
+}
+
 function renderReconciliationInspector(reconciliation) {
   const host = el("reconciliationInspector");
   if (!host) return;
@@ -1279,25 +1420,31 @@ async function loadSampleWorkspace() {
       state.projects = [];
     }
   }
-  const [samples, orders, mendelian, alerts, dashboard] = await Promise.all([
+  const [samples, orders, mendelian, alerts, dashboard, presets, cohorts] = await Promise.all([
     api("/api/samples", { headers: headers(false) }),
     api("/api/genotyping/orders", { headers: headers(false) }),
     api("/api/genotyping/mendelian", { headers: headers(false) }),
     api("/api/genotyping/alerts?threshold=0.1", { headers: headers(false) }),
     api("/api/genotyping/dashboard", { headers: headers(false) }),
+    api("/api/genotyping/providers", { headers: headers(false) }),
+    api("/api/genotyping/cohorts", { headers: headers(false) }),
   ]);
   state.samples = samples;
   state.genotypingOrders = orders;
   state.genotypingDashboard = dashboard;
+  state.providerPresets = presets;
+  state.cohortInsights = cohorts;
   state.selectedSampleIds = state.selectedSampleIds.filter((id) => samples.some((row) => Number(row.id) === Number(id)));
   if (!state.selectedGenotypingOrderId || !orders.some((row) => Number(row.id) === Number(state.selectedGenotypingOrderId))) {
     state.selectedGenotypingOrderId = orders.length ? Number(orders[0].id) : null;
   }
   populateOrderControls();
+  renderProviderPresets(presets);
   renderGenotypingOverview(dashboard);
   renderSampleList(samples);
   renderOrderList(orders);
   renderGenotypeAnalytics(mendelian, alerts);
+  renderCohortInsights(cohorts);
   if (samples.length) await inspectSample(samples[0].id);
   else renderSampleInspector(null, [], []);
   if (state.selectedGenotypingOrderId) await inspectGenotypingOrder(state.selectedGenotypingOrderId);
@@ -2929,6 +3076,12 @@ async function init() {
     withAction("Project detail load failed", () => openProjectInspector(Number(projectNode.getAttribute("data-project-id")))).catch(() => undefined);
   });
 
+  el("providerPresetList").addEventListener("click", (evt) => {
+    const presetNode = evt.target.closest("button[data-provider-preset]");
+    if (!presetNode) return;
+    applyProviderPreset(presetNode.getAttribute("data-provider-preset"));
+  });
+
   el("sampleList").addEventListener("click", (evt) => {
     const sampleNode = evt.target.closest("button[data-sample-id]");
     if (sampleNode) {
@@ -3017,6 +3170,22 @@ async function init() {
         await inspectGenotypingOrder(orderId);
         showMessage("Genotyping order submitted.", "success");
       }).catch(() => undefined);
+      return;
+    }
+    const animalNode = evt.target.closest("button[data-sample-animal-id]");
+    if (!animalNode) return;
+    withAction("Animal pedigree load failed", () => openLearningPedigree(Number(animalNode.getAttribute("data-sample-animal-id")))).catch(() => undefined);
+  });
+
+  el("cohortInsights").addEventListener("click", (evt) => {
+    const projectNode = evt.target.closest("button[data-project-id]");
+    if (projectNode) {
+      withAction("Project detail load failed", () => openProjectInspector(Number(projectNode.getAttribute("data-project-id")))).catch(() => undefined);
+      return;
+    }
+    const cageNode = evt.target.closest("button[data-sample-cage-id]");
+    if (cageNode) {
+      withAction("Cage detail load failed", () => openCageInspector(Number(cageNode.getAttribute("data-sample-cage-id")))).catch(() => undefined);
       return;
     }
     const animalNode = evt.target.closest("button[data-sample-animal-id]");

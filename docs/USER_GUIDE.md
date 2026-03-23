@@ -26,6 +26,7 @@ Then keep these two documents open together:
 Use the `Reports` tab for the samples/genotyping workspace.
 
 - review the genotyping overview dashboard for sample states, provider load, order flow, and genotype mix
+- apply provider presets for Transnetyx, Charles River, or in-house qPCR workflows
 - create samples from animal codes
 - inspect sample event history
 - select samples into genotyping orders
@@ -33,6 +34,8 @@ Use the `Reports` tab for the samples/genotyping workspace.
 - download provider-ready CSV templates for a selected order
 - import provider result CSV files back into the same order
 - inspect order reconciliation to see resulted, missing, in-transit, and blocked items
+- review cohort readiness by project and see genotype-ready assignment candidates
+- inspect breeder decision signals that connect genotyping output back to colony planning
 - review order items and results
 - inspect Mendelian summaries and genotype alerts
 

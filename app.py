@@ -81,10 +81,79 @@ class AuthContext:
 
 PROJECT_CODE_LIST_SQL = storage.sql_list_agg("pj.project_code", ", ")
 REQUEST_SLA_HOURS_SQL = storage.sql_hours_between("updated_at", "created_at")
+GENOTYPING_PROVIDER_PRESETS: list[dict[str, Any]] = [
+    {
+        "key": "transnetyx",
+        "name": "Transnetyx",
+        "sampleProvider": "Transnetyx",
+        "orderProvider": "Transnetyx",
+        "defaultSampleType": "tail",
+        "defaultMarkerPanel": "Cre Panel",
+        "exportColumns": ["order_ref", "sample_code", "animal_code", "marker_panel", "result"],
+        "importAliases": {
+            "sampleCode": ["sample_code", "sampleid", "sample_id"],
+            "animalCode": ["animal_code", "animal_id"],
+            "result": ["result", "genotype_result", "call"],
+            "markerPanel": ["marker_panel", "panel_name", "assay"],
+        },
+        "notes": "Phone-friendly default workflow with sample-code-based reconciliation.",
+    },
+    {
+        "key": "charles-river",
+        "name": "Charles River",
+        "sampleProvider": "Charles River",
+        "orderProvider": "Charles River",
+        "defaultSampleType": "ear",
+        "defaultMarkerPanel": "Mouse Line Verification",
+        "exportColumns": ["order_ref", "tube_id", "animal_id", "panel_name", "result"],
+        "importAliases": {
+            "sampleCode": ["tube_id", "sample_code", "tube"],
+            "animalCode": ["animal_id", "animal_code"],
+            "result": ["result", "genotype_result", "call"],
+            "markerPanel": ["panel_name", "marker_panel", "assay"],
+        },
+        "notes": "Tube-centric export/import aliases for external service workflows.",
+    },
+    {
+        "key": "in-house-qpcr",
+        "name": "In-House qPCR",
+        "sampleProvider": "In-House qPCR",
+        "orderProvider": "In-House qPCR",
+        "defaultSampleType": "tissue",
+        "defaultMarkerPanel": "qPCR Verification",
+        "exportColumns": ["order_ref", "animal_code", "well_position", "target_assay", "marker_panel", "result"],
+        "importAliases": {
+            "sampleCode": ["sample_code", "well_position"],
+            "animalCode": ["animal_code"],
+            "result": ["result", "ct_call", "genotype_result"],
+            "markerPanel": ["target_assay", "marker_panel"],
+        },
+        "notes": "Bench-oriented preset for internal assay plates and well-position tracking.",
+    },
+]
 
 
 def now_iso() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _provider_preset_by_name(name: str | None) -> dict[str, Any]:
+    normalized = str(name or "").strip().lower()
+    for preset in GENOTYPING_PROVIDER_PRESETS:
+        if normalized in {preset["key"], str(preset["name"]).strip().lower(), str(preset["orderProvider"]).strip().lower()}:
+            return preset
+    return GENOTYPING_PROVIDER_PRESETS[0]
+
+
+def _csv_pick(row: dict[str, Any], keys: list[str]) -> str:
+    for key in keys:
+        value = row.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return ""
 
 
 def db_target() -> str:
@@ -2408,6 +2477,165 @@ def genotyping_dashboard() -> Response:
             "genotypeDistribution": [{"label": r["genotype"], "value": int(r["n"])} for r in genotype_rows],
             "turnaround": [{"label": label, "value": value} for label, value in turnaround_buckets.items()],
             "recentActivity": recent_activity,
+        }
+    )
+
+
+@app.get("/api/genotyping/providers")
+@require_auth()
+def genotyping_provider_presets() -> Response:
+    return jsonify(GENOTYPING_PROVIDER_PRESETS)
+
+
+@app.get("/api/genotyping/cohorts")
+@require_auth()
+def genotyping_cohort_insights() -> Response:
+    cage_clause, cage_params = scoped_lab_clause(g.user, "c.lab_id")
+    pair_clause, pair_params = scoped_lab_clause(g.user, "bp.lab_id")
+    project_filters = ["p.status = 'active'"]
+    project_params: list[Any] = []
+    if not is_admin(g.user):
+        project_filters.append("p.lab_id = ?")
+        project_params.append(g.user.lab_id)
+
+    projects = db().execute(
+        """
+        SELECT p.id, p.project_code, p.title, p.target_animals, l.name AS lab_name
+        FROM projects p
+        JOIN labs l ON l.id = p.lab_id
+        WHERE """
+        + " AND ".join(project_filters)
+        + """
+        ORDER BY p.id DESC
+        LIMIT 200
+        """,
+        project_params,
+    ).fetchall()
+
+    animal_rows = db().execute(
+        f"""
+        SELECT a.id, a.animal_code, a.sex, a.genotype, a.cage_id, c.cage_code, l.name AS lab_name,
+               p.id AS project_id, p.project_code, p.title AS project_title
+        FROM animals a
+        JOIN cages c ON c.id = a.cage_id
+        JOIN labs l ON l.id = c.lab_id
+        LEFT JOIN project_cages pc ON pc.cage_id = c.id
+        LEFT JOIN projects p ON p.id = pc.project_id
+        {cage_clause}
+        {" AND " if cage_clause else " WHERE "} a.status = 'Active' AND COALESCE(a.genotype, '') <> ''
+        ORDER BY a.id DESC
+        LIMIT 2000
+        """,
+        cage_params,
+    ).fetchall()
+
+    animal_map: dict[int, dict[str, Any]] = {}
+    project_counts: dict[int, dict[str, Any]] = {}
+    for row in animal_rows:
+        animal = animal_map.setdefault(
+            int(row["id"]),
+            {
+                "id": int(row["id"]),
+                "animalCode": row["animal_code"],
+                "sex": row["sex"],
+                "genotype": row["genotype"],
+                "cageId": int(row["cage_id"]),
+                "cageCode": row["cage_code"],
+                "labName": row["lab_name"],
+                "projects": [],
+            },
+        )
+        if row["project_id"]:
+            animal["projects"].append({"id": int(row["project_id"]), "projectCode": row["project_code"], "title": row["project_title"]})
+            counts = project_counts.setdefault(int(row["project_id"]), {"readyAnimals": 0, "sexCounts": {"M": 0, "F": 0}, "genotypes": {}})
+            counts["readyAnimals"] += 1
+            counts["sexCounts"][row["sex"]] = counts["sexCounts"].get(row["sex"], 0) + 1
+            counts["genotypes"][row["genotype"]] = counts["genotypes"].get(row["genotype"], 0) + 1
+
+    cohort_projects = []
+    for row in projects:
+        counts = project_counts.get(int(row["id"]), {"readyAnimals": 0, "sexCounts": {"M": 0, "F": 0}, "genotypes": {}})
+        ready = int(counts["readyAnimals"])
+        target = int(row["target_animals"] or 0)
+        pressure = max(target - ready, 0)
+        action = "assign_now" if ready > 0 and pressure > 0 else "monitor"
+        if ready == 0 and target > 0:
+            action = "breed_more"
+        cohort_projects.append(
+            {
+                "id": int(row["id"]),
+                "projectCode": row["project_code"],
+                "title": row["title"],
+                "labName": row["lab_name"],
+                "targetAnimals": target,
+                "readyAnimals": ready,
+                "assignmentPressure": pressure,
+                "sexCounts": counts["sexCounts"],
+                "genotypes": counts["genotypes"],
+                "recommendedAction": action,
+            }
+        )
+
+    breeder_rows = db().execute(
+        f"""
+        SELECT bp.id, bp.status, c.id AS cage_id, c.cage_code, sire.animal_code AS sire_code, dam.animal_code AS dam_code,
+               COUNT(DISTINCT l.id) AS litter_count,
+               COALESCE(AVG(l.survived_count), 0) AS avg_survived,
+               COUNT(DISTINCT CASE WHEN a.status = 'Active' AND COALESCE(a.genotype, '') <> '' THEN a.id END) AS ready_animals
+        FROM breeding_pairs bp
+        JOIN cages c ON c.id = bp.cage_id
+        JOIN animals sire ON sire.id = bp.sire_id
+        JOIN animals dam ON dam.id = bp.dam_id
+        LEFT JOIN litters l ON l.cage_id = bp.cage_id
+        LEFT JOIN animals a ON a.cage_id = bp.cage_id
+        {pair_clause}
+        GROUP BY bp.id, bp.status, c.cage_code, sire.animal_code, dam.animal_code
+        ORDER BY bp.id DESC
+        LIMIT 20
+        """,
+        pair_params,
+    ).fetchall()
+    breeder_signals = []
+    for row in breeder_rows:
+        ready = int(row["ready_animals"] or 0)
+        litter_count = int(row["litter_count"] or 0)
+        avg_survived = float(row["avg_survived"] or 0)
+        if row["status"] == "active" and ready >= 4:
+            signal = "cohort_ready_pause_soon"
+            note = "Enough genotype-ready output is visible to consider pausing this pair after the current cohort."
+        elif row["status"] == "active" and litter_count == 0:
+            signal = "await_first_output"
+            note = "Pair is active but has not produced a tracked litter yet."
+        elif row["status"] == "active" and avg_survived < 2:
+            signal = "review_low_yield"
+            note = "Low average survival suggests this pair should be reviewed before expanding demand."
+        else:
+            signal = "maintain"
+            note = "Current output supports continued monitoring rather than immediate breeder changes."
+        breeder_signals.append(
+            {
+                "pairId": int(row["id"]),
+                "status": row["status"],
+                "cageId": int(row["cage_id"]),
+                "cageCode": row["cage_code"],
+                "sireCode": row["sire_code"],
+                "damCode": row["dam_code"],
+                "litterCount": litter_count,
+                "avgSurvived": round(avg_survived, 2),
+                "readyAnimals": ready,
+                "signal": signal,
+                "note": note,
+            }
+        )
+
+    animals = list(animal_map.values())
+    unassigned_ready = [animal for animal in animals if not animal["projects"]]
+    return jsonify(
+        {
+            "projects": cohort_projects[:12],
+            "readyAnimals": animals[:20],
+            "unassignedReadyCount": len(unassigned_ready),
+            "breederSignals": breeder_signals,
         }
     )
 
@@ -5383,23 +5611,26 @@ def genotyping_order_provider_template(order_id: int) -> Response:
     if not order:
         return jsonify({"error": "Not found"}), 404
     items = _order_items_with_sample_context(order_id)
+    preset = _provider_preset_by_name(order["provider"])
+    columns = list(preset.get("exportColumns") or ["order_ref", "sample_code", "animal_code", "marker_panel", "result"])
     output = io.StringIO()
-    writer = csv.DictWriter(
-        output,
-        fieldnames=["order_ref", "provider", "sample_code", "animal_code", "marker_panel", "result"],
-    )
+    writer = csv.DictWriter(output, fieldnames=columns)
     writer.writeheader()
     for item in items:
-        writer.writerow(
-            {
-                "order_ref": order["order_ref"],
-                "provider": order["provider"],
-                "sample_code": item.get("sample_code") or "",
-                "animal_code": item.get("animal_code") or "",
-                "marker_panel": item.get("marker_panel") or "",
-                "result": item.get("result") or "",
-            }
-        )
+        source_row = {
+            "order_ref": order["order_ref"],
+            "provider": order["provider"],
+            "sample_code": item.get("sample_code") or "",
+            "tube_id": item.get("sample_code") or "",
+            "animal_code": item.get("animal_code") or "",
+            "animal_id": item.get("animal_code") or "",
+            "marker_panel": item.get("marker_panel") or "",
+            "panel_name": item.get("marker_panel") or "",
+            "target_assay": item.get("marker_panel") or "",
+            "well_position": "",
+            "result": item.get("result") or "",
+        }
+        writer.writerow({column: source_row.get(column, "") for column in columns})
     filename = f"{order['order_ref']}_provider_template.csv"
     return Response(output.getvalue(), mimetype="text/csv", headers={"Content-Disposition": f"attachment; filename={filename}"})
 
@@ -5431,11 +5662,13 @@ def import_genotyping_order_results(order_id: int) -> Response:
         return jsonify({"error": "Upload a CSV file"}), 400
     content = request.files["file"].read().decode("utf-8")
     reader = csv.DictReader(io.StringIO(content))
+    preset = _provider_preset_by_name(order["provider"])
+    aliases = preset.get("importAliases") or {}
     results = []
     for row in reader:
-        result = str(row.get("result") or row.get("genotype_result") or "").strip()
-        sample_code = str(row.get("sample_code") or "").strip()
-        animal_code = str(row.get("animal_code") or "").strip()
+        result = _csv_pick(row, list(aliases.get("result") or ["result", "genotype_result"]))
+        sample_code = _csv_pick(row, list(aliases.get("sampleCode") or ["sample_code"]))
+        animal_code = _csv_pick(row, list(aliases.get("animalCode") or ["animal_code"]))
         if not result or (not sample_code and not animal_code):
             continue
         results.append(
@@ -5443,7 +5676,7 @@ def import_genotyping_order_results(order_id: int) -> Response:
                 "sampleCode": sample_code or None,
                 "animalCode": animal_code or None,
                 "result": result,
-                "markerPanel": str(row.get("marker_panel") or "").strip() or None,
+                "markerPanel": _csv_pick(row, list(aliases.get("markerPanel") or ["marker_panel"])) or None,
             }
         )
     status = str(request.form.get("status") or "received").strip()

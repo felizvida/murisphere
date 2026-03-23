@@ -273,6 +273,8 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertIn('id="genotypingOverview"', body)
         self.assertIn('id="genotypingImportForm"', body)
         self.assertIn('id="downloadProviderTemplateBtn"', body)
+        self.assertIn('id="providerPresetList"', body)
+        self.assertIn('id="cohortInsights"', body)
 
     def test_learning_routes_serve_tutorial_assets(self) -> None:
         redirect_res = self.client.get("/learn", follow_redirects=False)
@@ -477,7 +479,10 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertIn('el("genotypingCallbackForm").addEventListener("submit"', js)
         self.assertIn('el("genotypingImportForm").addEventListener("submit"', js)
         self.assertIn('el("downloadProviderTemplateBtn").addEventListener("click"', js)
+        self.assertIn('data-provider-preset', js)
         self.assertIn('api("/api/genotyping/dashboard"', js)
+        self.assertIn('api("/api/genotyping/providers"', js)
+        self.assertIn('api("/api/genotyping/cohorts"', js)
         self.assertIn('inspectGenotypingOrder(orderId)', js)
         self.assertIn('"/api/genotyping/orders"', js)
         self.assertIn('"/api/genotyping/orders/callback"', js)
@@ -1546,6 +1551,105 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertTrue(any(row["label"] == "resulted" and row["value"] >= 1 for row in dashboard_payload["sampleStatus"]))
         self.assertTrue(any(row["label"] == "closed" and row["value"] >= 1 for row in dashboard_payload["orderStatus"]))
         self.assertTrue(any(row["provider"] == "Transnetyx" for row in dashboard_payload["providers"]))
+
+    def test_provider_presets_and_cohort_assignment_views(self) -> None:
+        admin = self.login("admin@murisphere.local", "admin1234")
+        tech = self.login("tech@murisphere.local", "tech1234")
+
+        project = self.client.post(
+            "/api/projects",
+            headers=self.auth_headers(admin),
+            json={"labId": 1, "projectCode": "PRJ-GENO-001", "title": "Cohort Assignment", "status": "active", "targetAnimals": 6},
+        )
+        self.assertEqual(project.status_code, 201)
+        project_id = project.get_json()["id"]
+
+        assigned = self.client.post(
+            f"/api/projects/{project_id}/assign-cages",
+            headers=self.auth_headers(admin),
+            json={"cageIds": [1]},
+        )
+        self.assertEqual(assigned.status_code, 200)
+
+        with sqlite3.connect(appmod.DB_PATH) as conn:
+            now = datetime.now(UTC).isoformat()
+            conn.execute("UPDATE cages SET male_count = 1, female_count = 1 WHERE id = 1")
+            conn.execute(
+                """
+                INSERT INTO animals (animal_code, sex, dob, strain, genotype, status, cage_id, litter_id, sire_id, dam_id, created_at, updated_at)
+                VALUES (?, 'M', ?, 'C57BL/6J', 'Cre/+', 'Active', 1, NULL, NULL, NULL, ?, ?)
+                """,
+                ("COHORT-SIRE-001", date.today().isoformat(), now, now),
+            )
+            sire_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute(
+                """
+                INSERT INTO animals (animal_code, sex, dob, strain, genotype, status, cage_id, litter_id, sire_id, dam_id, created_at, updated_at)
+                VALUES (?, 'F', ?, 'C57BL/6J', 'fl/+', 'Active', 1, NULL, NULL, NULL, ?, ?)
+                """,
+                ("COHORT-DAM-001", date.today().isoformat(), now, now),
+            )
+            dam_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.commit()
+
+        pair = self.client.post(
+            "/api/breeding/pairs",
+            headers=self.auth_headers(tech),
+            json={"sireId": sire_id, "damId": dam_id, "cageId": 1, "notes": "cohort planning pair"},
+        )
+        self.assertEqual(pair.status_code, 201)
+
+        providers = self.client.get("/api/genotyping/providers", headers=self.auth_headers(tech))
+        self.assertEqual(providers.status_code, 200)
+        provider_payload = providers.get_json()
+        self.assertTrue(any(row["name"] == "Charles River" for row in provider_payload))
+        self.assertTrue(any("tube_id" in row["exportColumns"] for row in provider_payload if row["name"] == "Charles River"))
+
+        sample = self.client.post(
+            "/api/samples",
+            headers=self.auth_headers(tech),
+            json={"animalId": sire_id, "sampleType": "ear", "sampleCode": "CR-TUBE-001", "provider": "Charles River"},
+        )
+        self.assertEqual(sample.status_code, 201)
+        sample_id = sample.get_json()["id"]
+
+        order = self.client.post(
+            "/api/genotyping/orders",
+            headers=self.auth_headers(tech),
+            json={"provider": "Charles River", "projectId": project_id, "sampleIds": [sample_id], "markerPanel": "Mouse Line Verification"},
+        )
+        self.assertEqual(order.status_code, 201)
+        order_id = order.get_json()["id"]
+
+        template = self.client.get(f"/api/genotyping/orders/{order_id}/provider-template.csv", headers=self.auth_headers(tech))
+        self.assertEqual(template.status_code, 200)
+        template_text = template.data.decode("utf-8")
+        self.assertIn("tube_id", template_text.splitlines()[0])
+        self.assertIn("panel_name", template_text.splitlines()[0])
+        self.assertIn("CR-TUBE-001", template_text)
+
+        import_res = self.client.post(
+            f"/api/genotyping/orders/{order_id}/import-results",
+            headers=self.auth_headers(admin),
+            data={
+                "status": "received",
+                "file": (
+                    io.BytesIO(b"tube_id,result,panel_name\nCR-TUBE-001,Cre/+,Mouse Line Verification\n"),
+                    "charles_river_results.csv",
+                ),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(import_res.status_code, 200)
+        self.assertEqual(import_res.get_json()["updatedAnimals"], 1)
+
+        cohorts = self.client.get("/api/genotyping/cohorts", headers=self.auth_headers(tech))
+        self.assertEqual(cohorts.status_code, 200)
+        cohort_payload = cohorts.get_json()
+        self.assertTrue(any(row["projectCode"] == "PRJ-GENO-001" and row["readyAnimals"] >= 2 for row in cohort_payload["projects"]))
+        self.assertTrue(any(row["animalCode"] == "COHORT-SIRE-001" for row in cohort_payload["readyAnimals"]))
+        self.assertTrue(cohort_payload["breederSignals"])
+        self.assertIn("signal", cohort_payload["breederSignals"][0])
 
 
 if __name__ == "__main__":
