@@ -483,6 +483,9 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertIn('api("/api/genotyping/dashboard"', js)
         self.assertIn('api("/api/genotyping/providers"', js)
         self.assertIn('api("/api/genotyping/cohorts"', js)
+        self.assertIn('reserveCohortAnimalsBtn', js)
+        self.assertIn("/genotype-targets", js)
+        self.assertIn("/reserve-animals", js)
         self.assertIn('inspectGenotypingOrder(orderId)', js)
         self.assertIn('"/api/genotyping/orders"', js)
         self.assertIn('"/api/genotyping/orders/callback"', js)
@@ -1571,6 +1574,16 @@ class AppIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(assigned.status_code, 200)
 
+        targets = self.client.post(
+            f"/api/projects/{project_id}/genotype-targets",
+            headers=self.auth_headers(admin),
+            json={"targets": [{"genotypePattern": "Cre/+", "targetCount": 3, "priority": 1}]},
+        )
+        self.assertEqual(targets.status_code, 200)
+        listed_targets = self.client.get(f"/api/projects/{project_id}/genotype-targets", headers=self.auth_headers(tech))
+        self.assertEqual(listed_targets.status_code, 200)
+        self.assertEqual(listed_targets.get_json()[0]["genotype_pattern"], "Cre/+")
+
         with sqlite3.connect(appmod.DB_PATH) as conn:
             now = datetime.now(UTC).isoformat()
             conn.execute("UPDATE cages SET male_count = 1, female_count = 1 WHERE id = 1")
@@ -1643,13 +1656,41 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertEqual(import_res.status_code, 200)
         self.assertEqual(import_res.get_json()["updatedAnimals"], 1)
 
+        reserve = self.client.post(
+            f"/api/projects/{project_id}/reserve-animals",
+            headers=self.auth_headers(admin),
+            json={"animalIds": [sire_id]},
+        )
+        self.assertEqual(reserve.status_code, 200)
+        self.assertEqual(reserve.get_json()["reserved"], 1)
+        mismatch = self.client.post(
+            f"/api/projects/{project_id}/reserve-animals",
+            headers=self.auth_headers(admin),
+            json={"animalIds": [dam_id]},
+        )
+        self.assertEqual(mismatch.status_code, 200)
+        self.assertEqual(mismatch.get_json()["reserved"], 0)
+        self.assertEqual(mismatch.get_json()["conflicts"][0]["reason"], "target_mismatch")
+        assignments = self.client.get(f"/api/projects/{project_id}/assignments", headers=self.auth_headers(tech))
+        self.assertEqual(assignments.status_code, 200)
+        self.assertEqual(assignments.get_json()[0]["animal_code"], "COHORT-SIRE-001")
+
         cohorts = self.client.get("/api/genotyping/cohorts", headers=self.auth_headers(tech))
         self.assertEqual(cohorts.status_code, 200)
         cohort_payload = cohorts.get_json()
-        self.assertTrue(any(row["projectCode"] == "PRJ-GENO-001" and row["readyAnimals"] >= 2 for row in cohort_payload["projects"]))
+        self.assertTrue(any(row["projectCode"] == "PRJ-GENO-001" and row["matchedReadyAnimals"] >= 1 and row["reservedAnimals"] >= 1 for row in cohort_payload["projects"]))
         self.assertTrue(any(row["animalCode"] == "COHORT-SIRE-001" for row in cohort_payload["readyAnimals"]))
+        self.assertEqual(next(row for row in cohort_payload["projects"] if row["projectCode"] == "PRJ-GENO-001")["targetRules"][0]["genotypePattern"], "Cre/+")
         self.assertTrue(cohort_payload["breederSignals"])
         self.assertIn("signal", cohort_payload["breederSignals"][0])
+
+        release = self.client.post(
+            f"/api/projects/{project_id}/release-animals",
+            headers=self.auth_headers(admin),
+            json={"animalIds": [sire_id]},
+        )
+        self.assertEqual(release.status_code, 200)
+        self.assertEqual(release.get_json()["released"], 1)
 
 
 if __name__ == "__main__":

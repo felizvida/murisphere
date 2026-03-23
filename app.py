@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import csv
 from collections import deque
+import fnmatch
 import hashlib
 import io
 import json
@@ -154,6 +155,35 @@ def _csv_pick(row: dict[str, Any], keys: list[str]) -> str:
         if text:
             return text
     return ""
+
+
+def _match_genotype_pattern(genotype: str | None, pattern: str | None) -> bool:
+    genotype_text = str(genotype or "").strip().lower()
+    pattern_text = str(pattern or "").strip().lower()
+    if not pattern_text:
+        return False
+    if "*" in pattern_text or "?" in pattern_text:
+        return fnmatch.fnmatch(genotype_text, pattern_text)
+    return genotype_text == pattern_text or pattern_text in genotype_text
+
+
+def _project_target_map(project_ids: list[int]) -> dict[int, list[dict[str, Any]]]:
+    if not project_ids:
+        return {}
+    placeholders = ", ".join(["?"] * len(project_ids))
+    rows = db().execute(
+        f"""
+        SELECT id, project_id, genotype_pattern, target_count, priority, notes
+        FROM project_genotype_targets
+        WHERE project_id IN ({placeholders})
+        ORDER BY project_id ASC, priority ASC, id ASC
+        """,
+        project_ids,
+    ).fetchall()
+    targets: dict[int, list[dict[str, Any]]] = {}
+    for row in rows:
+        targets.setdefault(int(row["project_id"]), []).append(dict(row))
+    return targets
 
 
 def db_target() -> str:
@@ -1281,6 +1311,164 @@ def assign_project_cages(project_id: int) -> Response:
     db().commit()
     audit_log(g.user.user_id, "project", project_id, "assign_cages", None, {"cageIds": cage_ids, "assigned": assigned})
     return jsonify({"assigned": assigned})
+
+
+@app.get("/api/projects/<int:project_id>/genotype-targets")
+@require_auth()
+def project_genotype_targets(project_id: int) -> Response:
+    project = ensure_project_scope(project_id, g.user)
+    if not project:
+        return jsonify({"error": "Not found"}), 404
+    return jsonify(_project_target_map([project_id]).get(project_id, []))
+
+
+@app.post("/api/projects/<int:project_id>/genotype-targets")
+@require_auth(("PI", "Admin"))
+def set_project_genotype_targets(project_id: int) -> Response:
+    project = ensure_project_scope(project_id, g.user)
+    if not project:
+        return jsonify({"error": "Not found"}), 404
+    payload = request.get_json(force=True)
+    targets = payload.get("targets", [])
+    if not isinstance(targets, list):
+        return jsonify({"error": "targets must be a list"}), 400
+
+    before = _project_target_map([project_id]).get(project_id, [])
+    db().execute("DELETE FROM project_genotype_targets WHERE project_id = ?", (project_id,))
+    saved = 0
+    seen_patterns: set[str] = set()
+    for item in targets:
+        pattern = str(item.get("genotypePattern", "")).strip()
+        normalized = pattern.lower()
+        if not pattern or normalized in seen_patterns:
+            continue
+        seen_patterns.add(normalized)
+        db().execute(
+            """
+            INSERT INTO project_genotype_targets (project_id, genotype_pattern, target_count, priority, notes, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                project_id,
+                pattern,
+                max(0, int(item.get("targetCount", 0))),
+                max(1, int(item.get("priority", saved + 1))),
+                item.get("notes"),
+                now_iso(),
+            ),
+        )
+        saved += 1
+    db().commit()
+    after = _project_target_map([project_id]).get(project_id, [])
+    audit_log(g.user.user_id, "project", project_id, "set_genotype_targets", {"targets": before}, {"targets": after})
+    return jsonify({"saved": saved})
+
+
+@app.get("/api/projects/<int:project_id>/assignments")
+@require_auth()
+def project_animal_assignments(project_id: int) -> Response:
+    project = ensure_project_scope(project_id, g.user)
+    if not project:
+        return jsonify({"error": "Not found"}), 404
+    rows = db().execute(
+        """
+        SELECT pa.id, pa.status, pa.notes, pa.assigned_at,
+               a.id AS animal_id, a.animal_code, a.sex, a.genotype, a.status AS animal_status,
+               c.id AS cage_id, c.cage_code,
+               u.full_name AS assigned_by_name
+        FROM project_animal_assignments pa
+        JOIN animals a ON a.id = pa.animal_id
+        LEFT JOIN cages c ON c.id = a.cage_id
+        LEFT JOIN users u ON u.id = pa.assigned_by
+        WHERE pa.project_id = ?
+        ORDER BY pa.assigned_at DESC, pa.id DESC
+        """,
+        (project_id,),
+    ).fetchall()
+    return jsonify([dict(r) for r in rows])
+
+
+@app.post("/api/projects/<int:project_id>/reserve-animals")
+@require_auth(("PI", "Admin"))
+def reserve_project_animals(project_id: int) -> Response:
+    project = ensure_project_scope(project_id, g.user)
+    if not project:
+        return jsonify({"error": "Not found"}), 404
+    payload = request.get_json(force=True)
+    animal_ids = [int(x) for x in payload.get("animalIds", [])]
+    if not animal_ids:
+        return jsonify({"error": "Provide animalIds"}), 400
+    force = bool(payload.get("force", False))
+    notes = payload.get("notes")
+    targets = _project_target_map([project_id]).get(project_id, [])
+    reserved = 0
+    conflicts = []
+    for animal_id in animal_ids:
+        animal = ensure_animal_scope(animal_id, g.user)
+        if not animal:
+            conflicts.append({"animalId": animal_id, "reason": "not_found"})
+            continue
+        if animal["status"] != "Active":
+            conflicts.append({"animalId": animal_id, "reason": "not_active"})
+            continue
+        genotype = str(animal["genotype"] or "").strip()
+        if not genotype:
+            conflicts.append({"animalId": animal_id, "reason": "genotype_missing"})
+            continue
+        if targets and not any(_match_genotype_pattern(genotype, target["genotype_pattern"]) for target in targets) and not force:
+            conflicts.append({"animalId": animal_id, "reason": "target_mismatch"})
+            continue
+        existing = db().execute(
+            """
+            SELECT pa.project_id, pa.status, p.project_code
+            FROM project_animal_assignments pa
+            JOIN projects p ON p.id = pa.project_id
+            WHERE pa.animal_id = ? AND pa.status = 'reserved'
+            """,
+            (animal_id,),
+        ).fetchone()
+        if existing and int(existing["project_id"]) != project_id and not force:
+            conflicts.append({"animalId": animal_id, "reason": "already_reserved", "projectCode": existing["project_code"]})
+            continue
+        db().execute(
+            """
+            INSERT INTO project_animal_assignments (project_id, animal_id, status, notes, assigned_at, assigned_by)
+            VALUES (?, ?, 'reserved', ?, ?, ?)
+            ON CONFLICT(animal_id) DO UPDATE SET
+                project_id = excluded.project_id,
+                status = 'reserved',
+                notes = excluded.notes,
+                assigned_at = excluded.assigned_at,
+                assigned_by = excluded.assigned_by
+            """,
+            (project_id, animal_id, notes, now_iso(), g.user.user_id),
+        )
+        reserved += 1
+    db().commit()
+    audit_log(g.user.user_id, "project", project_id, "reserve_animals", None, {"animalIds": animal_ids, "reserved": reserved, "conflicts": conflicts})
+    return jsonify({"reserved": reserved, "conflicts": conflicts})
+
+
+@app.post("/api/projects/<int:project_id>/release-animals")
+@require_auth(("PI", "Admin"))
+def release_project_animals(project_id: int) -> Response:
+    project = ensure_project_scope(project_id, g.user)
+    if not project:
+        return jsonify({"error": "Not found"}), 404
+    payload = request.get_json(force=True)
+    animal_ids = [int(x) for x in payload.get("animalIds", [])]
+    if not animal_ids:
+        return jsonify({"error": "Provide animalIds"}), 400
+    released = 0
+    for animal_id in animal_ids:
+        result = db().execute(
+            "UPDATE project_animal_assignments SET status = 'released', notes = COALESCE(?, notes) WHERE project_id = ? AND animal_id = ? AND status = 'reserved'",
+            (payload.get("notes"), project_id, animal_id),
+        )
+        released += int(result.rowcount or 0)
+    db().commit()
+    audit_log(g.user.user_id, "project", project_id, "release_animals", None, {"animalIds": animal_ids, "released": released})
+    return jsonify({"released": released})
 
 
 @app.get("/api/cages")
@@ -2511,16 +2699,34 @@ def genotyping_cohort_insights() -> Response:
         """,
         project_params,
     ).fetchall()
+    project_ids = [int(row["id"]) for row in projects]
+    project_targets = _project_target_map(project_ids)
+
+    assignment_filters = ["pa.status = 'reserved'"]
+    assignment_params: list[Any] = []
+    if not is_admin(g.user):
+        assignment_filters.append("p.lab_id = ?")
+        assignment_params.append(g.user.lab_id)
+    assignment_rows = db().execute(
+        """
+        SELECT pa.project_id, pa.animal_id, pa.status, p.project_code
+        FROM project_animal_assignments pa
+        JOIN projects p ON p.id = pa.project_id
+        WHERE """
+        + " AND ".join(assignment_filters),
+        assignment_params,
+    ).fetchall()
+    assignment_by_animal = {int(row["animal_id"]): dict(row) for row in assignment_rows}
+    reserved_counts: dict[int, int] = {}
+    for row in assignment_rows:
+        reserved_counts[int(row["project_id"])] = reserved_counts.get(int(row["project_id"]), 0) + 1
 
     animal_rows = db().execute(
         f"""
-        SELECT a.id, a.animal_code, a.sex, a.genotype, a.cage_id, c.cage_code, l.name AS lab_name,
-               p.id AS project_id, p.project_code, p.title AS project_title
+        SELECT a.id, a.animal_code, a.sex, a.genotype, a.cage_id, c.cage_code, c.lab_id, l.name AS lab_name
         FROM animals a
         JOIN cages c ON c.id = a.cage_id
         JOIN labs l ON l.id = c.lab_id
-        LEFT JOIN project_cages pc ON pc.cage_id = c.id
-        LEFT JOIN projects p ON p.id = pc.project_id
         {cage_clause}
         {" AND " if cage_clause else " WHERE "} a.status = 'Active' AND COALESCE(a.genotype, '') <> ''
         ORDER BY a.id DESC
@@ -2529,49 +2735,72 @@ def genotyping_cohort_insights() -> Response:
         cage_params,
     ).fetchall()
 
-    animal_map: dict[int, dict[str, Any]] = {}
-    project_counts: dict[int, dict[str, Any]] = {}
+    animals: list[dict[str, Any]] = []
     for row in animal_rows:
-        animal = animal_map.setdefault(
-            int(row["id"]),
-            {
-                "id": int(row["id"]),
-                "animalCode": row["animal_code"],
-                "sex": row["sex"],
-                "genotype": row["genotype"],
-                "cageId": int(row["cage_id"]),
-                "cageCode": row["cage_code"],
-                "labName": row["lab_name"],
-                "projects": [],
-            },
-        )
-        if row["project_id"]:
-            animal["projects"].append({"id": int(row["project_id"]), "projectCode": row["project_code"], "title": row["project_title"]})
-            counts = project_counts.setdefault(int(row["project_id"]), {"readyAnimals": 0, "sexCounts": {"M": 0, "F": 0}, "genotypes": {}})
-            counts["readyAnimals"] += 1
-            counts["sexCounts"][row["sex"]] = counts["sexCounts"].get(row["sex"], 0) + 1
-            counts["genotypes"][row["genotype"]] = counts["genotypes"].get(row["genotype"], 0) + 1
+        animal = {
+            "id": int(row["id"]),
+            "animalCode": row["animal_code"],
+            "sex": row["sex"],
+            "genotype": row["genotype"],
+            "cageId": int(row["cage_id"]),
+            "cageCode": row["cage_code"],
+            "labId": int(row["lab_id"]),
+            "labName": row["lab_name"],
+            "matchingProjects": [],
+            "assignment": assignment_by_animal.get(int(row["id"])),
+        }
+        for project in projects:
+            if not is_admin(g.user) and int(g.user.lab_id or -1) != int(row["lab_id"]):
+                continue
+            if int(project["id"]) not in project_ids:
+                continue
+            targets = project_targets.get(int(project["id"]), [])
+            if targets and not any(_match_genotype_pattern(row["genotype"], target["genotype_pattern"]) for target in targets):
+                continue
+            animal["matchingProjects"].append(
+                {
+                    "id": int(project["id"]),
+                    "projectCode": project["project_code"],
+                    "title": project["title"],
+                    "labName": project["lab_name"],
+                }
+            )
+        animals.append(animal)
 
     cohort_projects = []
     for row in projects:
-        counts = project_counts.get(int(row["id"]), {"readyAnimals": 0, "sexCounts": {"M": 0, "F": 0}, "genotypes": {}})
-        ready = int(counts["readyAnimals"])
-        target = int(row["target_animals"] or 0)
-        pressure = max(target - ready, 0)
-        action = "assign_now" if ready > 0 and pressure > 0 else "monitor"
-        if ready == 0 and target > 0:
+        targets = project_targets.get(int(row["id"]), [])
+        matching_animals = [animal for animal in animals if any(project["id"] == int(row["id"]) for project in animal["matchingProjects"])]
+        ready = len(matching_animals)
+        reserved = reserved_counts.get(int(row["id"]), 0)
+        target_total = sum(int(target["target_count"] or 0) for target in targets) if targets else int(row["target_animals"] or 0)
+        pressure = max(target_total - reserved, 0)
+        if ready > reserved and pressure > 0:
+            action = "assign_now"
+        elif ready == 0 and target_total > 0:
             action = "breed_more"
+        else:
+            action = "monitor"
         cohort_projects.append(
             {
                 "id": int(row["id"]),
                 "projectCode": row["project_code"],
                 "title": row["title"],
                 "labName": row["lab_name"],
-                "targetAnimals": target,
-                "readyAnimals": ready,
+                "targetAnimals": int(row["target_animals"] or 0),
+                "targetRules": [
+                    {
+                        "id": int(target["id"]),
+                        "genotypePattern": target["genotype_pattern"],
+                        "targetCount": int(target["target_count"] or 0),
+                        "priority": int(target["priority"] or 1),
+                        "notes": target["notes"],
+                    }
+                    for target in targets
+                ],
+                "matchedReadyAnimals": ready,
+                "reservedAnimals": reserved,
                 "assignmentPressure": pressure,
-                "sexCounts": counts["sexCounts"],
-                "genotypes": counts["genotypes"],
                 "recommendedAction": action,
             }
         )
@@ -2589,7 +2818,7 @@ def genotyping_cohort_insights() -> Response:
         LEFT JOIN litters l ON l.cage_id = bp.cage_id
         LEFT JOIN animals a ON a.cage_id = bp.cage_id
         {pair_clause}
-        GROUP BY bp.id, bp.status, c.cage_code, sire.animal_code, dam.animal_code
+        GROUP BY bp.id, bp.status, c.id, c.cage_code, sire.animal_code, dam.animal_code
         ORDER BY bp.id DESC
         LIMIT 20
         """,
@@ -2628,8 +2857,7 @@ def genotyping_cohort_insights() -> Response:
             }
         )
 
-    animals = list(animal_map.values())
-    unassigned_ready = [animal for animal in animals if not animal["projects"]]
+    unassigned_ready = [animal for animal in animals if not animal["assignment"]]
     return jsonify(
         {
             "projects": cohort_projects[:12],

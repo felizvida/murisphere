@@ -331,9 +331,11 @@ That lets you learn the process as a pipeline instead of a single field.
 9. Download the provider template CSV for that order.
 10. Open the order reconciliation view and note how it distinguishes `ready to ship`, `in transit`, `with provider`, `missing result`, and `resulted`.
 11. Inspect the **Project Cohort Readiness** panel and find which project has the largest assignment deficit.
-12. In **Assignment Candidates**, open one genotype-ready animal and confirm whether it already sits on a project-assigned cage.
-13. Review **Breeder Decisions** and decide whether the active pair should keep producing, pause soon, or be reviewed for low output.
-14. If you are practicing as an admin, import a result CSV or use callback simulation and watch the order move toward completion.
+12. Add a genotype target rule for the selected project, for example `Cre/+` or `fl/*`.
+13. In **Assignment Candidates**, open one genotype-ready animal and confirm whether it matches the target rule.
+14. Select one or more matching animals and reserve them into the project cohort.
+15. Review **Breeder Decisions** and decide whether the active pair should keep producing, pause soon, or be reviewed for low output.
+16. If you are practicing as an admin, import a result CSV or use callback simulation and watch the order move toward completion.
 
 ## Exercise
 Choose one `resulted` sample and one `collected` sample.
@@ -344,6 +346,7 @@ Write down:
 - what the next handoff should be
 - whether the provider workflow is blocked by shipping, provider receipt, or missing result reconciliation
 - which project could use that animal first and whether breeder output should continue to meet demand
+- whether the animal actually matches the project's genotype target rule before you reserve it
 
 ## Fun application
 Pretend a PI needs to start a pilot cohort tomorrow. Your job is to identify which animals are closest to assignment.

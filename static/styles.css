@@ -621,6 +621,17 @@ button:disabled,
   align-items: start;
 }
 
+.cohort-toolbar {
+  margin-bottom: 0.55rem;
+}
+
+.timeline-actions {
+  display: inline-flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .planner-toolbar > * {
   flex: 1 1 150px;
 }

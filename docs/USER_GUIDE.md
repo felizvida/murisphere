@@ -35,6 +35,8 @@ Use the `Reports` tab for the samples/genotyping workspace.
 - import provider result CSV files back into the same order
 - inspect order reconciliation to see resulted, missing, in-transit, and blocked items
 - review cohort readiness by project and see genotype-ready assignment candidates
+- define project-specific genotype target rules such as `Cre/+` or `fl/*`
+- reserve genotype-ready animals directly into project cohorts and release them when plans change
 - inspect breeder decision signals that connect genotyping output back to colony planning
 - review order items and results
 - inspect Mendelian summaries and genotype alerts

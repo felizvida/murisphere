@@ -133,6 +133,18 @@ CREATE TABLE IF NOT EXISTS project_cages (
     FOREIGN KEY(cage_id) REFERENCES cages(id)
 );
 
+CREATE TABLE IF NOT EXISTS project_genotype_targets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    genotype_pattern TEXT NOT NULL,
+    target_count INTEGER NOT NULL DEFAULT 0,
+    priority INTEGER NOT NULL DEFAULT 1,
+    notes TEXT,
+    created_at TEXT NOT NULL,
+    UNIQUE(project_id, genotype_pattern),
+    FOREIGN KEY(project_id) REFERENCES projects(id)
+);
+
 CREATE TABLE IF NOT EXISTS litters (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     cage_id INTEGER NOT NULL,
@@ -162,6 +174,19 @@ CREATE TABLE IF NOT EXISTS animals (
     FOREIGN KEY(litter_id) REFERENCES litters(id),
     FOREIGN KEY(sire_id) REFERENCES animals(id),
     FOREIGN KEY(dam_id) REFERENCES animals(id)
+);
+
+CREATE TABLE IF NOT EXISTS project_animal_assignments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    animal_id INTEGER NOT NULL UNIQUE,
+    status TEXT NOT NULL DEFAULT 'reserved',
+    notes TEXT,
+    assigned_at TEXT NOT NULL,
+    assigned_by INTEGER,
+    FOREIGN KEY(project_id) REFERENCES projects(id),
+    FOREIGN KEY(animal_id) REFERENCES animals(id),
+    FOREIGN KEY(assigned_by) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS lifecycle_events (
@@ -779,6 +804,9 @@ CREATE INDEX IF NOT EXISTS idx_breeding_date ON breeding_events(event_date);
 CREATE INDEX IF NOT EXISTS idx_projects_lab ON projects(lab_id);
 CREATE INDEX IF NOT EXISTS idx_project_cages_project ON project_cages(project_id);
 CREATE INDEX IF NOT EXISTS idx_project_cages_cage ON project_cages(cage_id);
+CREATE INDEX IF NOT EXISTS idx_project_genotype_targets_project ON project_genotype_targets(project_id);
+CREATE INDEX IF NOT EXISTS idx_project_animal_assignments_project ON project_animal_assignments(project_id);
+CREATE INDEX IF NOT EXISTS idx_project_animal_assignments_status ON project_animal_assignments(status);
 CREATE INDEX IF NOT EXISTS idx_billing_entries_period ON billing_entries(period_start, period_end);
 CREATE INDEX IF NOT EXISTS idx_facility_requests_lab ON facility_requests(lab_id);
 CREATE INDEX IF NOT EXISTS idx_census_scan_session ON cage_census_scans(session_id);

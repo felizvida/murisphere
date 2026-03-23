@@ -32,6 +32,8 @@ const state = {
   genotypingDashboard: null,
   providerPresets: [],
   cohortInsights: null,
+  selectedCohortAnimalIds: [],
+  selectedCohortProjectId: null,
 };
 const PENDING_SCAN_KEY = "murisphere_pending_scan";
 const SCAN_BASE_KEY = "murisphere_scan_base_url";
@@ -74,6 +76,8 @@ function handleSessionExpired(message = "Session expired. Please sign in again."
   state.genotypingDashboard = null;
   state.providerPresets = [];
   state.cohortInsights = null;
+  state.selectedCohortAnimalIds = [];
+  state.selectedCohortProjectId = null;
   showMessage(message, "warn");
 }
 
@@ -924,6 +928,18 @@ function renderProviderPresets(presets) {
   `;
 }
 
+function cohortAnimalSelected(animalId) {
+  return state.selectedCohortAnimalIds.includes(Number(animalId));
+}
+
+function setCohortAnimalSelected(animalId, selected) {
+  const id = Number(animalId);
+  const next = new Set(state.selectedCohortAnimalIds.map(Number));
+  if (selected) next.add(id);
+  else next.delete(id);
+  state.selectedCohortAnimalIds = Array.from(next.values());
+}
+
 function renderCohortInsights(insights) {
   const host = el("cohortInsights");
   if (!host) return;
@@ -931,19 +947,38 @@ function renderCohortInsights(insights) {
     host.innerHTML = "";
     return;
   }
+  const canManageProjects = roleAllows(["PI", "Admin"]);
+  const projects = insights.projects || [];
+  if (!state.selectedCohortProjectId || !projects.some((row) => Number(row.id) === Number(state.selectedCohortProjectId))) {
+    state.selectedCohortProjectId = projects.length ? Number(projects[0].id) : null;
+  }
+  const activeProject = projects.find((row) => Number(row.id) === Number(state.selectedCohortProjectId)) || null;
   const projectBars = (insights.projects || []).slice(0, 8).map((row) => ({
     label: row.projectCode,
-    value: row.readyAnimals,
+    value: row.matchedReadyAnimals,
     color: row.assignmentPressure > 0 ? "#eb9c44" : "#18a172",
   }));
-  const readyAnimals = (insights.readyAnimals || [])
+  const candidateAnimals = (insights.readyAnimals || []).filter((animal) =>
+    activeProject
+      ? (animal.matchingProjects || []).some((project) => Number(project.id) === Number(activeProject.id)) ||
+        Number(animal.assignment?.project_id || 0) === Number(activeProject.id)
+      : true
+  );
+  const readyAnimals = candidateAnimals
     .slice(0, 8)
     .map(
       (animal) => `<div class="timeline-item">
         <strong><button type="button" class="table-link" data-sample-animal-id="${esc(animal.id)}">${esc(animal.animalCode)}</button></strong>
         <span><button type="button" class="table-link" data-sample-cage-id="${esc(animal.cageId)}">${esc(animal.cageCode)}</button> · ${esc(
           animal.genotype
-        )} · ${animal.projects?.length ? esc(animal.projects.map((project) => project.projectCode).join(", ")) : "unassigned"}</span>
+        )} · ${
+          animal.matchingProjects?.length ? esc(animal.matchingProjects.map((project) => project.projectCode).join(", ")) : "no match"
+        }${animal.assignment ? ` · reserved to ${esc(animal.assignment.project_code)}` : ""}</span>
+        <span class="timeline-actions">
+          <button type="button" class="table-link" data-cohort-animal-toggle="${esc(animal.id)}">${
+            cohortAnimalSelected(animal.id) ? "Deselect" : "Select"
+          }</button>
+        </span>
       </div>`
     )
     .join("");
@@ -967,6 +1002,15 @@ function renderCohortInsights(insights) {
       </article>`
     )
     .join("");
+  const targetRules = (activeProject?.targetRules || [])
+    .map(
+      (rule) => `<div class="timeline-item">
+        <strong>${esc(rule.genotypePattern)}</strong>
+        <span>${esc(rule.targetCount)} animals · priority ${esc(rule.priority)}</span>
+        <span class="timeline-actions"><button type="button" class="table-link" data-target-remove-id="${esc(rule.id)}">Remove</button></span>
+      </div>`
+    )
+    .join("");
   host.innerHTML = `
     <div class="detail-grid">
       ${chartCard(
@@ -975,7 +1019,12 @@ function renderCohortInsights(insights) {
         projectBars.length ? drawBars(projectBars, { height: 132 }) : `<p class="hint">No active project cohorts are visible yet.</p>`,
         (insights.projects || [])
           .slice(0, 8)
-          .map((row) => `<span class="legend-item">${esc(row.projectCode)} ${esc(row.readyAnimals)} ready / ${esc(row.targetAnimals)} target</span>`)
+          .map(
+            (row) =>
+              `<span class="legend-item">${esc(row.projectCode)} ${esc(row.matchedReadyAnimals)} match / ${esc(row.reservedAnimals)} reserved / ${esc(
+                row.targetAnimals
+              )} target</span>`
+          )
           .join("")
       )}
       <article class="viz-card">
@@ -990,6 +1039,41 @@ function renderCohortInsights(insights) {
       </article>
       <article class="viz-card">
         <h4>Assignment Pressure</h4>
+        <div class="grid-form compact-form cohort-toolbar">
+          <label>Project
+            <select id="cohortProjectSelect">
+              ${
+                projects.length
+                  ? projects
+                      .map(
+                        (row) =>
+                          `<option value="${esc(row.id)}" ${Number(row.id) === Number(state.selectedCohortProjectId) ? "selected" : ""}>${esc(
+                            row.projectCode
+                          )} · ${esc(row.title)}</option>`
+                      )
+                      .join("")
+                  : `<option value="">No projects available</option>`
+              }
+            </select>
+          </label>
+          <label>Genotype Target<input id="cohortTargetPattern" placeholder="e.g., Cre/+ or fl/*" /></label>
+          <label>Target Count<input id="cohortTargetCount" type="number" min="0" value="4" /></label>
+          <div class="learning-actions">
+            <button type="button" id="saveCohortTargetBtn" ${canManageProjects ? "" : "disabled title='Requires PI/Admin role'"}>Add Target Rule</button>
+            <button type="button" id="reserveCohortAnimalsBtn" ${canManageProjects ? "" : "disabled title='Requires PI/Admin role'"}>Reserve Selected</button>
+            <button type="button" id="releaseCohortAnimalsBtn" ${canManageProjects ? "" : "disabled title='Requires PI/Admin role'"}>Release Selected</button>
+          </div>
+        </div>
+        ${
+          activeProject
+            ? `<div class="learning-copy">Selected project: ${esc(activeProject.projectCode)} · matched ${esc(
+                activeProject.matchedReadyAnimals
+              )} · reserved ${esc(activeProject.reservedAnimals)} · deficit ${esc(activeProject.assignmentPressure)} · selected ${
+                state.selectedCohortAnimalIds.length
+              }</div>`
+            : `<p class="hint">No project selected.</p>`
+        }
+        <div class="timeline-list">${targetRules || `<div class="hint">No genotype target rules yet. Add one above or rely on broad target count only.</div>`}</div>
         <div class="timeline-list">
           ${
             (insights.projects || [])
@@ -999,7 +1083,7 @@ function renderCohortInsights(insights) {
                   row.projectCode
                 )}</button></strong><span>${esc(row.recommendedAction)} · deficit ${esc(
                   row.assignmentPressure
-                )}</span></div>`
+                )} · reserved ${esc(row.reservedAnimals)}</span></div>`
               )
               .join("") || `<div class="hint">No project demand context is visible yet.</div>`
           }
@@ -1435,6 +1519,9 @@ async function loadSampleWorkspace() {
   state.providerPresets = presets;
   state.cohortInsights = cohorts;
   state.selectedSampleIds = state.selectedSampleIds.filter((id) => samples.some((row) => Number(row.id) === Number(id)));
+  state.selectedCohortAnimalIds = state.selectedCohortAnimalIds.filter((id) =>
+    (cohorts.readyAnimals || []).some((row) => Number(row.id) === Number(id))
+  );
   if (!state.selectedGenotypingOrderId || !orders.some((row) => Number(row.id) === Number(state.selectedGenotypingOrderId))) {
     state.selectedGenotypingOrderId = orders.length ? Number(orders[0].id) : null;
   }
@@ -1824,7 +1911,7 @@ function renderCageInspector(detail) {
   `;
 }
 
-function renderProjectInspector(project, cages) {
+function renderProjectInspector(project, cages, targets = [], assignments = []) {
   if (!project) {
     el("projectInspector").innerHTML = "";
     return;
@@ -1853,7 +1940,49 @@ function renderProjectInspector(project, cages) {
           `<div class="progress-wrap"><div class="progress-bar"><span style="width:${progress}%"></span></div><div class="viz-sub">${assigned} assigned / target ${target}</div></div>`,
           `<span class="legend-item">${esc(project.lab_name)}</span>`
         )}
-        ${chartCard("Cage Status Mix", "Assigned cage breeding status", drawBars(statusBars, { height: 120 }), statusBars.map((x) => `<span class="legend-item">${esc(x.label)} ${esc(x.value)}</span>`).join(""))}
+        ${chartCard(
+          "Cage Status Mix",
+          "Assigned cage breeding status",
+          drawBars(statusBars, { height: 120 }),
+          statusBars.map((x) => `<span class="legend-item">${esc(x.label)} ${esc(x.value)}</span>`).join("")
+        )}
+      </div>
+      <div class="detail-grid">
+        <article class="viz-card">
+          <h4>Genotype Targets</h4>
+          <div class="timeline-list">
+            ${
+              targets.length
+                ? targets
+                    .map(
+                      (row) =>
+                        `<div class="timeline-item"><strong>${esc(row.genotype_pattern)}</strong><span>${esc(row.target_count)} animals · priority ${esc(
+                          row.priority
+                        )}</span></div>`
+                    )
+                    .join("")
+                : `<div class="hint">No genotype rules saved for this project yet.</div>`
+            }
+          </div>
+        </article>
+        <article class="viz-card">
+          <h4>Reserved Animals</h4>
+          <div class="timeline-list">
+            ${
+              assignments.length
+                ? assignments
+                    .slice(0, 8)
+                    .map(
+                      (row) =>
+                        `<div class="timeline-item"><strong>${esc(row.animal_code)}</strong><span>${esc(row.genotype || "Pending")} · ${esc(
+                          row.cage_code || "N/A"
+                        )} · ${esc(row.status)}</span></div>`
+                    )
+                    .join("")
+                : `<div class="hint">No animals reserved to this project yet.</div>`
+            }
+          </div>
+        </article>
       </div>
       <article class="viz-card">
         <h4>Assigned Cages</h4>
@@ -1892,9 +2021,13 @@ async function openCageInspector(cageId) {
 async function openProjectInspector(projectId) {
   if (!projectId) return;
   const project = state.projects.find((p) => Number(p.id) === Number(projectId));
-  const cages = await api(`/api/projects/${projectId}/cages`, { headers: headers(false) });
+  const [cages, targets, assignments] = await Promise.all([
+    api(`/api/projects/${projectId}/cages`, { headers: headers(false) }),
+    api(`/api/projects/${projectId}/genotype-targets`, { headers: headers(false) }),
+    api(`/api/projects/${projectId}/assignments`, { headers: headers(false) }),
+  ]);
   activateTab("projects");
-  renderProjectInspector(project, cages);
+  renderProjectInspector(project, cages, targets, assignments);
   showMessage(`Loaded project ${project?.project_code || projectId}`, "success");
 }
 
@@ -3178,6 +3311,101 @@ async function init() {
   });
 
   el("cohortInsights").addEventListener("click", (evt) => {
+    const reserveNode = evt.target.closest("button#reserveCohortAnimalsBtn");
+    if (reserveNode) {
+      const projectId = Number(el("cohortProjectSelect")?.value || state.selectedCohortProjectId || 0);
+      withAction("Animal reservation failed", async () => {
+        if (!projectId) throw new Error("Select a project first");
+        if (!state.selectedCohortAnimalIds.length) throw new Error("Select at least one genotype-ready animal");
+        const result = await api(`/api/projects/${projectId}/reserve-animals`, {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify({ animalIds: state.selectedCohortAnimalIds }),
+        });
+        await loadSampleWorkspace();
+        showMessage(`Reserved ${result.reserved} animals for the selected project.`, "success");
+      }).catch(() => undefined);
+      return;
+    }
+    const releaseNode = evt.target.closest("button#releaseCohortAnimalsBtn");
+    if (releaseNode) {
+      const projectId = Number(el("cohortProjectSelect")?.value || state.selectedCohortProjectId || 0);
+      withAction("Animal release failed", async () => {
+        if (!projectId) throw new Error("Select a project first");
+        if (!state.selectedCohortAnimalIds.length) throw new Error("Select at least one reserved animal");
+        const result = await api(`/api/projects/${projectId}/release-animals`, {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify({ animalIds: state.selectedCohortAnimalIds }),
+        });
+        await loadSampleWorkspace();
+        showMessage(`Released ${result.released} animals from the selected project.`, "success");
+      }).catch(() => undefined);
+      return;
+    }
+    const saveTargetNode = evt.target.closest("button#saveCohortTargetBtn");
+    if (saveTargetNode) {
+      const projectId = Number(el("cohortProjectSelect")?.value || state.selectedCohortProjectId || 0);
+      withAction("Project genotype target update failed", async () => {
+        if (!projectId) throw new Error("Select a project first");
+        const pattern = el("cohortTargetPattern").value.trim();
+        if (!pattern) throw new Error("Enter a genotype target pattern");
+        const current = (state.cohortInsights?.projects || []).find((row) => Number(row.id) === projectId)?.targetRules || [];
+        const targets = current.map((row) => ({
+          genotypePattern: row.genotypePattern,
+          targetCount: row.targetCount,
+          priority: row.priority,
+          notes: row.notes || "",
+        }));
+        targets.push({
+          genotypePattern: pattern,
+          targetCount: Number(el("cohortTargetCount").value || 0),
+          priority: targets.length + 1,
+          notes: "",
+        });
+        await api(`/api/projects/${projectId}/genotype-targets`, {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify({ targets }),
+        });
+        el("cohortTargetPattern").value = "";
+        await loadSampleWorkspace();
+        showMessage("Project genotype target saved.", "success");
+      }).catch(() => undefined);
+      return;
+    }
+    const removeTargetNode = evt.target.closest("button[data-target-remove-id]");
+    if (removeTargetNode) {
+      const targetId = Number(removeTargetNode.getAttribute("data-target-remove-id"));
+      const projectId = Number(el("cohortProjectSelect")?.value || state.selectedCohortProjectId || 0);
+      withAction("Project genotype target removal failed", async () => {
+        if (!projectId) throw new Error("Select a project first");
+        const current = (state.cohortInsights?.projects || []).find((row) => Number(row.id) === projectId)?.targetRules || [];
+        const targets = current
+          .filter((row) => Number(row.id) !== targetId)
+          .map((row, idx) => ({
+            genotypePattern: row.genotypePattern,
+            targetCount: row.targetCount,
+            priority: idx + 1,
+            notes: row.notes || "",
+          }));
+        await api(`/api/projects/${projectId}/genotype-targets`, {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify({ targets }),
+        });
+        await loadSampleWorkspace();
+        showMessage("Project genotype target removed.", "success");
+      }).catch(() => undefined);
+      return;
+    }
+    const toggleNode = evt.target.closest("button[data-cohort-animal-toggle]");
+    if (toggleNode) {
+      const animalId = Number(toggleNode.getAttribute("data-cohort-animal-toggle"));
+      setCohortAnimalSelected(animalId, !cohortAnimalSelected(animalId));
+      renderCohortInsights(state.cohortInsights);
+      return;
+    }
     const projectNode = evt.target.closest("button[data-project-id]");
     if (projectNode) {
       withAction("Project detail load failed", () => openProjectInspector(Number(projectNode.getAttribute("data-project-id")))).catch(() => undefined);
@@ -3191,6 +3419,13 @@ async function init() {
     const animalNode = evt.target.closest("button[data-sample-animal-id]");
     if (!animalNode) return;
     withAction("Animal pedigree load failed", () => openLearningPedigree(Number(animalNode.getAttribute("data-sample-animal-id")))).catch(() => undefined);
+  });
+
+  el("cohortInsights").addEventListener("change", (evt) => {
+    const projectSelect = evt.target.closest("select#cohortProjectSelect");
+    if (!projectSelect) return;
+    state.selectedCohortProjectId = Number(projectSelect.value || 0) || null;
+    renderCohortInsights(state.cohortInsights);
   });
 
   el("recommendationPanel").addEventListener("click", (evt) => {
