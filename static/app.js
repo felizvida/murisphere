@@ -2048,7 +2048,7 @@ function renderCageInspector(detail) {
   `;
 }
 
-function renderProjectInspector(project, cages, targets = [], assignments = [], timeline = null) {
+function renderProjectInspector(project, cages, targets = [], assignments = [], timeline = null, closeouts = []) {
   if (!project) {
     el("projectInspector").innerHTML = "";
     return;
@@ -2074,6 +2074,26 @@ function renderProjectInspector(project, cages, targets = [], assignments = [], 
     color: row.color || "#64748b",
   }));
   const completion = timeline?.completion || null;
+  const closeoutRows = (closeouts || [])
+    .slice(0, 6)
+    .map(
+      (row) => `<div class="timeline-item">
+        <strong>${esc(row.status)}</strong>
+        <span>${esc(row.completed_animals)} animals · ${esc(row.closed_by_name || "Unknown")} · ${esc(fmtDate(row.closed_at))}</span>
+        <span>${esc(row.summary)}</span>
+        ${
+          row.attachments?.length
+            ? `<span class="timeline-actions">${row.attachments
+                .map(
+                  (att) =>
+                    `<button type="button" class="table-link" data-project-closeout-attachment-id="${esc(att.id)}">${esc(att.filename)}</button>`
+                )
+                .join("")}</span>`
+            : ""
+        }
+      </div>`
+    )
+    .join("");
   const timelineRows = (timeline?.events || [])
     .map(
       (row) => `<div class="timeline-item"><strong>${esc(row.animalCode)}</strong><span>${esc(row.fromStatus || "new")} → ${esc(
@@ -2164,6 +2184,30 @@ function renderProjectInspector(project, cages, targets = [], assignments = [], 
         <div class="timeline-list">${timelineRows || `<div class="hint">No assignment events recorded yet.</div>`}</div>
       </article>
       <article class="viz-card">
+        <h4>Cohort Closeout</h4>
+        <div class="grid-form compact-form cohort-toolbar">
+          <label>Status
+            <select id="projectCloseoutStatus">
+              <option value="completed">Completed</option>
+              <option value="partial">Partial</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
+          <label>Completed Animals<input id="projectCloseoutCompletedAnimals" type="number" min="0" value="${esc(
+            completion?.completedAnimals || 0
+          )}" /></label>
+          <label>Summary<input id="projectCloseoutSummary" placeholder="e.g., Imaging cohort completed and archived" /></label>
+          <label>Notes<input id="projectCloseoutNotes" placeholder="Optional study outcome or disposition notes" /></label>
+          <label>Attachment<input id="projectCloseoutFile" type="file" /></label>
+          <div class="learning-actions">
+            <button type="button" id="saveProjectCloseoutBtn" data-project-closeout-project-id="${esc(project.id)}" ${
+              roleAllows(["PI", "Admin"]) ? "" : "disabled title='Requires PI/Admin role'"
+            }>Record Closeout</button>
+          </div>
+        </div>
+        <div class="timeline-list">${closeoutRows || `<div class="hint">No project closeouts recorded yet.</div>`}</div>
+      </article>
+      <article class="viz-card">
         <h4>Assigned Cages</h4>
         <table class="table compact-table">
           <thead><tr><th>Cage</th><th>Strain</th><th>Genotype</th><th>Status</th><th>M/F</th></tr></thead>
@@ -2200,14 +2244,15 @@ async function openCageInspector(cageId) {
 async function openProjectInspector(projectId) {
   if (!projectId) return;
   const project = state.projects.find((p) => Number(p.id) === Number(projectId));
-  const [cages, targets, assignments, timeline] = await Promise.all([
+  const [cages, targets, assignments, timeline, closeouts] = await Promise.all([
     api(`/api/projects/${projectId}/cages`, { headers: headers(false) }),
     api(`/api/projects/${projectId}/genotype-targets`, { headers: headers(false) }),
     api(`/api/projects/${projectId}/assignments`, { headers: headers(false) }),
     api(`/api/projects/${projectId}/assignment-timeline`, { headers: headers(false) }),
+    api(`/api/projects/${projectId}/closeouts`, { headers: headers(false) }),
   ]);
   activateTab("projects");
-  renderProjectInspector(project, cages, targets, assignments, timeline);
+  renderProjectInspector(project, cages, targets, assignments, timeline, closeouts);
   showMessage(`Loaded project ${project?.project_code || projectId}`, "success");
 }
 
@@ -3368,6 +3413,49 @@ async function init() {
   });
 
   el("projectInspector").addEventListener("click", (evt) => {
+    const closeoutNode = evt.target.closest("button#saveProjectCloseoutBtn");
+    if (closeoutNode) {
+      withAction("Project closeout save failed", async () => {
+        const projectId = Number(closeoutNode.getAttribute("data-project-closeout-project-id") || 0);
+        if (!projectId) throw new Error("Select a project first");
+        const summary = el("projectCloseoutSummary")?.value.trim() || "";
+        if (!summary) throw new Error("Enter a closeout summary");
+        const result = await api(`/api/projects/${projectId}/closeouts`, {
+          method: "POST",
+          headers: headers(),
+          body: JSON.stringify({
+            status: el("projectCloseoutStatus")?.value || "completed",
+            completedAnimals: Number(el("projectCloseoutCompletedAnimals")?.value || 0),
+            summary,
+            notes: el("projectCloseoutNotes")?.value.trim() || "",
+          }),
+        });
+        const file = el("projectCloseoutFile")?.files?.[0];
+        if (file) {
+          const fd = new FormData();
+          fd.append("entityType", "project_closeout");
+          fd.append("entityId", String(result.id));
+          fd.append("file", file);
+          const res = await fetch("/api/attachments", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: state.token ? { Authorization: `Bearer ${state.token}` } : {},
+            body: fd,
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || "Closeout attachment upload failed");
+        }
+        await loadProjects();
+        await openProjectInspector(projectId);
+        showMessage("Project closeout recorded.", "success");
+      }).catch(() => undefined);
+      return;
+    }
+    const attachmentNode = evt.target.closest("button[data-project-closeout-attachment-id]");
+    if (attachmentNode) {
+      window.open(`/api/attachments/${attachmentNode.getAttribute("data-project-closeout-attachment-id")}/download`, "_blank", "noopener");
+      return;
+    }
     const cageNode = evt.target.closest("button[data-cage-id]");
     if (!cageNode) return;
     withAction("Cage detail load failed", () => openCageInspector(Number(cageNode.getAttribute("data-cage-id")))).catch(() => undefined);

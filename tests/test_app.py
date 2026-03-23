@@ -487,11 +487,13 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertIn('reserveCohortAnimalsBtn', js)
         self.assertIn("applyCohortTemplateBtn", js)
         self.assertIn("advanceCohortStatusBtn", js)
+        self.assertIn("saveProjectCloseoutBtn", js)
         self.assertIn("/genotype-targets", js)
         self.assertIn("/apply-target-template", js)
         self.assertIn("/reserve-animals", js)
         self.assertIn("/assignment-status", js)
         self.assertIn("/assignment-timeline", js)
+        self.assertIn("/closeouts", js)
         self.assertIn('inspectGenotypingOrder(orderId)', js)
         self.assertIn('"/api/genotyping/orders"', js)
         self.assertIn('"/api/genotyping/orders/callback"', js)
@@ -1751,6 +1753,36 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertEqual(consumed_payload["completion"]["state"], "in_progress")
         self.assertTrue(any(row["key"] == "consumed" and row["value"] == 1 for row in consumed_payload["dispositionFlow"]))
 
+        closeout = self.client.post(
+            f"/api/projects/{project_id}/closeouts",
+            headers=self.auth_headers(admin),
+            json={
+                "status": "partial",
+                "completedAnimals": 1,
+                "summary": "Pilot imaging cohort completed for the first subject.",
+                "notes": "Initial microscopy run completed; waiting for second animal.",
+            },
+        )
+        self.assertEqual(closeout.status_code, 201)
+        closeout_id = closeout.get_json()["id"]
+        closeout_attachment = self.client.post(
+            "/api/attachments",
+            headers=self.auth_headers(admin),
+            data={
+                "entityType": "project_closeout",
+                "entityId": str(closeout_id),
+                "file": (io.BytesIO(b"closeout attachment"), "closeout.txt"),
+            },
+            content_type="multipart/form-data",
+        )
+        self.assertEqual(closeout_attachment.status_code, 201)
+        closeouts = self.client.get(f"/api/projects/{project_id}/closeouts", headers=self.auth_headers(tech))
+        self.assertEqual(closeouts.status_code, 200)
+        closeout_payload = closeouts.get_json()
+        self.assertEqual(closeout_payload[0]["summary"], "Pilot imaging cohort completed for the first subject.")
+        self.assertEqual(closeout_payload[0]["attachment_count"], 1)
+        self.assertEqual(closeout_payload[0]["attachments"][0]["filename"], "closeout.txt")
+
         cohorts = self.client.get("/api/genotyping/cohorts", headers=self.auth_headers(tech))
         self.assertEqual(cohorts.status_code, 200)
         cohort_payload = cohorts.get_json()
@@ -1773,6 +1805,38 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertEqual(released_timeline.status_code, 200)
         self.assertGreaterEqual(released_timeline.get_json()["statusCounts"]["released"], 1)
         self.assertEqual(released_timeline.get_json()["completion"]["completedAnimals"], 1)
+
+        with sqlite3.connect(appmod.DB_PATH) as conn:
+            now = datetime.now(UTC).isoformat()
+            conn.execute(
+                """
+                INSERT INTO animals (animal_code, sex, dob, strain, genotype, status, cage_id, litter_id, sire_id, dam_id, created_at, updated_at)
+                VALUES (?, 'M', ?, 'C57BL/6J', 'Cre/+', 'Active', 1, NULL, NULL, NULL, ?, ?)
+                """,
+                ("COHORT-STALLED-001", date.today().isoformat(), now, now),
+            )
+            stalled_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.commit()
+
+        reserve_stalled = self.client.post(
+            f"/api/projects/{project_id}/reserve-animals",
+            headers=self.auth_headers(admin),
+            json={"animalIds": [stalled_id]},
+        )
+        self.assertEqual(reserve_stalled.status_code, 200)
+        status_stalled = self.client.post(
+            f"/api/projects/{project_id}/assignment-status",
+            headers=self.auth_headers(admin),
+            json={"animalIds": [stalled_id], "status": "assigned"},
+        )
+        self.assertEqual(status_stalled.status_code, 200)
+        with sqlite3.connect(appmod.DB_PATH) as conn:
+            aged = (datetime.now(UTC) - timedelta(days=4)).isoformat()
+            conn.execute("UPDATE project_animal_assignments SET assigned_at = ? WHERE animal_id = ?", (aged, stalled_id))
+            conn.commit()
+        alert_feed = self.client.get("/api/alerts/feed?status=active", headers=self.auth_headers(admin))
+        self.assertEqual(alert_feed.status_code, 200)
+        self.assertTrue(any(row["category"] == "cohort" and "COHORT-STALLED-001" in row["message"] for row in alert_feed.get_json()))
 
 
 if __name__ == "__main__":

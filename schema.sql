@@ -228,6 +228,20 @@ CREATE TABLE IF NOT EXISTS project_animal_assignment_events (
     FOREIGN KEY(actor_user_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS project_cohort_closeouts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('completed', 'partial', 'cancelled')),
+    completed_animals INTEGER NOT NULL DEFAULT 0,
+    summary TEXT NOT NULL,
+    notes TEXT,
+    closed_by INTEGER,
+    closed_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(project_id) REFERENCES projects(id),
+    FOREIGN KEY(closed_by) REFERENCES users(id)
+);
+
 CREATE TABLE IF NOT EXISTS lifecycle_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     cage_id INTEGER NOT NULL,
@@ -850,6 +864,7 @@ CREATE INDEX IF NOT EXISTS idx_project_animal_assignments_project ON project_ani
 CREATE INDEX IF NOT EXISTS idx_project_animal_assignments_status ON project_animal_assignments(status);
 CREATE INDEX IF NOT EXISTS idx_project_assignment_events_project ON project_animal_assignment_events(project_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_project_assignment_events_animal ON project_animal_assignment_events(animal_id);
+CREATE INDEX IF NOT EXISTS idx_project_closeouts_project ON project_cohort_closeouts(project_id, closed_at);
 CREATE INDEX IF NOT EXISTS idx_billing_entries_period ON billing_entries(period_start, period_end);
 CREATE INDEX IF NOT EXISTS idx_facility_requests_lab ON facility_requests(lab_id);
 CREATE INDEX IF NOT EXISTS idx_census_scan_session ON cage_census_scans(session_id);

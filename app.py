@@ -497,6 +497,44 @@ def _project_assignment_timeline_payload(project_id: int) -> dict[str, Any]:
     }
 
 
+def _project_closeouts(project_id: int) -> list[dict[str, Any]]:
+    rows = db().execute(
+        """
+        SELECT pc.id, pc.status, pc.completed_animals, pc.summary, pc.notes, pc.closed_at, pc.created_at,
+               u.full_name AS closed_by_name
+        FROM project_cohort_closeouts pc
+        LEFT JOIN users u ON u.id = pc.closed_by
+        WHERE pc.project_id = ?
+        ORDER BY pc.closed_at DESC, pc.id DESC
+        """,
+        (project_id,),
+    ).fetchall()
+    if not rows:
+        return []
+    closeout_ids = [str(int(row["id"])) for row in rows]
+    attachments = db().execute(
+        """
+        SELECT id, entity_id, filename, content_type, created_at
+        FROM record_attachments
+        WHERE entity_type = 'project_closeout' AND entity_id IN ("""
+        + ", ".join(["?"] * len(closeout_ids))
+        + """)
+        ORDER BY id DESC
+        """,
+        closeout_ids,
+    ).fetchall()
+    by_closeout: dict[str, list[dict[str, Any]]] = {}
+    for row in attachments:
+        by_closeout.setdefault(str(row["entity_id"]), []).append(dict(row))
+    payload = []
+    for row in rows:
+        item = dict(row)
+        item["attachments"] = by_closeout.get(str(item["id"]), [])
+        item["attachment_count"] = len(item["attachments"])
+        payload.append(item)
+    return payload
+
+
 def db_target() -> str:
     return os.getenv("MURISPHERE_DATABASE_URL", DB_PATH)
 
@@ -699,6 +737,25 @@ def _apply_schema_migrations(conn: storage.Connection) -> None:
     litter_cols = set(storage.table_columns(conn, "litters"))
     if "weaned_on" not in litter_cols:
         conn.execute("ALTER TABLE litters ADD COLUMN weaned_on TEXT")
+    if not storage.table_columns(conn, "project_cohort_closeouts"):
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS project_cohort_closeouts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id INTEGER NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('completed', 'partial', 'cancelled')),
+                completed_animals INTEGER NOT NULL DEFAULT 0,
+                summary TEXT NOT NULL,
+                notes TEXT,
+                closed_by INTEGER,
+                closed_at TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(project_id) REFERENCES projects(id),
+                FOREIGN KEY(closed_by) REFERENCES users(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_project_closeouts_project ON project_cohort_closeouts(project_id, closed_at);
+            """
+        )
 
 
 def audit_log(actor_id: int | None, entity_type: str, entity_id: int | str, action: str, before: Any, after: Any) -> None:
@@ -1011,6 +1068,56 @@ def derive_active_alerts(user: AuthContext) -> list[dict[str, Any]]:
                 "title": "Open Vet Case",
                 "message": f"Cage {r['cage_code']} has open vet case #{r['id']}.",
                 "meta": {"caseId": r["id"], "severity": r["severity"]},
+                "seen_at": now,
+            }
+        )
+
+    stalled_rows = db().execute(
+        """
+        SELECT pa.id, pa.project_id, pa.status, pa.assigned_at,
+               p.project_code, p.lab_id,
+               a.animal_code, a.cage_id, c.cage_code
+        FROM project_animal_assignments pa
+        JOIN projects p ON p.id = pa.project_id
+        JOIN animals a ON a.id = pa.animal_id
+        LEFT JOIN cages c ON c.id = a.cage_id
+        WHERE pa.status IN ('assigned', 'shipped')
+        """
+        + ("" if is_admin(user) else " AND p.lab_id = ? "),
+        () if is_admin(user) else (user.lab_id,),
+    ).fetchall()
+    current_dt = datetime.now(UTC)
+    for r in stalled_rows:
+        try:
+            assigned_at = datetime.fromisoformat(str(r["assigned_at"]))
+        except ValueError:
+            continue
+        age_days = max(0, (current_dt - assigned_at).days)
+        threshold = 2 if r["status"] == "assigned" else 5
+        if age_days < threshold:
+            continue
+        severity = "medium" if r["status"] == "assigned" else "high"
+        alerts.append(
+            {
+                "alert_key": f"cohort_stalled:{r['id']}:{r['status']}",
+                "lab_id": r["lab_id"],
+                "cage_id": r["cage_id"],
+                "severity": severity,
+                "category": "cohort",
+                "title": "Cohort Assignment Stalled",
+                "message": (
+                    f"Project {r['project_code']} has animal {r['animal_code']} stuck in {r['status']} for "
+                    f"{age_days} days."
+                ),
+                "meta": {
+                    "assignmentId": r["id"],
+                    "projectId": r["project_id"],
+                    "projectCode": r["project_code"],
+                    "animalCode": r["animal_code"],
+                    "status": r["status"],
+                    "ageDays": age_days,
+                    "thresholdDays": threshold,
+                },
                 "seen_at": now,
             }
         )
@@ -1765,6 +1872,55 @@ def project_assignment_timeline(project_id: int) -> Response:
     return jsonify(_project_assignment_timeline_payload(project_id))
 
 
+@app.get("/api/projects/<int:project_id>/closeouts")
+@require_auth()
+def project_closeouts(project_id: int) -> Response:
+    project = ensure_project_scope(project_id, g.user)
+    if not project:
+        return jsonify({"error": "Not found"}), 404
+    return jsonify(_project_closeouts(project_id))
+
+
+@app.post("/api/projects/<int:project_id>/closeouts")
+@require_auth(("PI", "Admin"))
+def create_project_closeout(project_id: int) -> Response:
+    project = ensure_project_scope(project_id, g.user)
+    if not project:
+        return jsonify({"error": "Not found"}), 404
+    payload = request.get_json(force=True)
+    status = str(payload.get("status") or "").strip().lower()
+    if status not in {"completed", "partial", "cancelled"}:
+        return jsonify({"error": "Invalid closeout status"}), 400
+    summary = str(payload.get("summary") or "").strip()
+    if not summary:
+        return jsonify({"error": "Provide closeout summary"}), 400
+    completed_animals = max(0, int(payload.get("completedAnimals") or 0))
+    cur = db().execute(
+        """
+        INSERT INTO project_cohort_closeouts
+            (project_id, status, completed_animals, summary, notes, closed_by, closed_at, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (project_id, status, completed_animals, summary, payload.get("notes"), g.user.user_id, now_iso(), now_iso()),
+    )
+    closeout_id = int(cur.lastrowid)
+    db().commit()
+    audit_log(
+        g.user.user_id,
+        "project_closeout",
+        closeout_id,
+        "create",
+        None,
+        {
+            "projectId": project_id,
+            "status": status,
+            "completedAnimals": completed_animals,
+            "summary": summary,
+        },
+    )
+    return jsonify({"id": closeout_id}), 201
+
+
 @app.post("/api/projects/<int:project_id>/reserve-animals")
 @require_auth(("PI", "Admin"))
 def reserve_project_animals(project_id: int) -> Response:
@@ -1880,10 +2036,10 @@ def update_project_assignment_status(project_id: int) -> Response:
         db().execute(
             """
             UPDATE project_animal_assignments
-            SET status = ?, notes = COALESCE(?, notes), assigned_by = ?
+            SET status = ?, notes = COALESCE(?, notes), assigned_by = ?, assigned_at = ?
             WHERE id = ?
             """,
-            (status, notes, g.user.user_id, int(row["id"])),
+            (status, notes, g.user.user_id, now_iso(), int(row["id"])),
         )
         _log_project_assignment_event(
             assignment_id=int(row["id"]),
@@ -1927,8 +2083,8 @@ def release_project_animals(project_id: int) -> Response:
         if not row or str(row["status"] or "") == "released":
             continue
         db().execute(
-            "UPDATE project_animal_assignments SET status = 'released', notes = COALESCE(?, notes), assigned_by = ? WHERE id = ?",
-            (payload.get("notes"), g.user.user_id, int(row["id"])),
+            "UPDATE project_animal_assignments SET status = 'released', notes = COALESCE(?, notes), assigned_by = ?, assigned_at = ? WHERE id = ?",
+            (payload.get("notes"), g.user.user_id, now_iso(), int(row["id"])),
         )
         _log_project_assignment_event(
             assignment_id=int(row["id"]),
