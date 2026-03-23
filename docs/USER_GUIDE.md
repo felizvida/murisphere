@@ -40,6 +40,7 @@ Use the `Reports` tab for the samples/genotyping workspace.
 - reserve genotype-ready animals directly into project cohorts and release them when plans change
 - move selected cohort animals through `reserved`, `assigned`, `shipped`, `consumed`, and `released`
 - inspect assignment flow charts and recent project cohort activity before handing animals off to research teams
+- review downstream completion and disposition summaries to see how much of a cohort has actually finished experimental use
 - inspect breeder decision signals that connect genotyping output back to colony planning
 - review order items and results
 - inspect Mendelian summaries and genotype alerts
@@ -82,13 +83,14 @@ Notes:
 ## Visual Dashboards (Fast Situational Awareness)
 - `Cages` tab: room density, breeding status mix, alerted cage ranking.
 - `Breeding` tab: event timeline density, breeder productivity/survivor trend.
-- `Analytics` tab: projected capacity bars, reminder pressure curve, sex balance donut.
+- `Analytics` tab: projected capacity bars, reminder pressure curve, sex balance donut, cross-lab cohort flow.
 - `Compliance` tab: alert severity stack, category mix donut, protocol expiration watch.
 - `Scan/Edit` tab: pedigree explorer (interactive lineage chart by animal ID).
 
 ## PI/Admin Tasks
 - Schedule breeding events and monitor calendar.
 - Review analytics and demand forecasts.
+- Review facility-wide cohort flow by lab to see where assignments are still in flight versus already completed.
 - Build planner scenarios and evaluate projected deficits/risk.
 - Generate recommendations and apply decisions (accept/adjust/ignore/complete).
 - Submit genotyping orders and ingest callback results automatically.

@@ -482,12 +482,50 @@ function renderAnalyticsVisuals(summary, nonProd, reminders, space, consolidatio
   const reminderLegend = reminderBars.map((r) => `<span class="legend-item">${esc(r.label)} ${esc(r.value)}</span>`).join("");
   const npLegend = `<span class="legend-item">${nonProd.length} non-productive cages</span><span class="legend-item">${consolidation.length} consolidation opportunities</span><span class="legend-item">${overCap} projected over-cap rooms</span>`;
   const sexLegend = sexParts.map((p) => `<span class="legend-item">${esc(p.label)} ${esc(p.value)}</span>`).join("");
+  const cohortFlowBars = (summary.cohortFlow || []).map((row) => ({
+    label: row.label || row.key,
+    value: toNum(row.value || 0),
+    color: row.color || "#64748b",
+  }));
+  const cohortDispositionParts = (summary.cohortDisposition || []).map((row) => ({
+    label: row.label,
+    value: toNum(row.value || 0),
+    color: row.color || "#64748b",
+  }));
+  const cohortLabBars = (summary.cohortLabs || [])
+    .slice(0, 8)
+    .map((row) => ({
+      label: row.labName,
+      value: toNum(row.activeAssignments || 0) + toNum(row.completedAssignments || 0),
+      color: toNum(row.completionPct || 0) >= 50 ? "#18a172" : "#4f8ef7",
+    }));
+  const cohortLegend = cohortFlowBars.map((row) => `<span class="legend-item">${esc(row.label)} ${esc(row.value)}</span>`).join("");
+  const dispositionLegend = (summary.cohortLabs || [])
+    .slice(0, 8)
+    .map(
+      (row) =>
+        `<span class="legend-item">${esc(row.labName)} ${esc(row.completedAssignments)} done / ${esc(row.activeAssignments)} active</span>`
+    )
+    .join("");
 
   el("analyticsVisuals").innerHTML = [
     chartCard("Projected Capacity", "30-day room utilization", drawBars(roomRows.slice(0, 12)), utilLegend),
     chartCard("Task Pressure Curve", "Upcoming reminders by day", `${drawBars(reminderBars, { height: 130 })}${drawSparkline(reminderBars.map((r) => r.value), "#3b82f6")}`, reminderLegend),
     chartCard("Breeding Throughput Risk", "Non-productive and consolidation pressure", drawBars(nonProdBars, { height: 120 }), npLegend),
     chartCard("Population Sex Balance", "Current sex ratio snapshot", drawDonut(sexParts), sexLegend),
+    chartCard(
+      "Facility Cohort Flow",
+      `${esc(summary.cohortCompletion?.completedAssignments || 0)} completed / ${esc(summary.cohortCompletion?.activeAssignments || 0)} still in flight`,
+      cohortFlowBars.length ? drawBars(cohortFlowBars, { height: 120 }) : `<p class="hint">No cohort assignment activity yet.</p>`,
+      cohortLegend
+    ),
+    chartCard(
+      "Cross-Lab Cohort Throughput",
+      "Assignment load and downstream completion by lab",
+      cohortLabBars.length ? drawBars(cohortLabBars, { height: 120 }) : drawDonut(cohortDispositionParts),
+      dispositionLegend ||
+        cohortDispositionParts.map((row) => `<span class="legend-item">${esc(row.label)} ${esc(row.value)}</span>`).join("")
+    ),
   ].join("");
 }
 
@@ -972,6 +1010,7 @@ function renderCohortInsights(insights) {
   }
   const activeProject = activeCohortProject();
   const activeTimeline = state.cohortTimeline || null;
+  const completion = activeTimeline?.completion || null;
   const projectBars = (insights.projects || []).slice(0, 8).map((row) => ({
     label: row.projectCode,
     value: row.matchedReadyAnimals,
@@ -979,6 +1018,11 @@ function renderCohortInsights(insights) {
   }));
   const flowBars = (activeTimeline?.statusFlow || activeProject?.statusFlow || []).map((row) => ({
     label: row.label || row.key,
+    value: Number(row.value || 0),
+    color: row.color || "#64748b",
+  }));
+  const dispositionParts = (activeTimeline?.dispositionFlow || []).map((row) => ({
+    label: row.label,
     value: Number(row.value || 0),
     color: row.color || "#64748b",
   }));
@@ -1159,6 +1203,20 @@ function renderCohortInsights(insights) {
           : "Select a project to inspect its cohort movement",
         flowBars.length ? drawBars(flowBars, { height: 132 }) : `<p class="hint">No assignment activity is visible yet.</p>`,
         flowBars.map((row) => `<span class="legend-item">${esc(row.label)} ${esc(row.value)}</span>`).join("")
+      )}
+      ${chartCard(
+        "Downstream Completion",
+        completion
+          ? `${esc(completion.completedAnimals)} completed of target ${esc(completion.targetAnimals || 0)}`
+          : "Select a project to inspect downstream completion",
+        completion
+          ? `<div class="progress-wrap"><div class="progress-bar"><span style="width:${esc(
+              Math.min(100, Number(completion.completionPct || 0))
+            )}%"></span></div><div class="viz-sub">${esc(completion.completionPct)}% complete · ${esc(
+              completion.remainingAnimals
+            )} remaining</div></div>${dispositionParts.length ? drawDonut(dispositionParts) : ""}`
+          : `<p class="hint">No completion data is visible yet.</p>`,
+        dispositionParts.map((row) => `<span class="legend-item">${esc(row.label)} ${esc(row.value)}</span>`).join("")
       )}
       <article class="viz-card">
         <h4>Recent Assignment Activity</h4>
@@ -2010,6 +2068,12 @@ function renderProjectInspector(project, cages, targets = [], assignments = [], 
     value: Number(row.value || 0),
     color: row.color || "#64748b",
   }));
+  const dispositionParts = (timeline?.dispositionFlow || []).map((row) => ({
+    label: row.label,
+    value: Number(row.value || 0),
+    color: row.color || "#64748b",
+  }));
+  const completion = timeline?.completion || null;
   const timelineRows = (timeline?.events || [])
     .map(
       (row) => `<div class="timeline-item"><strong>${esc(row.animalCode)}</strong><span>${esc(row.fromStatus || "new")} → ${esc(
@@ -2042,6 +2106,20 @@ function renderProjectInspector(project, cages, targets = [], assignments = [], 
           "Current cohort movement by status",
           flowBars.length ? drawBars(flowBars, { height: 120 }) : `<p class="hint">No animals have moved through this cohort yet.</p>`,
           flowBars.map((x) => `<span class="legend-item">${esc(x.label)} ${esc(x.value)}</span>`).join("")
+        )}
+        ${chartCard(
+          "Experimental Completion",
+          completion
+            ? `${esc(completion.completedAnimals)} completed of ${esc(completion.targetAnimals || 0)} target animals`
+            : "No downstream completion summary yet",
+          completion
+            ? `<div class="progress-wrap"><div class="progress-bar"><span style="width:${esc(
+                Math.min(100, Number(completion.completionPct || 0))
+              )}%"></span></div><div class="viz-sub">${esc(completion.completionPct)}% complete · ${esc(
+                completion.remainingAnimals
+              )} remaining</div></div>${dispositionParts.length ? drawDonut(dispositionParts) : ""}`
+            : `<p class="hint">No downstream completion summary yet.</p>`,
+          dispositionParts.map((x) => `<span class="legend-item">${esc(x.label)} ${esc(x.value)}</span>`).join("")
         )}
       </div>
       <div class="detail-grid">
@@ -2758,6 +2836,8 @@ async function loadDashboard() {
     <div class="kpi"><div>Upcoming Tasks</div><div class="value">${esc(reminders.length)}</div></div>
     <div class="kpi"><div>Pup Survival</div><div class="value">${esc(summary.pupSurvivalPct)}%</div></div>
     <div class="kpi"><div>Sex Ratio</div><div class="value">${esc(summary.sexRatio.M)}/${esc(summary.sexRatio.F)}</div></div>
+    <div class="kpi"><div>Cohorts In Flight</div><div class="value">${esc(summary.cohortCompletion?.activeAssignments || 0)}</div></div>
+    <div class="kpi"><div>Cohorts Completed</div><div class="value">${esc(summary.cohortCompletion?.completedAssignments || 0)}</div></div>
     <div class="kpi"><div>Labs Over Capacity</div><div class="value">${esc(overCapacity)}</div></div>
   `;
   renderDashboardVisuals(summary, alerts, reminders, quotas);

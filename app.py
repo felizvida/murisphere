@@ -442,6 +442,15 @@ def _log_project_assignment_event(
 def _project_assignment_timeline_payload(project_id: int) -> dict[str, Any]:
     flow = _assignment_status_flow(project_id)
     counts = {item["key"]: int(item["value"]) for item in flow}
+    project = db().execute("SELECT project_code, title, target_animals FROM projects WHERE id = ?", (project_id,)).fetchone()
+    completed = int(counts.get("consumed", 0)) + int(counts.get("released", 0))
+    active = int(counts.get("reserved", 0)) + int(counts.get("assigned", 0)) + int(counts.get("shipped", 0))
+    target = int(project["target_animals"] or 0) if project else 0
+    completion_pct = round((completed / target) * 100, 1) if target > 0 else 0.0
+    disposition = [
+        {"label": "Consumed", "key": "consumed", "value": int(counts.get("consumed", 0)), "color": "#7c6cf2"},
+        {"label": "Released", "key": "released", "value": int(counts.get("released", 0)), "color": "#64748b"},
+    ]
     rows = db().execute(
         """
         SELECT e.id, e.event_type, e.from_status, e.to_status, e.notes, e.created_at,
@@ -459,7 +468,18 @@ def _project_assignment_timeline_payload(project_id: int) -> dict[str, Any]:
     return {
         "statusFlow": flow,
         "statusCounts": counts,
-        "activeAssignments": sum(count for key, count in counts.items() if key != "released"),
+        "activeAssignments": active,
+        "completion": {
+            "projectCode": project["project_code"] if project else None,
+            "projectTitle": project["title"] if project else None,
+            "targetAnimals": target,
+            "completedAnimals": completed,
+            "activeAnimals": active,
+            "completionPct": completion_pct,
+            "remainingAnimals": max(target - completed, 0),
+            "state": "complete" if target and completed >= target else ("in_progress" if completed > 0 or active > 0 else "not_started"),
+        },
+        "dispositionFlow": disposition,
         "events": [
             {
                 "id": int(row["id"]),
@@ -3521,6 +3541,68 @@ def analytics_summary() -> Response:
         else (datetime.now(UTC).date().isoformat(), (datetime.now(UTC).date() + timedelta(days=14)).isoformat(), g.user.lab_id),
     ).fetchall()
 
+    cohort_scope = "" if is_admin(g.user) else " WHERE p.lab_id = ? "
+    cohort_params: tuple[Any, ...] = () if is_admin(g.user) else (g.user.lab_id,)
+    cohort_rows = db().execute(
+        """
+        SELECT pa.status, COUNT(*) AS count
+        FROM project_animal_assignments pa
+        JOIN projects p ON p.id = pa.project_id
+        """
+        + cohort_scope
+        + """
+        GROUP BY pa.status
+        """,
+        cohort_params,
+    ).fetchall()
+    cohort_counts = {str(row["status"] or "reserved"): int(row["count"] or 0) for row in cohort_rows}
+
+    lab_rows = db().execute(
+        """
+        SELECT l.id AS lab_id, l.name AS lab_name,
+               COUNT(DISTINCT CASE WHEN p.status = 'active' THEN p.id END) AS active_projects,
+               COALESCE(SUM(CASE WHEN pa.status = 'reserved' THEN 1 ELSE 0 END), 0) AS reserved_count,
+               COALESCE(SUM(CASE WHEN pa.status = 'assigned' THEN 1 ELSE 0 END), 0) AS assigned_count,
+               COALESCE(SUM(CASE WHEN pa.status = 'shipped' THEN 1 ELSE 0 END), 0) AS shipped_count,
+               COALESCE(SUM(CASE WHEN pa.status = 'consumed' THEN 1 ELSE 0 END), 0) AS consumed_count,
+               COALESCE(SUM(CASE WHEN pa.status = 'released' THEN 1 ELSE 0 END), 0) AS released_count
+        FROM labs l
+        LEFT JOIN projects p ON p.lab_id = l.id
+        LEFT JOIN project_animal_assignments pa ON pa.project_id = p.id
+        """
+        + ("" if is_admin(g.user) else " WHERE l.id = ? ")
+        + """
+        GROUP BY l.id, l.name
+        ORDER BY (COALESCE(SUM(CASE WHEN pa.status IN ('reserved', 'assigned', 'shipped') THEN 1 ELSE 0 END), 0)
+               + COALESCE(SUM(CASE WHEN pa.status IN ('consumed', 'released') THEN 1 ELSE 0 END), 0)) DESC, l.name ASC
+        LIMIT 20
+        """,
+        () if is_admin(g.user) else (g.user.lab_id,),
+    ).fetchall()
+    cohort_labs = []
+    for row in lab_rows:
+        active_count = int(row["reserved_count"] or 0) + int(row["assigned_count"] or 0) + int(row["shipped_count"] or 0)
+        completed_count = int(row["consumed_count"] or 0) + int(row["released_count"] or 0)
+        cohort_labs.append(
+            {
+                "labId": int(row["lab_id"]),
+                "labName": row["lab_name"],
+                "activeProjects": int(row["active_projects"] or 0),
+                "activeAssignments": active_count,
+                "completedAssignments": completed_count,
+                "completionPct": round((completed_count / max(active_count + completed_count, 1)) * 100, 1),
+                "statusFlow": [
+                    {"key": "reserved", "label": "Reserved", "value": int(row["reserved_count"] or 0), "color": "#4f8ef7"},
+                    {"key": "assigned", "label": "Assigned", "value": int(row["assigned_count"] or 0), "color": "#18a172"},
+                    {"key": "shipped", "label": "Shipped", "value": int(row["shipped_count"] or 0), "color": "#eb9c44"},
+                    {"key": "consumed", "label": "Consumed", "value": int(row["consumed_count"] or 0), "color": "#7c6cf2"},
+                    {"key": "released", "label": "Released", "value": int(row["released_count"] or 0), "color": "#64748b"},
+                ],
+            }
+        )
+    completed_total = int(cohort_counts.get("consumed", 0)) + int(cohort_counts.get("released", 0))
+    active_total = int(cohort_counts.get("reserved", 0)) + int(cohort_counts.get("assigned", 0)) + int(cohort_counts.get("shipped", 0))
+
     return jsonify(
         {
             "totalCages": total_cages,
@@ -3529,6 +3611,20 @@ def analytics_summary() -> Response:
             "pupSurvivalPct": survival,
             "roomCapacity": [dict(r) for r in room_capacity],
             "upcomingTasks": [dict(r) for r in upcoming_tasks],
+            "cohortFlow": [
+                {"key": step["key"], "label": step["label"], "value": int(cohort_counts.get(step["key"], 0)), "color": step["color"]}
+                for step in ASSIGNMENT_STATUS_STEPS
+            ],
+            "cohortDisposition": [
+                {"label": "Consumed", "key": "consumed", "value": int(cohort_counts.get("consumed", 0)), "color": "#7c6cf2"},
+                {"label": "Released", "key": "released", "value": int(cohort_counts.get("released", 0)), "color": "#64748b"},
+            ],
+            "cohortCompletion": {
+                "activeAssignments": active_total,
+                "completedAssignments": completed_total,
+                "completionPct": round((completed_total / max(active_total + completed_total, 1)) * 100, 1),
+            },
+            "cohortLabs": cohort_labs,
         }
     )
 

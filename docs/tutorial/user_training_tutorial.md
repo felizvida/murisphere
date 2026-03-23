@@ -335,9 +335,10 @@ That lets you learn the process as a pipeline instead of a single field.
 13. Optionally save the current rule set as a reusable lab template for the next project that needs the same design.
 14. In **Assignment Candidates**, open one genotype-ready animal and confirm whether it matches the target rule.
 15. Select one or more matching animals and reserve them into the project cohort.
-16. Move one selected animal from `reserved` to `assigned` and inspect the **Assignment Flow** chart plus the recent assignment activity log.
+16. Move one selected animal from `reserved` to `assigned`, then to `consumed`, and inspect the **Assignment Flow** chart plus the downstream completion/disposition summary.
 17. Review **Breeder Decisions** and decide whether the active pair should keep producing, pause soon, or be reviewed for low output.
-18. If you are practicing as an admin, import a result CSV or use callback simulation and watch the order move toward completion.
+18. If you are practicing as an admin, switch to `Analytics` and compare cross-lab cohort flow so you can see which labs still have animals in flight versus already completed.
+19. If you are practicing as an admin, import a result CSV or use callback simulation and watch the order move toward completion.
 
 ## Exercise
 Choose one `resulted` sample and one `collected` sample.

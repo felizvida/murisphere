@@ -525,7 +525,11 @@ class AppIntegrationTests(unittest.TestCase):
 
         analytics = self.client.get("/api/analytics/summary", headers=self.auth_headers(token))
         self.assertEqual(analytics.status_code, 200)
-        self.assertGreaterEqual(analytics.get_json()["totalCages"], 2)
+        analytics_payload = analytics.get_json()
+        self.assertGreaterEqual(analytics_payload["totalCages"], 2)
+        self.assertIn("cohortFlow", analytics_payload)
+        self.assertIn("cohortLabs", analytics_payload)
+        self.assertIn("cohortCompletion", analytics_payload)
 
     def test_reports_imports_genotyping_facility_audit(self) -> None:
         token = self.login("admin@murisphere.local", "admin1234")
@@ -1730,6 +1734,22 @@ class AppIntegrationTests(unittest.TestCase):
         timeline_payload = timeline.get_json()
         self.assertEqual(timeline_payload["statusCounts"]["assigned"], 1)
         self.assertTrue(any(row["toStatus"] == "assigned" and row["animalCode"] == "COHORT-SIRE-001" for row in timeline_payload["events"]))
+        self.assertEqual(timeline_payload["completion"]["completedAnimals"], 0)
+
+        consumed_update = self.client.post(
+            f"/api/projects/{project_id}/assignment-status",
+            headers=self.auth_headers(admin),
+            json={"animalIds": [sire_id], "status": "consumed"},
+        )
+        self.assertEqual(consumed_update.status_code, 200)
+        self.assertEqual(consumed_update.get_json()["updated"], 1)
+
+        consumed_timeline = self.client.get(f"/api/projects/{project_id}/assignment-timeline", headers=self.auth_headers(tech))
+        self.assertEqual(consumed_timeline.status_code, 200)
+        consumed_payload = consumed_timeline.get_json()
+        self.assertEqual(consumed_payload["completion"]["completedAnimals"], 1)
+        self.assertEqual(consumed_payload["completion"]["state"], "in_progress")
+        self.assertTrue(any(row["key"] == "consumed" and row["value"] == 1 for row in consumed_payload["dispositionFlow"]))
 
         cohorts = self.client.get("/api/genotyping/cohorts", headers=self.auth_headers(tech))
         self.assertEqual(cohorts.status_code, 200)
@@ -1738,7 +1758,7 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertTrue(any(row["animalCode"] == "COHORT-SIRE-001" for row in cohort_payload["readyAnimals"]))
         project_row = next(row for row in cohort_payload["projects"] if row["projectCode"] == "PRJ-GENO-001")
         self.assertEqual(project_row["targetRules"][0]["genotypePattern"], "Cre/+")
-        self.assertTrue(any(item["key"] == "assigned" and item["value"] >= 1 for item in project_row["statusFlow"]))
+        self.assertTrue(any(item["key"] == "consumed" and item["value"] >= 1 for item in project_row["statusFlow"]))
         self.assertTrue(cohort_payload["breederSignals"])
         self.assertIn("signal", cohort_payload["breederSignals"][0])
 
@@ -1752,6 +1772,7 @@ class AppIntegrationTests(unittest.TestCase):
         released_timeline = self.client.get(f"/api/projects/{project_id}/assignment-timeline", headers=self.auth_headers(tech))
         self.assertEqual(released_timeline.status_code, 200)
         self.assertGreaterEqual(released_timeline.get_json()["statusCounts"]["released"], 1)
+        self.assertEqual(released_timeline.get_json()["completion"]["completedAnimals"], 1)
 
 
 if __name__ == "__main__":
