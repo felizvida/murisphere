@@ -22,6 +22,7 @@ const state = {
   cards: [],
   alerts: [],
   alertsByCage: {},
+  learning: null,
 };
 const PENDING_SCAN_KEY = "murisphere_pending_scan";
 const SCAN_BASE_KEY = "murisphere_scan_base_url";
@@ -523,6 +524,149 @@ function renderDashboardVisuals(summary, alerts, reminders, quotas) {
   ].join("");
 }
 
+function learningPill(label, ready) {
+  return `<span class="learning-pill ${ready ? "ready" : "pending"}">${esc(label)} ${ready ? "ready" : "pending"}</span>`;
+}
+
+function renderLearningHub(overview) {
+  const host = el("dashboardLearning");
+  if (!host) return;
+  if (!overview) {
+    host.innerHTML = "";
+    return;
+  }
+  state.learning = overview;
+  const counts = overview.counts || {};
+  const availability = overview.workflowAvailability || {};
+  const scanBase = normalizedScanBase();
+  const phoneReady = !(scanBase.includes("localhost") || scanBase.includes("127.0.0.1"));
+  const examples = overview.examples || {};
+
+  const exampleCards = [];
+  if (examples.cage) {
+    exampleCards.push(`
+      <article class="learning-example">
+        <div class="learning-example-title">Practice cage</div>
+        <strong>${esc(examples.cage.cage_code)}</strong>
+        <div class="learning-copy">${esc(examples.cage.strain || "Cage example")} · ${esc(examples.cage.breeding_status || "status unknown")}</div>
+        <div class="learning-actions">
+          <button type="button" class="table-link" data-learning-cage-id="${esc(examples.cage.id)}">Open Cage</button>
+          <button type="button" class="table-link" data-learning-scan-code="${esc(examples.cage.cage_code)}">Open In Scan/Edit</button>
+        </div>
+      </article>
+    `);
+  }
+  if (examples.project) {
+    exampleCards.push(`
+      <article class="learning-example">
+        <div class="learning-example-title">Project example</div>
+        <strong>${esc(examples.project.project_code)}</strong>
+        <div class="learning-copy">${esc(examples.project.title || "Project")} · ${esc(examples.project.status || "status unknown")}</div>
+        <div class="learning-actions">
+          <button type="button" class="table-link" data-learning-project-id="${esc(examples.project.id)}">Open Project</button>
+          <button type="button" class="table-link" data-learning-tab="projects">Project Workspace</button>
+        </div>
+      </article>
+    `);
+  }
+  if (examples.pedigreeAnimal) {
+    exampleCards.push(`
+      <article class="learning-example">
+        <div class="learning-example-title">Pedigree example</div>
+        <strong>${esc(examples.pedigreeAnimal.animal_code)}</strong>
+        <div class="learning-copy">From cage ${esc(examples.pedigreeAnimal.cage_code || "N/A")}</div>
+        <div class="learning-actions">
+          <button type="button" class="table-link" data-learning-animal-id="${esc(examples.pedigreeAnimal.id)}">Open Pedigree</button>
+          <button type="button" class="table-link" data-learning-tab="scan">Pedigree Workspace</button>
+        </div>
+      </article>
+    `);
+  }
+  if (examples.sample) {
+    exampleCards.push(`
+      <article class="learning-example">
+        <div class="learning-example-title">Sample chain-of-custody</div>
+        <strong>${esc(examples.sample.sample_code)}</strong>
+        <div class="learning-copy">${esc(examples.sample.status || "status unknown")} · animal ${esc(examples.sample.animal_code || "N/A")}</div>
+        <div class="learning-actions">
+          <a class="button-link button-link-soft" href="${esc(overview.tutorialUrl)}" target="_blank" rel="noopener">Read Sample Module</a>
+        </div>
+      </article>
+    `);
+  }
+  if (examples.plannerScenario) {
+    exampleCards.push(`
+      <article class="learning-example">
+        <div class="learning-example-title">Planner scenario</div>
+        <strong>${esc(examples.plannerScenario.name)}</strong>
+        <div class="learning-copy">${esc(examples.plannerScenario.lab_name || "Lab")} · ${esc(examples.plannerScenario.status || "status unknown")}</div>
+        <div class="learning-actions">
+          <button type="button" class="table-link" data-learning-tab="analytics">Open Analytics</button>
+          <a class="button-link button-link-soft" href="${esc(overview.tutorialUrl)}" target="_blank" rel="noopener">Read Planner Module</a>
+        </div>
+      </article>
+    `);
+  }
+
+  host.innerHTML = `
+    <section class="learning-hero">
+      <div class="learning-hero-copy">
+        <div class="card-badge">Start Learning</div>
+        <h4>Self-paced onboarding lives inside the dashboard now.</h4>
+        <p class="learning-copy">
+          Learn Murisphere with real seeded examples, a biology-first tutorial, and the exact phone scan workflow technicians use in the room.
+        </p>
+        <div class="learning-actions">
+          <a class="button-link" href="${esc(overview.tutorialUrl)}" target="_blank" rel="noopener">Open Full Tutorial</a>
+          <a class="button-link button-link-soft" href="${esc(overview.tutorialPdfUrl)}" target="_blank" rel="noopener">Open PDF</a>
+          <button type="button" class="button-link button-link-soft" data-learning-tab="cages">Set Scan Base URL</button>
+        </div>
+      </div>
+      <div class="learning-readiness">
+        <div class="learning-stat"><span>Visible scope</span><strong>${esc(counts.labs || 0)} labs · ${esc(counts.cages || 0)} cages · ${esc(counts.projects || 0)} projects</strong></div>
+        <div class="learning-stat"><span>Tutorial data</span><strong>${esc(counts.animals || 0)} animals · ${esc(counts.litters || 0)} litters · ${esc(counts.samples || 0)} samples · ${esc(counts.plannerScenarios || 0)} scenarios</strong></div>
+        <div class="learning-status ${overview.tutorialReady ? "ready" : "pending"}">
+          ${overview.tutorialReady ? "Tutorial-ready workflow data detected." : "Core app data is ready; richer learning examples appear when the tutorial seed is loaded."}
+        </div>
+        <div class="learning-status ${phoneReady ? "ready" : "warn"}">
+          Phone scan base: ${esc(scanBase)}${phoneReady ? "" : " (not phone-reachable; use LAN IP or public domain)"}
+        </div>
+        <div class="learning-pill-row">
+          ${learningPill("Breeding + pedigree", availability.breedingPedigree)}
+          ${learningPill("Samples", availability.sampleGenotyping)}
+          ${learningPill("Planner", availability.planner)}
+          ${learningPill("Projects", availability.projects)}
+        </div>
+      </div>
+    </section>
+    <div class="learning-grid">
+      ${(overview.modules || [])
+        .map(
+          (module) => `
+            <article class="learning-card">
+              <div class="learning-step">Module ${esc(module.order)}</div>
+              <h4>${esc(module.title)}</h4>
+              <p class="learning-copy">${esc(module.summary)}</p>
+              <div class="learning-actions">
+                <button type="button" class="table-link" data-learning-tab="${esc(module.tab)}">${esc(module.actionLabel)}</button>
+                <a class="button-link button-link-soft" href="${esc(overview.tutorialUrl)}" target="_blank" rel="noopener">Read Guide</a>
+              </div>
+            </article>
+          `
+        )
+        .join("")}
+    </div>
+    <div class="learning-examples">
+      <div class="viz-heading">Seeded Examples</div>
+      ${
+        exampleCards.length
+          ? `<div class="learning-example-grid">${exampleCards.join("")}</div>`
+          : `<div class="viz-card"><p class="learning-copy">No advanced example records are visible in this database yet. Load the tutorial-ready seed to practice pedigree, samples, and planner workflows with matching examples.</p></div>`
+      }
+    </div>
+  `;
+}
+
 function renderCageInspector(detail) {
   if (!detail?.cage) {
     el("cageInspector").innerHTML = "";
@@ -654,6 +798,22 @@ async function openProjectInspector(projectId) {
   activateTab("projects");
   renderProjectInspector(project, cages);
   showMessage(`Loaded project ${project?.project_code || projectId}`, "success");
+}
+
+async function openLearningScan(code) {
+  if (!code) return;
+  activateTab("scan");
+  el("scanCode").value = code;
+  await runScan();
+  showMessage(`Opened scan workflow for ${code}`, "success");
+}
+
+async function openLearningPedigree(animalId) {
+  if (!animalId) return;
+  activateTab("scan");
+  el("pedigreeAnimalId").value = String(animalId);
+  await loadPedigreeViz();
+  showMessage(`Opened pedigree for animal ${animalId}`, "success");
 }
 
 function renderPedigreeGraph(data) {
@@ -1241,10 +1401,11 @@ async function loadQuotas() {
 }
 
 async function loadDashboard() {
-  const [summary, alerts, reminders] = await Promise.all([
+  const [summary, alerts, reminders, learning] = await Promise.all([
     api("/api/analytics/summary", { headers: headers(false) }),
     api("/api/alerts/feed?status=active", { headers: headers(false) }),
     api("/api/tasks/reminders?windowDays=14", { headers: headers(false) }),
+    api("/api/learning/overview", { headers: headers(false) }),
   ]);
   let quotas = [];
   try {
@@ -1266,6 +1427,7 @@ async function loadDashboard() {
     <div class="kpi"><div>Labs Over Capacity</div><div class="value">${esc(overCapacity)}</div></div>
   `;
   renderDashboardVisuals(summary, alerts, reminders, quotas);
+  renderLearningHub(learning);
   el("dashboardAlerts").innerHTML =
     alerts.slice(0, 8).map(alertCardMarkup).join("") || `<p class="hint">No active alerts.</p>`;
   el("dashboardTasks").innerHTML =
@@ -1584,6 +1746,35 @@ async function init() {
       await api(`/api/alerts/${id}/ack`, { method: "POST", headers: headers() });
       await loadActiveAlertFeed();
       ackNode.closest(".cage-card")?.remove();
+    }).catch(() => undefined);
+  });
+
+  el("dashboardLearning").addEventListener("click", (evt) => {
+    const tabNode = evt.target.closest("[data-learning-tab]");
+    if (tabNode) {
+      withAction("Learning module load failed", () => handleTabOpen(tabNode.getAttribute("data-learning-tab"))).catch(() => undefined);
+      return;
+    }
+    const cageNode = evt.target.closest("[data-learning-cage-id]");
+    if (cageNode) {
+      withAction("Learning cage open failed", () => openCageInspector(Number(cageNode.getAttribute("data-learning-cage-id")))).catch(() => undefined);
+      return;
+    }
+    const scanNode = evt.target.closest("[data-learning-scan-code]");
+    if (scanNode) {
+      withAction("Learning scan open failed", () => openLearningScan(scanNode.getAttribute("data-learning-scan-code"))).catch(() => undefined);
+      return;
+    }
+    const animalNode = evt.target.closest("[data-learning-animal-id]");
+    if (animalNode) {
+      withAction("Learning pedigree open failed", () => openLearningPedigree(Number(animalNode.getAttribute("data-learning-animal-id")))).catch(() => undefined);
+      return;
+    }
+    const projectNode = evt.target.closest("[data-learning-project-id]");
+    if (!projectNode) return;
+    withAction("Learning project open failed", async () => {
+      if (!state.projects.length) await loadProjects();
+      await openProjectInspector(Number(projectNode.getAttribute("data-learning-project-id")));
     }).catch(() => undefined);
   });
 

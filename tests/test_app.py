@@ -264,6 +264,131 @@ class AppIntegrationTests(unittest.TestCase):
         body = page.data.decode("utf-8")
         self.assertNotIn("cdn.jsdelivr.net/npm/qrcode", body)
         self.assertNotIn("cdn.jsdelivr.net/npm/jsbarcode", body)
+        self.assertIn('id="dashboardLearning"', body)
+
+    def test_learning_routes_serve_tutorial_assets(self) -> None:
+        redirect_res = self.client.get("/learn", follow_redirects=False)
+        self.assertEqual(redirect_res.status_code, 308)
+        self.assertEqual(redirect_res.headers["Location"], "/learn/")
+
+        page = self.client.get("/learn/")
+        self.assertEqual(page.status_code, 200)
+        body = page.data.decode("utf-8")
+        self.assertIn("self-paced learning", body)
+        self.assertIn("tutorial.css", body)
+        self.assertIn("assets/cage_card_complete.svg", body)
+
+        css = self.client.get("/learn/tutorial.css")
+        self.assertEqual(css.status_code, 200)
+        self.assertIn("text/css", css.content_type)
+        self.assertIn(b":root", css.data)
+
+        asset = self.client.get("/learn/assets/cage_card_complete.svg")
+        self.assertEqual(asset.status_code, 200)
+        self.assertIn("image/svg+xml", asset.content_type)
+        self.assertIn(b"<svg", asset.data)
+
+        pdf = self.client.get("/learn/user_training_tutorial.pdf")
+        self.assertEqual(pdf.status_code, 200)
+        self.assertIn("application/pdf", pdf.content_type)
+        self.assertTrue(pdf.data.startswith(b"%PDF-"))
+
+    def test_learning_overview_reports_scope_and_seeded_examples(self) -> None:
+        token = self.login("admin@murisphere.local", "admin1234")
+
+        initial = self.client.get("/api/learning/overview", headers=self.auth_headers(token))
+        self.assertEqual(initial.status_code, 200)
+        payload = initial.get_json()
+        self.assertEqual(payload["tutorialUrl"], "/learn/")
+        self.assertEqual(payload["tutorialPdfUrl"], "/learn/user_training_tutorial.pdf")
+        self.assertEqual(len(payload["modules"]), 7)
+        self.assertFalse(payload["tutorialReady"])
+        self.assertEqual(payload["counts"]["animals"], 0)
+        self.assertIsNone(payload["examples"]["pedigreeAnimal"])
+
+        project = self.client.post(
+            "/api/projects",
+            headers=self.auth_headers(token),
+            json={"labId": 1, "projectCode": "PRJ-LEARN-001", "title": "Learning Cohort", "status": "active", "targetAnimals": 24},
+        )
+        self.assertEqual(project.status_code, 201)
+        project_id = project.get_json()["id"]
+
+        litter = self.client.post(
+            "/api/litters",
+            headers=self.auth_headers(token),
+            json={"cageId": 1, "birthDate": date.today().isoformat(), "size": 4, "survived": 4, "male": 2, "female": 2},
+        )
+        self.assertEqual(litter.status_code, 200)
+        litter_id = litter.get_json()["id"]
+
+        now = datetime.now(UTC).isoformat()
+        with sqlite3.connect(appmod.DB_PATH) as conn:
+            conn.execute(
+                """
+                INSERT INTO animals (animal_code, sex, dob, strain, genotype, status, cage_id, litter_id, sire_id, dam_id, created_at, updated_at)
+                VALUES (?, 'M', ?, 'C57BL/6J', 'WT/WT', 'Active', 1, NULL, NULL, NULL, ?, ?)
+                """,
+                ("LEARN-SIRE-001", date.today().isoformat(), now, now),
+            )
+            sire_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute(
+                """
+                INSERT INTO animals (animal_code, sex, dob, strain, genotype, status, cage_id, litter_id, sire_id, dam_id, created_at, updated_at)
+                VALUES (?, 'F', ?, 'C57BL/6J', 'WT/WT', 'Active', 1, NULL, NULL, NULL, ?, ?)
+                """,
+                ("LEARN-DAM-001", date.today().isoformat(), now, now),
+            )
+            dam_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute(
+                """
+                INSERT INTO animals (animal_code, sex, dob, strain, genotype, status, cage_id, litter_id, sire_id, dam_id, created_at, updated_at)
+                VALUES (?, 'M', ?, 'C57BL/6J', 'Cre/+', 'Active', 1, ?, ?, ?, ?, ?)
+                """,
+                ("LEARN-PUP-001", date.today().isoformat(), litter_id, sire_id, dam_id, now, now),
+            )
+            pup_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.commit()
+
+        sample = self.client.post(
+            "/api/samples",
+            headers=self.auth_headers(token),
+            json={
+                "animalId": pup_id,
+                "sampleType": "tail",
+                "sampleCode": "SMP-LEARN-001",
+                "status": "received",
+                "provider": "Transnetyx",
+            },
+        )
+        self.assertEqual(sample.status_code, 201)
+
+        scenario = self.client.post(
+            "/api/planner/scenarios",
+            headers=self.auth_headers(token),
+            json={"labId": 1, "name": "Learning Planner Scenario", "neededBy": "2026-04-15", "targetAnimals": 20, "maxNewCages": 4},
+        )
+        self.assertEqual(scenario.status_code, 201)
+
+        attach = self.client.post(
+            f"/api/planner/scenarios/{scenario.get_json()['id']}/projects",
+            headers=self.auth_headers(token),
+            json={"projects": [{"projectId": project_id, "animalsNeeded": 20, "priority": 1}]},
+        )
+        self.assertEqual(attach.status_code, 200)
+
+        learned = self.client.get("/api/learning/overview", headers=self.auth_headers(token))
+        self.assertEqual(learned.status_code, 200)
+        enriched = learned.get_json()
+        self.assertTrue(enriched["workflowAvailability"]["breedingPedigree"])
+        self.assertTrue(enriched["workflowAvailability"]["sampleGenotyping"])
+        self.assertTrue(enriched["workflowAvailability"]["planner"])
+        self.assertTrue(enriched["workflowAvailability"]["projects"])
+        self.assertTrue(enriched["tutorialReady"])
+        self.assertEqual(enriched["examples"]["project"]["project_code"], "PRJ-LEARN-001")
+        self.assertEqual(enriched["examples"]["pedigreeAnimal"]["animal_code"], "LEARN-PUP-001")
+        self.assertEqual(enriched["examples"]["sample"]["sample_code"], "SMP-LEARN-001")
+        self.assertEqual(enriched["examples"]["plannerScenario"]["name"], "Learning Planner Scenario")
 
     def test_scan_template_escapes_public_fields(self) -> None:
         page = self.client.get("/scan/test-token-123")

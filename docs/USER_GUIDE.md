@@ -2,6 +2,7 @@
 
 ## Recommended Training Setup
 If you are learning Murisphere for the first time, use the tutorial-ready seed and the self-paced tutorial.
+After login, the landing dashboard includes a `Start Learning` section that links to the tutorial and the guided example workflows.
 
 ```bash
 python3 -m venv .venv

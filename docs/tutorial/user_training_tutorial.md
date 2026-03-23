@@ -13,6 +13,8 @@ toc-depth: 3
 # Purpose
 This tutorial is designed for **self-paced learning**. It teaches Murisphere as an operational system and as a biological thinking tool.
 
+Inside Murisphere, the landing dashboard now includes a **Start Learning** section. Use it to launch this tutorial, open the PDF, and jump into seeded example workflows directly from the app.
+
 The goal is not only to click through screens. The goal is to learn how a mouse colony actually behaves over time:
 
 - how breeding status changes what a technician should do next
@@ -161,12 +163,13 @@ Be able to log in, identify the main views, and prepare a phone-reachable QR wor
 ## Steps
 1. Log in as the technician.
 2. Pause on the landing dashboard before clicking anywhere else.
-3. Note the alert count, room pressure, and overdue workload.
-4. Open the cage card center.
-5. Confirm `Scan Base URL` points to a host your phone can reach.
-6. Print one test card at **100% scale**.
-7. Scan the QR with your phone camera.
-8. Confirm the cage opens directly in the browser.
+3. In the `Start Learning` panel, open the full tutorial once so you know where it lives in the app.
+4. Note the alert count, room pressure, and overdue workload.
+5. Open the cage card center.
+6. Confirm `Scan Base URL` points to a host your phone can reach.
+7. Print one test card at **100% scale**.
+8. Scan the QR with your phone camera.
+9. Confirm the cage opens directly in the browser.
 
 ## Why this matters biologically
 Bad scan setup causes delayed data entry. Delayed data entry turns real biological events into memory-based guesses.

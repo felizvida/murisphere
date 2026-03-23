@@ -3,8 +3,9 @@
 Recommended starting order for self-paced learning:
 1. `docs/tutorial/user_training_tutorial.md`
 2. `docs/USER_GUIDE.md`
-3. `docs/WORKFLOW_COVERAGE_MATRIX.md`
-4. `docs/API_REFERENCE.md`
+3. `docs/INSTRUCTOR_GUIDE.md`
+4. `docs/WORKFLOW_COVERAGE_MATRIX.md`
+5. `docs/API_REFERENCE.md`
 
 - `docs/CHECKPOINT_2026-03-04.md` - historical checkpoint from pre-hardening phase
 - `docs/CHECKPOINT_2026-03-05.md` - current checkpoint with resume-from-zero-memory release state
@@ -20,6 +21,7 @@ Recommended starting order for self-paced learning:
 - `docs/SECURITY_COMPLIANCE.md` - implemented controls, residual risks, governance practices
 - `docs/TESTING_STRATEGY.md` - automated, diagnostic, and release-gate testing strategy
 - `docs/USER_GUIDE.md` - role-based operating guide with phone scan workflow
+- `docs/INSTRUCTOR_GUIDE.md` - facilitator guide for 60- and 90-minute onboarding sessions
 - `docs/tutorial/user_training_tutorial.md` - primary self-paced tutorial with biology primer, guided exercises, and tutorial-ready data map
 - `docs/tutorial/user_training_tutorial.html` - tutorial web version for browser-based training
 - `docs/tutorial/user_training_tutorial.pdf` - tutorial PDF for distribution, classroom use, and self-study

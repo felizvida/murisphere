@@ -187,6 +187,8 @@ Tutorial-ready profile:
 
 ## Documentation
 - Start here for onboarding: [Self-paced tutorial](docs/tutorial/user_training_tutorial.md)
+- In the app, use the dashboard `Start Learning` section to launch the tutorial and seeded example workflows.
+- For instructor-led rollout: [Instructor guide](docs/INSTRUCTOR_GUIDE.md)
 - [Documentation index](docs/DOCUMENTATION_INDEX.md)
 - [User guide](docs/USER_GUIDE.md)
 - [Workflow coverage matrix](docs/WORKFLOW_COVERAGE_MATRIX.md)

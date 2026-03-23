@@ -33,7 +33,7 @@ from typing import Any
 from urllib import error as urlerror
 from urllib import request as urlrequest
 
-from flask import Flask, Response, g, jsonify, render_template, request, send_file, stream_with_context
+from flask import Flask, Response, abort, g, jsonify, redirect, render_template, request, send_file, stream_with_context
 from openpyxl import Workbook
 from werkzeug.security import check_password_hash, generate_password_hash
 import qrcode
@@ -49,6 +49,11 @@ APP_VERSION = Path("VERSION").read_text(encoding="utf-8").strip() if Path("VERSI
 DEFAULT_BIND_HOST = os.getenv("MURISPHERE_HOST", "0.0.0.0")
 DEFAULT_BIND_PORT = int(os.getenv("MURISPHERE_PORT", "8000"))
 RUNTIME_MODE = os.getenv("MURISPHERE_RUNTIME_MODE", "web")
+TUTORIAL_DIR = Path("docs/tutorial")
+TUTORIAL_HTML_PATH = TUTORIAL_DIR / "user_training_tutorial.html"
+TUTORIAL_PDF_PATH = TUTORIAL_DIR / "user_training_tutorial.pdf"
+TUTORIAL_CSS_PATH = TUTORIAL_DIR / "tutorial.css"
+TUTORIAL_ASSET_DIR = TUTORIAL_DIR / "assets"
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = int(os.getenv("MURISPHERE_MAX_UPLOAD_BYTES", "5242880"))
@@ -92,6 +97,33 @@ def schema_path() -> str:
 
 def token_digest(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def tutorial_file_path(path: Path) -> Path:
+    resolved = path.resolve()
+    if not resolved.is_file():
+        abort(404)
+    return resolved
+
+
+def tutorial_asset_path(name: str) -> Path:
+    root = TUTORIAL_ASSET_DIR.resolve()
+    resolved = (root / name).resolve()
+    if root not in resolved.parents or not resolved.is_file():
+        abort(404)
+    return resolved
+
+
+def tutorial_response(path: Path, mimetype: str) -> Response:
+    return Response(path.read_bytes(), mimetype=mimetype)
+
+
+def scoped_lab_clause(user: AuthContext, column: str) -> tuple[str, tuple[Any, ...]]:
+    if is_admin(user):
+        return ("", ())
+    if user.lab_id is None:
+        return (" WHERE 1 = 0", ())
+    return (f" WHERE {column} = ?", (user.lab_id,))
 
 
 def _client_ip() -> str:
@@ -715,6 +747,33 @@ def index() -> str:
     return render_template("index.html", app_name=APP_NAME)
 
 
+@app.route("/learn")
+def tutorial_redirect() -> Response:
+    return redirect("/learn/", code=308)
+
+
+@app.route("/learn/")
+def tutorial_page() -> Response:
+    return tutorial_response(tutorial_file_path(TUTORIAL_HTML_PATH), "text/html")
+
+
+@app.route("/learn/tutorial.css")
+def tutorial_stylesheet() -> Response:
+    return tutorial_response(tutorial_file_path(TUTORIAL_CSS_PATH), "text/css")
+
+
+@app.route("/learn/user_training_tutorial.pdf")
+def tutorial_pdf() -> Response:
+    return tutorial_response(tutorial_file_path(TUTORIAL_PDF_PATH), "application/pdf")
+
+
+@app.route("/learn/assets/<path:name>")
+def tutorial_asset(name: str) -> Response:
+    asset = tutorial_asset_path(name)
+    guessed, _ = mimetypes.guess_type(asset.name)
+    return tutorial_response(asset, guessed or "application/octet-stream")
+
+
 @app.route("/scan/<token>")
 def scan_page(token: str) -> str:
     return render_template("scan.html", app_name=APP_NAME, scan_token=token)
@@ -806,6 +865,219 @@ def logout() -> Response:
 def me() -> Response:
     user = g.user
     return jsonify({"id": user.user_id, "email": user.email, "fullName": user.full_name, "role": user.role, "labId": user.lab_id})
+
+
+def learning_modules() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": "orientation",
+            "order": 1,
+            "title": "Orientation and safe setup",
+            "summary": "Start on the landing dashboard, verify scan setup, and get comfortable with the phone-first flow.",
+            "actionLabel": "Open Dashboard",
+            "tab": "dashboard",
+        },
+        {
+            "id": "cage_cards",
+            "order": 2,
+            "title": "Cage card literacy",
+            "summary": "Read the card the way a technician does: identify ownership, strain, genotype, population, and litter context fast.",
+            "actionLabel": "Open Cages",
+            "tab": "cages",
+        },
+        {
+            "id": "scan_edit",
+            "order": 3,
+            "title": "Scan-to-edit workflow",
+            "summary": "Jump from printed QR to the browser, update counts, and watch the audit trail behave like a real room workflow.",
+            "actionLabel": "Open Scan/Edit",
+            "tab": "scan",
+        },
+        {
+            "id": "breeding",
+            "order": 4,
+            "title": "Breeding, litters, and pedigree",
+            "summary": "Connect breeder pairs, litters, and inheritance so cage work stays tied to the biology.",
+            "actionLabel": "Open Breeding",
+            "tab": "breeding",
+        },
+        {
+            "id": "projects",
+            "order": 5,
+            "title": "Projects and research readiness",
+            "summary": "See how cages roll up into projects, quotas, and sample-driven research planning.",
+            "actionLabel": "Open Projects",
+            "tab": "projects",
+        },
+        {
+            "id": "compliance",
+            "order": 6,
+            "title": "Compliance and abnormal conditions",
+            "summary": "Practice identifying welfare pressure, protocol risk, and hard-stop situations before they disrupt work.",
+            "actionLabel": "Open Compliance",
+            "tab": "compliance",
+        },
+        {
+            "id": "planner",
+            "order": 7,
+            "title": "Planner and manager workflows",
+            "summary": "Use analytics, capacity, and seeded scenarios to reason about demand, risk, and cage growth.",
+            "actionLabel": "Open Analytics",
+            "tab": "analytics",
+        },
+    ]
+
+
+def learning_counts(user: AuthContext) -> dict[str, int]:
+    cage_where, cage_params = scoped_lab_clause(user, "lab_id")
+    project_where, project_params = scoped_lab_clause(user, "lab_id")
+    scenario_where, scenario_params = scoped_lab_clause(user, "lab_id")
+
+    cages = db().execute(f"SELECT COUNT(*) AS n FROM cages{cage_where}", cage_params).fetchone()["n"]
+    projects = db().execute(f"SELECT COUNT(*) AS n FROM projects{project_where}", project_params).fetchone()["n"]
+    scenarios = db().execute(f"SELECT COUNT(*) AS n FROM planner_scenarios{scenario_where}", scenario_params).fetchone()["n"]
+    if is_admin(user):
+        labs = db().execute("SELECT COUNT(*) AS n FROM labs").fetchone()["n"]
+        animals = db().execute("SELECT COUNT(*) AS n FROM animals").fetchone()["n"]
+        litters = db().execute("SELECT COUNT(*) AS n FROM litters").fetchone()["n"]
+        samples = db().execute("SELECT COUNT(*) AS n FROM sample_records").fetchone()["n"]
+    else:
+        labs = 1 if user.lab_id else 0
+        animals = db().execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM animals a
+            JOIN cages c ON c.id = a.cage_id
+            WHERE c.lab_id = ?
+            """,
+            (user.lab_id,),
+        ).fetchone()["n"]
+        litters = db().execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM litters l
+            JOIN cages c ON c.id = l.cage_id
+            WHERE c.lab_id = ?
+            """,
+            (user.lab_id,),
+        ).fetchone()["n"]
+        samples = db().execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM sample_records s
+            JOIN cages c ON c.id = s.cage_id
+            WHERE c.lab_id = ?
+            """,
+            (user.lab_id,),
+        ).fetchone()["n"]
+
+    return {
+        "labs": int(labs),
+        "cages": int(cages),
+        "projects": int(projects),
+        "animals": int(animals),
+        "litters": int(litters),
+        "samples": int(samples),
+        "plannerScenarios": int(scenarios),
+    }
+
+
+def learning_examples(user: AuthContext) -> dict[str, Any]:
+    cage_where, cage_params = scoped_lab_clause(user, "c.lab_id")
+    project_where, project_params = scoped_lab_clause(user, "p.lab_id")
+    scenario_where, scenario_params = scoped_lab_clause(user, "ps.lab_id")
+
+    cage_row = db().execute(
+        f"""
+        SELECT c.id, c.cage_code, c.breeding_status, c.strain, COUNT(l.id) AS litter_count
+        FROM cages c
+        LEFT JOIN litters l ON l.cage_id = c.id
+        {cage_where}
+        GROUP BY c.id, c.cage_code, c.breeding_status, c.strain
+        ORDER BY litter_count DESC, c.id ASC
+        LIMIT 1
+        """,
+        cage_params,
+    ).fetchone()
+
+    project_row = db().execute(
+        f"""
+        SELECT p.id, p.project_code, p.title, p.status
+        FROM projects p
+        {project_where}
+        ORDER BY p.id ASC
+        LIMIT 1
+        """,
+        project_params,
+    ).fetchone()
+
+    pedigree_row = db().execute(
+        f"""
+        SELECT a.id, a.animal_code, c.cage_code
+        FROM animals a
+        JOIN cages c ON c.id = a.cage_id
+        {cage_where}{' AND' if cage_where else ' WHERE'} a.sire_id IS NOT NULL AND a.dam_id IS NOT NULL
+        ORDER BY a.id ASC
+        LIMIT 1
+        """,
+        cage_params,
+    ).fetchone()
+
+    sample_row = db().execute(
+        f"""
+        SELECT s.id, s.sample_code, s.status, a.animal_code
+        FROM sample_records s
+        JOIN cages c ON c.id = s.cage_id
+        LEFT JOIN animals a ON a.id = s.animal_id
+        {cage_where}
+        ORDER BY s.id ASC
+        LIMIT 1
+        """,
+        cage_params,
+    ).fetchone()
+
+    scenario_row = db().execute(
+        f"""
+        SELECT ps.id, ps.name, ps.status, l.name AS lab_name
+        FROM planner_scenarios ps
+        JOIN labs l ON l.id = ps.lab_id
+        {scenario_where}
+        ORDER BY ps.id ASC
+        LIMIT 1
+        """,
+        scenario_params,
+    ).fetchone()
+
+    return {
+        "cage": dict(cage_row) if cage_row else None,
+        "project": dict(project_row) if project_row else None,
+        "pedigreeAnimal": dict(pedigree_row) if pedigree_row else None,
+        "sample": dict(sample_row) if sample_row else None,
+        "plannerScenario": dict(scenario_row) if scenario_row else None,
+    }
+
+
+@app.get("/api/learning/overview")
+@require_auth()
+def learning_overview() -> Response:
+    counts = learning_counts(g.user)
+    availability = {
+        "breedingPedigree": counts["animals"] > 0 and counts["litters"] > 0,
+        "sampleGenotyping": counts["samples"] > 0,
+        "planner": counts["plannerScenarios"] > 0,
+        "projects": counts["projects"] > 0,
+    }
+    return jsonify(
+        {
+            "tutorialUrl": "/learn/",
+            "tutorialPdfUrl": "/learn/user_training_tutorial.pdf",
+            "counts": counts,
+            "workflowAvailability": availability,
+            "tutorialReady": all(availability.values()),
+            "modules": learning_modules(),
+            "examples": learning_examples(g.user),
+        }
+    )
 
 
 @app.get("/api/projects")
