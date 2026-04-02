@@ -265,6 +265,24 @@ def _normalize_project_handoff_sla(payload: dict[str, Any] | None) -> dict[str, 
     }
 
 
+def _project_handoff_sla_create_sql() -> str:
+    id_column = "id SERIAL PRIMARY KEY" if storage.is_postgres() else "id INTEGER PRIMARY KEY AUTOINCREMENT"
+    return f"""
+            CREATE TABLE IF NOT EXISTS project_handoff_slas (
+                {id_column},
+                project_id INTEGER NOT NULL UNIQUE,
+                assigned_max_days INTEGER NOT NULL DEFAULT 2,
+                shipped_max_days INTEGER NOT NULL DEFAULT 5,
+                repeat_breach_threshold INTEGER NOT NULL DEFAULT 2,
+                updated_by INTEGER,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(project_id) REFERENCES projects(id),
+                FOREIGN KEY(updated_by) REFERENCES users(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_project_handoff_slas_project ON project_handoff_slas(project_id);
+    """
+
+
 def _csv_pick(row: dict[str, Any], keys: list[str]) -> str:
     for key in keys:
         value = row.get(key)
@@ -1174,22 +1192,7 @@ def _apply_schema_migrations(conn: storage.Connection) -> None:
         if "outcome_code" not in closeout_cols:
             conn.execute("ALTER TABLE project_cohort_closeouts ADD COLUMN outcome_code TEXT NOT NULL DEFAULT 'other'")
     if not storage.table_columns(conn, "project_handoff_slas"):
-        conn.executescript(
-            """
-            CREATE TABLE IF NOT EXISTS project_handoff_slas (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                project_id INTEGER NOT NULL UNIQUE,
-                assigned_max_days INTEGER NOT NULL DEFAULT 2,
-                shipped_max_days INTEGER NOT NULL DEFAULT 5,
-                repeat_breach_threshold INTEGER NOT NULL DEFAULT 2,
-                updated_by INTEGER,
-                updated_at TEXT NOT NULL,
-                FOREIGN KEY(project_id) REFERENCES projects(id),
-                FOREIGN KEY(updated_by) REFERENCES users(id)
-            );
-            CREATE INDEX IF NOT EXISTS idx_project_handoff_slas_project ON project_handoff_slas(project_id);
-            """
-        )
+        conn.executescript(_project_handoff_sla_create_sql())
     else:
         sla_cols = set(storage.table_columns(conn, "project_handoff_slas"))
         if "assigned_max_days" not in sla_cols:
@@ -2343,42 +2346,36 @@ def update_project_handoff_sla(project_id: int) -> Response:
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     before = _project_handoff_sla_payload(project_id, g.user)
-    existing = db().execute(
-        "SELECT id FROM project_handoff_slas WHERE project_id = ?",
-        (project_id,),
-    ).fetchone()
-    if existing:
-        db().execute(
-            """
-            UPDATE project_handoff_slas
-            SET assigned_max_days = ?, shipped_max_days = ?, repeat_breach_threshold = ?, updated_by = ?, updated_at = ?
-            WHERE project_id = ?
-            """,
-            (
-                normalized["assignedMaxDays"],
-                normalized["shippedMaxDays"],
-                normalized["repeatBreachThreshold"],
-                g.user.user_id,
-                now_iso(),
-                project_id,
-            ),
-        )
-    else:
-        db().execute(
-            """
-            INSERT INTO project_handoff_slas
-                (project_id, assigned_max_days, shipped_max_days, repeat_breach_threshold, updated_by, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-            """,
-            (
-                project_id,
-                normalized["assignedMaxDays"],
-                normalized["shippedMaxDays"],
-                normalized["repeatBreachThreshold"],
-                g.user.user_id,
-                now_iso(),
-            ),
-        )
+    updated_at = now_iso()
+    db().execute(
+        storage.sql_upsert(
+            "project_handoff_slas",
+            [
+                "project_id",
+                "assigned_max_days",
+                "shipped_max_days",
+                "repeat_breach_threshold",
+                "updated_by",
+                "updated_at",
+            ],
+            ["project_id"],
+            [
+                "assigned_max_days",
+                "shipped_max_days",
+                "repeat_breach_threshold",
+                "updated_by",
+                "updated_at",
+            ],
+        ),
+        (
+            project_id,
+            normalized["assignedMaxDays"],
+            normalized["shippedMaxDays"],
+            normalized["repeatBreachThreshold"],
+            g.user.user_id,
+            updated_at,
+        ),
+    )
     db().commit()
     after = _project_handoff_sla_payload(project_id, g.user)
     audit_log(g.user.user_id, "project_handoff_sla", project_id, "update", before, after)

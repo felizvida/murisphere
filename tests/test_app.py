@@ -585,6 +585,10 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertIn("application/pdf", stalled_pdf.content_type)
         self.assertTrue(stalled_pdf.data.startswith(b"%PDF-"))
 
+        cookie_closeout_csv = self.client.get("/api/reports/cohort-closeouts.csv")
+        self.assertEqual(cookie_closeout_csv.status_code, 200)
+        self.assertIn("text/csv", cookie_closeout_csv.content_type)
+
         with sqlite3.connect(appmod.DB_PATH) as conn:
             conn.execute(
                 """
@@ -1781,6 +1785,17 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertEqual(custom_sla.get_json()["assignedMaxDays"], 3)
         self.assertEqual(custom_sla.get_json()["repeatBreachThreshold"], 1)
         self.assertEqual(custom_sla.get_json()["source"], "custom")
+
+        second_sla = self.client.put(
+            f"/api/projects/{project_id}/handoff-sla",
+            headers=self.auth_headers(admin),
+            json={"assignedMaxDays": 3, "shippedMaxDays": 3, "repeatBreachThreshold": 1},
+        )
+        self.assertEqual(second_sla.status_code, 200)
+        self.assertEqual(second_sla.get_json()["shippedMaxDays"], 3)
+        with sqlite3.connect(appmod.DB_PATH) as conn:
+            handoff_rows = conn.execute("SELECT COUNT(*) FROM project_handoff_slas WHERE project_id = ?", (project_id,)).fetchone()[0]
+        self.assertEqual(handoff_rows, 1)
 
         timeline = self.client.get(f"/api/projects/{project_id}/assignment-timeline", headers=self.auth_headers(tech))
         self.assertEqual(timeline.status_code, 200)

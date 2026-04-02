@@ -139,3 +139,35 @@ CREATE TABLE demo (id SERIAL PRIMARY KEY)""",
     def test_app_selects_postgres_schema_when_postgres_dialect_is_active(self) -> None:
         with mock.patch.object(storage, "DATABASE_DIALECT", "postgres"):
             self.assertEqual(appmod.schema_path(), "schema_postgres.sql")
+
+    def test_project_handoff_sla_migration_sql_is_postgres_safe(self) -> None:
+        class FakeConn:
+            def __init__(self) -> None:
+                self.executed: list[str] = []
+
+            def execute(self, sql: str, _params=None):
+                self.executed.append(sql)
+                return mock.Mock()
+
+            def executescript(self, script: str) -> None:
+                self.executed.append(script)
+
+        fake_conn = FakeConn()
+
+        def fake_columns(_conn, table: str) -> list[str]:
+            if table == "litters":
+                return ["id", "weaned_on"]
+            if table == "project_cohort_closeouts":
+                return ["id", "outcome_code"]
+            if table == "project_handoff_slas":
+                return []
+            return ["id"]
+
+        with mock.patch.object(storage, "DATABASE_DIALECT", "postgres"):
+            with mock.patch.object(appmod.storage, "table_columns", side_effect=fake_columns):
+                appmod._apply_schema_migrations(fake_conn)
+
+        executed_sql = "\n".join(fake_conn.executed)
+        self.assertIn("CREATE TABLE IF NOT EXISTS project_handoff_slas", executed_sql)
+        self.assertIn("SERIAL PRIMARY KEY", executed_sql)
+        self.assertNotIn("AUTOINCREMENT", executed_sql)
