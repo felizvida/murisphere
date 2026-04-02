@@ -223,7 +223,7 @@ jobs:
 
       - name: Desktop scaffold tests
         run: |
-          python3 -m unittest tests.test_desktop_scaffold -v
+          python3 -m unittest discover -s tests -p 'test_desktop_scaffold.py' -v
 
       - name: Cargo format check
         run: |

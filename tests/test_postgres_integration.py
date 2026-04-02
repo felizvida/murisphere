@@ -148,8 +148,21 @@ class PostgresIntegrationTests(unittest.TestCase):
         self.appmod.app.config.update(TESTING=True)
         client = self.appmod.app.test_client()
         admin = self.login(client, "admin@murisphere.local", "admin1234")
+        project = client.post(
+            "/api/projects",
+            headers=self.auth_headers(admin),
+            json={
+                "projectCode": f"PG-UPGRADE-{int(time.time() * 1000)}",
+                "title": "Postgres Upgrade Migration Project",
+                "labId": 1,
+                "status": "Active",
+                "targetAnimals": 12,
+            },
+        )
+        self.assertEqual(project.status_code, 201)
+        project_id = project.get_json()["id"]
         update = client.put(
-            "/api/projects/1/handoff-sla",
+            f"/api/projects/{project_id}/handoff-sla",
             headers=self.auth_headers(admin),
             json={"assignedMaxDays": 3, "shippedMaxDays": 4, "repeatBreachThreshold": 2},
         )
