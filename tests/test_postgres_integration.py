@@ -18,6 +18,9 @@ import importlib
 import os
 import time
 import unittest
+from pathlib import Path
+
+import storage_postgres
 
 
 DB_URL = os.getenv("MURISPHERE_DATABASE_URL", "").strip()
@@ -74,6 +77,84 @@ class PostgresIntegrationTests(unittest.TestCase):
         self.assertGreaterEqual(user_count, 3)
         self.assertGreaterEqual(cage_count, 2)
         self.assertEqual(tables, 3)
+
+    def test_init_db_upgrades_legacy_postgres_schema_missing_handoff_sla_table(self) -> None:
+        schema = Path("schema_postgres.sql").read_text(encoding="utf-8")
+        handoff_block = """CREATE TABLE IF NOT EXISTS project_handoff_slas (
+    id SERIAL PRIMARY KEY,
+    project_id INTEGER NOT NULL UNIQUE,
+    assigned_max_days INTEGER NOT NULL DEFAULT 2,
+    shipped_max_days INTEGER NOT NULL DEFAULT 5,
+    repeat_breach_threshold INTEGER NOT NULL DEFAULT 2,
+    updated_by INTEGER,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(project_id) REFERENCES projects(id),
+    FOREIGN KEY(updated_by) REFERENCES users(id)
+);
+
+"""
+        legacy_schema = schema.replace(handoff_block, "")
+        legacy_schema = legacy_schema.replace(
+            "CREATE INDEX IF NOT EXISTS idx_project_handoff_slas_project ON project_handoff_slas(project_id);\n",
+            "",
+        )
+
+        with psycopg.connect(DB_URL, autocommit=True, row_factory=dict_row) as conn:
+            for statement in storage_postgres.split_sql_statements(legacy_schema):
+                conn.execute(statement)
+            before = conn.execute(
+                """
+                SELECT COUNT(*) AS n
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'project_handoff_slas'
+                """
+            ).fetchone()["n"]
+        self.assertEqual(before, 0)
+
+        self.appmod.init_db()
+
+        with psycopg.connect(DB_URL, row_factory=dict_row) as conn:
+            table_count = conn.execute(
+                """
+                SELECT COUNT(*) AS n
+                FROM information_schema.tables
+                WHERE table_schema = 'public' AND table_name = 'project_handoff_slas'
+                """
+            ).fetchone()["n"]
+            column_rows = conn.execute(
+                """
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public' AND table_name = 'project_handoff_slas'
+                ORDER BY ordinal_position
+                """
+            ).fetchall()
+            user_count = conn.execute("SELECT COUNT(*) AS n FROM users").fetchone()["n"]
+        self.assertEqual(table_count, 1)
+        self.assertGreaterEqual(user_count, 3)
+        self.assertEqual(
+            [row["column_name"] for row in column_rows],
+            [
+                "id",
+                "project_id",
+                "assigned_max_days",
+                "shipped_max_days",
+                "repeat_breach_threshold",
+                "updated_by",
+                "updated_at",
+            ],
+        )
+
+        self.appmod.app.config.update(TESTING=True)
+        client = self.appmod.app.test_client()
+        admin = self.login(client, "admin@murisphere.local", "admin1234")
+        update = client.put(
+            "/api/projects/1/handoff-sla",
+            headers=self.auth_headers(admin),
+            json={"assignedMaxDays": 3, "shippedMaxDays": 4, "repeatBreachThreshold": 2},
+        )
+        self.assertEqual(update.status_code, 200)
+        self.assertEqual(update.get_json()["assignedMaxDays"], 3)
 
     def test_storage_wrapper_supports_qmark_queries_and_lastrowid(self) -> None:
         self.appmod.init_db()
