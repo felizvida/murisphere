@@ -2101,14 +2101,20 @@ def chat_prompt_examples(user: AuthContext) -> list[str]:
         manager_prompts = [
             "Give me the facility morning brief",
             "Show room utilization",
+            "Which labs are above expected load?",
             "Show chargeback summary",
+            "What requests breached SLA?",
+            "Show recent sample results",
         ]
         if project_code:
             manager_prompts.insert(2, f"Show project {project_code}")
+            manager_prompts.append(f"Reserve 1 matching animal for project {project_code}")
         return shared + manager_prompts
 
     technician_prompts = [
         "Technician checklist",
+        "What needs weaning this week?",
+        "Show mortality follow-up",
     ]
     if cage_code:
         technician_prompts.extend(
@@ -2737,6 +2743,476 @@ def chat_reports_response(user: AuthContext) -> dict[str, Any]:
     }
 
 
+def chat_weaning_response(user: AuthContext) -> dict[str, Any]:
+    today = date.today()
+    horizon = (today + timedelta(days=7)).isoformat()
+    scope_clause = "" if is_admin(user) else " AND c.lab_id = ?"
+    params: list[Any] = []
+    if not is_admin(user):
+        params.append(user.lab_id)
+    rows = db().execute(
+        """
+        SELECT l.id, l.birth_date, l.litter_size, l.survived_count,
+               c.id AS cage_id, c.cage_code, c.breeding_status, r.name AS room_name, k.name AS rack_name
+        FROM litters l
+        JOIN cages c ON c.id = l.cage_id
+        LEFT JOIN rooms r ON r.id = c.room_id
+        LEFT JOIN racks k ON k.id = c.rack_id
+        WHERE l.weaned_on IS NULL
+        """
+        + scope_clause
+        + """
+        ORDER BY l.birth_date ASC, c.cage_code ASC
+        LIMIT 100
+        """,
+        params,
+    ).fetchall()
+    table_rows = []
+    overdue = 0
+    for row in rows:
+        try:
+            birth_date = date.fromisoformat(str(row["birth_date"]))
+        except (TypeError, ValueError):
+            continue
+        due_on = (birth_date + timedelta(days=21)).isoformat()
+        if due_on > horizon:
+            continue
+        if due_on < today.isoformat():
+            overdue += 1
+        table_rows.append(
+            [
+                row["cage_code"],
+                row["birth_date"],
+                due_on,
+                row["survived_count"],
+                f"{row['room_name'] or '-'} / {row['rack_name'] or '-'}",
+                row["breeding_status"],
+            ]
+        )
+        if len(table_rows) >= 20:
+            break
+    return {
+        "intent": "weaning_queue",
+        "message": "These litters are due or coming due for weaning in the next 7 days.",
+        "cards": [
+            chat_stats_card(
+                "Weaning pressure",
+                [
+                    ("Due within 7 days", len(table_rows), "warn" if table_rows else None),
+                    ("Overdue", overdue, "high" if overdue else None),
+                ],
+            ),
+            chat_table_card(
+                "Weaning queue",
+                ["Cage", "Litter DOB", "Due to wean", "Survived", "Location", "Cage status"],
+                table_rows,
+                "No unweaned litters are due in the next 7 days.",
+            ),
+        ],
+        "suggestions": ["Show overdue tasks", "Show breeding summary", "What needs attention today?"],
+    }
+
+
+def chat_mortality_followup_response(user: AuthContext) -> dict[str, Any]:
+    scope_clause = "" if is_admin(user) else " AND c.lab_id = ?"
+    params: list[Any] = [] if is_admin(user) else [user.lab_id]
+    rows = db().execute(
+        """
+        SELECT m.id, m.found_at, m.count_male, m.count_female, m.cause, m.necropsy_status,
+               c.cage_code, l.name AS lab_name
+        FROM mortality_records m
+        JOIN cages c ON c.id = m.cage_id
+        JOIN labs l ON l.id = c.lab_id
+        WHERE COALESCE(m.necropsy_status, 'pending') IN ('pending', 'requested')
+        """
+        + scope_clause
+        + """
+        ORDER BY m.found_at ASC, m.id DESC
+        LIMIT 20
+        """,
+        params,
+    ).fetchall()
+    total_animals = sum(int(r["count_male"] or 0) + int(r["count_female"] or 0) for r in rows)
+    return {
+        "intent": "mortality_followup",
+        "message": "These mortality records still need necropsy or veterinary follow-up.",
+        "cards": [
+            chat_stats_card(
+                "Mortality follow-up pressure",
+                [
+                    ("Open records", len(rows), "high" if rows else None),
+                    ("Animals represented", total_animals, "high" if total_animals else None),
+                ],
+            ),
+            chat_table_card(
+                "Open mortality follow-up",
+                ["Record", "Cage", "Found", "M/F", "Cause", "Necropsy", "Lab"],
+                [
+                    [
+                        f"#{r['id']}",
+                        r["cage_code"],
+                        r["found_at"],
+                        f"{r['count_male']}/{r['count_female']}",
+                        r["cause"] or "-",
+                        r["necropsy_status"] or "pending",
+                        r["lab_name"],
+                    ]
+                    for r in rows
+                ],
+                "No pending mortality follow-up records in scope.",
+            ),
+            chat_links_card("Mortality exports", [{"label": "Mortality CSV", "url": "/api/reports/mortality.csv"}]),
+        ],
+        "suggestions": ["Show alerts", "Show reports", "What needs attention today?"],
+    }
+
+
+def chat_print_room_cards_response(user: AuthContext, room_text: str) -> dict[str, Any]:
+    normalized = " ".join(room_text.strip().split())
+    if not normalized:
+        return {"intent": "print_room_cards_missing", "message": "Tell me which room to print, for example `Generate cage cards for Room 2`.", "cards": [], "suggestions": ["Show reports"]}
+    scope_clause = "" if is_admin(user) else " AND c.lab_id = ?"
+    params: list[Any] = [normalized.lower(), f"%{normalized.lower()}%"]
+    if not is_admin(user):
+        params.append(user.lab_id)
+    rows = db().execute(
+        """
+        SELECT c.id, c.cage_code, r.name AS room_name, k.name AS rack_name
+        FROM cages c
+        JOIN rooms r ON r.id = c.room_id
+        LEFT JOIN racks k ON k.id = c.rack_id
+        WHERE (lower(r.name) = ? OR lower(r.name) LIKE ?)
+        """
+        + scope_clause
+        + """
+        ORDER BY r.name, k.name, c.cage_code
+        LIMIT 40
+        """,
+        params,
+    ).fetchall()
+    if not rows:
+        return {
+            "intent": "print_room_cards_empty",
+            "message": f"I could not find printable cages for `{normalized}` in your scope.",
+            "cards": [],
+            "suggestions": ["Show reports", "Search Room"],
+        }
+    ids = ",".join(str(int(r["id"])) for r in rows)
+    room_name = rows[0]["room_name"]
+    return {
+        "intent": "print_room_cards",
+        "message": f"Batch cage cards are ready for {room_name}. The print view includes up to 40 cages so the URL remains browser-safe.",
+        "cards": [
+            chat_stats_card(
+                "Batch print set",
+                [
+                    ("Room", room_name, None),
+                    ("Cards", len(rows), "warn" if len(rows) >= 40 else None),
+                ],
+            ),
+            chat_table_card(
+                "Cards included",
+                ["Cage", "Room", "Rack"],
+                [[r["cage_code"], r["room_name"], r["rack_name"] or "-"] for r in rows[:12]],
+                "No cages selected.",
+            ),
+            chat_links_card("Print action", [{"label": f"Open {room_name} cage-card print view", "url": f"/print/cards?ids={ids}"}]),
+        ],
+        "suggestions": ["What needs attention today?", "Show reports"],
+    }
+
+
+def chat_load_pressure_response(user: AuthContext) -> dict[str, Any]:
+    if user.role not in {"PI", "Admin"}:
+        return {
+            "intent": "load_pressure_forbidden",
+            "message": "Lab load and quota comparisons are limited to PI and Admin roles.",
+            "cards": [],
+            "suggestions": ["What needs attention today?", "Show reports"],
+        }
+    quotas = facility_quotas().get_json() or []
+    above = [q for q in quotas if q.get("expectedCageLoad") and int(q.get("currentCages") or 0) > int(q.get("expectedCageLoad") or 0)]
+    watch = [q for q in quotas if q.get("utilizationPct") is not None and float(q["utilizationPct"]) >= 90]
+    rows = sorted(above or watch, key=lambda q: float(q.get("utilizationPct") or 0), reverse=True)
+    return {
+        "intent": "load_pressure",
+        "message": "These labs are above expected load or close enough to quota to deserve attention.",
+        "cards": [
+            chat_stats_card(
+                "Load pressure",
+                [
+                    ("Above expected load", len(above), "high" if above else None),
+                    ("At or above 90%", len(watch), "warn" if watch else None),
+                ],
+            ),
+            chat_table_card(
+                "Quota watchlist",
+                ["Lab", "Tier", "Current cages", "Expected", "Remaining", "Utilization %"],
+                [
+                    [q["labName"], q["sizeTier"], q["currentCages"], q["expectedCageLoad"], q["remainingQuota"], q["utilizationPct"] or "-"]
+                    for q in rows[:12]
+                ],
+                "No labs are above expected load in the current scope.",
+            ),
+        ],
+        "suggestions": ["Show room utilization", "Show chargeback summary", "Show reports"],
+    }
+
+
+def chat_request_sla_response(user: AuthContext) -> dict[str, Any]:
+    if user.role not in {"PI", "Admin"}:
+        return {
+            "intent": "request_sla_forbidden",
+            "message": "Facility request SLA review is limited to PI and Admin roles.",
+            "cards": [],
+            "suggestions": ["What needs attention today?", "Show reports"],
+        }
+    threshold_hours = 48.0
+    scope_clause = "" if is_admin(user) else " AND fr.lab_id = ?"
+    params: list[Any] = [] if is_admin(user) else [user.lab_id]
+    rows = db().execute(
+        """
+        SELECT fr.id, fr.request_type, fr.status, fr.created_at, fr.updated_at,
+               l.name AS lab_name, p.project_code
+        FROM facility_requests fr
+        JOIN labs l ON l.id = fr.lab_id
+        LEFT JOIN projects p ON p.id = fr.project_id
+        WHERE fr.status IN ('submitted', 'approved')
+        """
+        + scope_clause
+        + """
+        ORDER BY fr.created_at ASC
+        LIMIT 40
+        """,
+        params,
+    ).fetchall()
+    now_dt = datetime.now(UTC)
+    aged_rows = []
+    for row in rows:
+        created_raw = str(row["created_at"])
+        try:
+            created_at = datetime.fromisoformat(created_raw)
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=UTC)
+        except ValueError:
+            created_at = now_dt
+        item = dict(row)
+        item["age_hours"] = max(0.0, (now_dt - created_at).total_seconds() / 3600.0)
+        aged_rows.append(item)
+    breached = [r for r in aged_rows if float(r["age_hours"] or 0) >= threshold_hours]
+    return {
+        "intent": "request_sla",
+        "message": f"Facility requests at or above {int(threshold_hours)} hours are treated as SLA breaches for this chat review.",
+        "cards": [
+            chat_stats_card(
+                "Request SLA pressure",
+                [
+                    ("Open submitted/approved", len(aged_rows), "warn" if aged_rows else None),
+                    ("Breached SLA", len(breached), "high" if breached else None),
+                ],
+            ),
+            chat_table_card(
+                "Breached requests",
+                ["Request", "Type", "Status", "Age h", "Lab", "Project"],
+                [
+                    [f"#{r['id']}", r["request_type"], r["status"], round(float(r["age_hours"] or 0), 1), r["lab_name"], r["project_code"] or "-"]
+                    for r in breached[:12]
+                ],
+                "No open requests have breached the 48-hour chat SLA threshold.",
+            ),
+        ],
+        "suggestions": ["Show room utilization", "Show reports", "What needs attention today?"],
+    }
+
+
+def chat_sample_results_response(user: AuthContext) -> dict[str, Any]:
+    scope_clause = "" if is_admin(user) else " AND c.lab_id = ?"
+    params: list[Any] = [] if is_admin(user) else [user.lab_id]
+    rows = db().execute(
+        """
+        SELECT s.id, s.sample_code, s.sample_type, s.provider, s.status, s.collected_on,
+               a.animal_code, a.genotype, c.cage_code,
+               (
+                   SELECT gr.result
+                   FROM genotype_results gr
+                   WHERE gr.animal_id = a.id
+                   ORDER BY gr.id DESC
+                   LIMIT 1
+               ) AS latest_result
+        FROM sample_records s
+        JOIN animals a ON a.id = s.animal_id
+        LEFT JOIN cages c ON c.id = s.cage_id
+        WHERE s.status IN ('received', 'resulted', 'rejected')
+        """
+        + scope_clause
+        + """
+        ORDER BY s.id DESC
+        LIMIT 20
+        """,
+        params,
+    ).fetchall()
+    resulted = sum(1 for row in rows if row["status"] == "resulted")
+    return {
+        "intent": "sample_results",
+        "message": "These are the most recent samples with received, resulted, or rejected states.",
+        "cards": [
+            chat_stats_card(
+                "Sample result state",
+                [
+                    ("Recent review rows", len(rows), None),
+                    ("Resulted", resulted, "warn" if resulted else None),
+                ],
+            ),
+            chat_table_card(
+                "Recent sample results",
+                ["Sample", "Animal", "Cage", "Status", "Result", "Provider"],
+                [
+                    [
+                        row["sample_code"],
+                        row["animal_code"],
+                        row["cage_code"] or "-",
+                        row["status"],
+                        row["latest_result"] or row["genotype"] or "-",
+                        row["provider"] or "-",
+                    ]
+                    for row in rows[:12]
+                ],
+                "No recent sample results are visible in scope.",
+            ),
+        ],
+        "suggestions": ["Show genotype-ready animals", "Show reports", "What needs attention today?"],
+    }
+
+
+def chat_project_closeout_report_response(user: AuthContext, code: str | None = None) -> dict[str, Any]:
+    project = chat_find_project_row(code, user) if code else None
+    closeouts = _project_closeouts(int(project["id"]))[:10] if project else _cohort_closeout_rows(user, limit=10)
+    title = f"Recent closeouts for {project['project_code']}" if project else "Recent project closeouts"
+    if code and not project:
+        return {"intent": "project_closeout_missing", "message": f"I could not find project `{code}` in your scope.", "cards": [], "suggestions": ["Show reports"]}
+    return {
+        "intent": "project_closeout_report",
+        "message": "Here is the closeout report shortcut. Use the links for exportable evidence, and the table for fast review.",
+        "cards": [
+            chat_table_card(
+                title,
+                ["Project", "Status", "Outcome", "Completed", "Closed", "Summary"],
+                [
+                    [
+                        project["project_code"] if project else row["projectCode"],
+                        row["status"],
+                        row.get("outcome_label") or row.get("outcomeLabel") or "n/a",
+                        row.get("completed_animals") or row.get("completedAnimals") or 0,
+                        row.get("closed_at") or row.get("closedAt") or "-",
+                        row.get("summary") or "-",
+                    ]
+                    for row in closeouts
+                ],
+                "No closeout records are visible in scope.",
+            ),
+            chat_links_card(
+                "Closeout exports",
+                [
+                    {"label": "Cohort closeouts CSV", "url": "/api/reports/cohort-closeouts.csv"},
+                    {"label": "Cohort closeouts PDF", "url": "/api/reports/cohort-closeouts.pdf"},
+                ],
+            ),
+        ],
+        "suggestions": ["Show stalled handoffs", "Show reports", "What needs attention today?"],
+    }
+
+
+def chat_reserve_matching_response(user: AuthContext, project_code: str, requested_count: int = 1) -> dict[str, Any]:
+    if user.role not in {"PI", "Admin"}:
+        return {
+            "intent": "reserve_matching_forbidden",
+            "message": "Animal reservation is limited to PI and Admin roles.",
+            "cards": [],
+            "suggestions": ["Show genotype-ready animals", "Show reports"],
+        }
+    project = chat_find_project_row(project_code, user)
+    if not project:
+        return {"intent": "reserve_matching_missing", "message": f"I could not find project `{project_code}` in your scope.", "cards": [], "suggestions": ["Show genotype-ready animals"]}
+    count = max(1, min(int(requested_count or 1), 10))
+    targets = _project_target_map([int(project["id"])]).get(int(project["id"]), [])
+    params: list[Any] = [int(project["lab_id"])]
+    rows = db().execute(
+        """
+        SELECT a.id, a.animal_code, a.sex, a.genotype, c.cage_code
+        FROM animals a
+        JOIN cages c ON c.id = a.cage_id
+        LEFT JOIN project_animal_assignments pa ON pa.animal_id = a.id AND pa.status <> 'released'
+        WHERE c.lab_id = ?
+          AND a.status = 'Active'
+          AND COALESCE(a.genotype, '') <> ''
+          AND pa.id IS NULL
+        ORDER BY a.id DESC
+        LIMIT 200
+        """,
+        params,
+    ).fetchall()
+    candidates = []
+    for row in rows:
+        genotype = str(row["genotype"] or "")
+        if targets and not any(_match_genotype_pattern(genotype, target["genotype_pattern"]) for target in targets):
+            continue
+        candidates.append(row)
+        if len(candidates) >= count:
+            break
+    if not candidates:
+        return {
+            "intent": "reserve_matching_empty",
+            "message": f"No unassigned active animals currently match project {project['project_code']}.",
+            "cards": [chat_project_response(user, project["project_code"])["cards"][0]],
+            "suggestions": ["Show genotype-ready animals", "Show breeding summary"],
+        }
+    reserved = 0
+    for row in candidates:
+        db().execute(
+            """
+            INSERT INTO project_animal_assignments (project_id, animal_id, status, notes, assigned_at, assigned_by)
+            VALUES (?, ?, 'reserved', ?, ?, ?)
+            ON CONFLICT(animal_id) DO UPDATE SET
+                project_id = excluded.project_id,
+                status = 'reserved',
+                notes = excluded.notes,
+                assigned_at = excluded.assigned_at,
+                assigned_by = excluded.assigned_by
+            """,
+            (int(project["id"]), int(row["id"]), "Reserved from chat matching workflow", now_iso(), user.user_id),
+        )
+        assignment = db().execute(
+            "SELECT id FROM project_animal_assignments WHERE project_id = ? AND animal_id = ?",
+            (int(project["id"]), int(row["id"])),
+        ).fetchone()
+        _log_project_assignment_event(
+            assignment_id=int(assignment["id"]) if assignment else None,
+            project_id=int(project["id"]),
+            animal_id=int(row["id"]),
+            event_type="reserve",
+            from_status=None,
+            to_status="reserved",
+            notes="Reserved from chat matching workflow",
+            actor_user_id=user.user_id,
+        )
+        reserved += 1
+    db().commit()
+    audit_log(user.user_id, "project", int(project["id"]), "chat_reserve_matching", None, {"reserved": reserved, "requested": count})
+    return {
+        "intent": "reserve_matching",
+        "message": f"Reserved {reserved} matching animal(s) for project {project['project_code']}.",
+        "cards": [
+            chat_table_card(
+                "Reserved animals",
+                ["Animal", "Sex", "Genotype", "Cage"],
+                [[row["animal_code"], row["sex"], row["genotype"], row["cage_code"]] for row in candidates],
+                "No animals reserved.",
+            )
+        ],
+        "suggestions": [f"Show project {project['project_code']}", "Show genotype-ready animals", "Show reports"],
+    }
+
+
 def chat_genotype_ready_response(user: AuthContext) -> dict[str, Any]:
     payload = genotyping_cohort_insights().get_json() or {}
     projects = payload.get("projects", [])
@@ -3228,6 +3704,25 @@ def route_chat_message(user: AuthContext, message: str) -> dict[str, Any]:
         return chat_tasks_response(user)
     if "show reports" in normalized or normalized == "reports" or normalized.startswith("generate report"):
         return chat_reports_response(user)
+    if "weaning" in normalized or "needs wean" in normalized or "need wean" in normalized:
+        return chat_weaning_response(user)
+    if "mortality follow" in normalized or "necropsy" in normalized:
+        return chat_mortality_followup_response(user)
+    room_cards_match = re.search(r"(?:print|generate)\s+(?:cage\s+)?cards\s+for\s+(room\s+[A-Za-z0-9 -]+)\b", raw, re.IGNORECASE)
+    if room_cards_match:
+        return chat_print_room_cards_response(user, room_cards_match.group(1))
+    if "above expected load" in normalized or "above quota" in normalized or "quota pressure" in normalized:
+        return chat_load_pressure_response(user)
+    if "request" in normalized and ("sla" in normalized or "late" in normalized or "breach" in normalized):
+        return chat_request_sla_response(user)
+    if "sample results" in normalized or "recent sample" in normalized or "genotyping results" in normalized:
+        return chat_sample_results_response(user)
+    closeout_match = re.search(r"(?:project\s+)?closeout\s+report(?:\s+for\s+(?:project\s+)?([A-Za-z0-9-]+))?", raw, re.IGNORECASE)
+    if closeout_match or "generate a project closeout report" in normalized:
+        return chat_project_closeout_report_response(user, closeout_match.group(1) if closeout_match else None)
+    reserve_match = re.search(r"reserve\s+(?:(\d+)\s+)?matching\s+animals?\s+for\s+(?:project\s+)?([A-Za-z0-9-]+)\b", raw, re.IGNORECASE)
+    if reserve_match:
+        return chat_reserve_matching_response(user, reserve_match.group(2), int(reserve_match.group(1) or 1))
     if "genotype-ready" in normalized or "genotype ready" in normalized:
         return chat_genotype_ready_response(user)
     if "stalled cohort handoff" in normalized or "stalled handoffs" in normalized or "what cohorts are stalled" in normalized:

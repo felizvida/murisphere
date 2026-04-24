@@ -56,6 +56,7 @@
 - `docs/releases/v0.3.0.md` - workflow, compliance, and visualization expansion
 - `docs/releases/v0.3.1.md` - cage-card refinement and LaTeX/Pandoc tutorial PDF pipeline
 - `docs/releases/v0.3.2.md` - dashboard, search, and public-scan hardening work
+- `docs/releases/v0.4.1.md` - chat-first daily workflow expansion with dual-mode parity
 
 ## Test And Verification Artifacts
 - `docs/test_reports/UI_CLICKABILITY_REPORT.html` - visual UI clickability contract report

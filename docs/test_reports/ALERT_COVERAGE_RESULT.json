@@ -1,7 +1,7 @@
 {
   "ok": true,
   "db_path": "murisphere.db",
-  "today": "2026-03-05",
+  "today": "2026-04-23",
   "thresholds": {
     "min_total_alerts": 100,
     "min_distinct_cages": 50,

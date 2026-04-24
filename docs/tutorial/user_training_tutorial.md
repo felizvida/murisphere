@@ -142,11 +142,20 @@ A complete Murisphere card should show:
 
 ## Common prompts used across all roles
 The tutorial sections below show the exact seeded responses for these prompts:
+
 - `What needs attention today?`
 - `Open cage F1-L01-C0006`
 - `Show reports`
 - `Print cage card for F1-L01-C0006`
 - `Show project L01-PRJ-01`
+- `What needs weaning this week?`
+- `Show mortality follow-up`
+- `Generate cage cards for Room A1`
+- `Which labs are above expected load?`
+- `What requests breached SLA?`
+- `Show recent sample results`
+- `Reserve 1 matching animal for project L01-PRJ-01`
+- `Generate a project closeout report`
 
 # Role 1: Technician
 ## What a technician cares about daily
@@ -321,6 +330,73 @@ Task pressure card:
 - `F1-L01-C0039`
 - all four were still `pending` and assigned to `Admin User`
 
+### 7. Ask for the weaning queue
+Prompt:
+```text
+What needs weaning this week?
+```
+
+Observed response in the refreshed seeded training environment on **April 24, 2026**:
+
+- message: `These litters are due or coming due for weaning in the next 7 days.`
+
+Weaning pressure:
+
+- `11` litters due within 7 days
+- `0` overdue
+
+First rows in the weaning queue:
+
+- `F1-L01-C0015` · litter DOB `2026-04-03` · due to wean `2026-04-24` · `5` survived · `Room A1 / Rack R1`
+- `F1-L01-C0033` · litter DOB `2026-04-03` · due to wean `2026-04-24` · `5` survived · `Room A1 / Rack R1`
+- `F1-L01-C0012` · litter DOB `2026-04-04` · due to wean `2026-04-25` · `5` survived · `Room A1 / Rack R1`
+
+### 8. Ask for mortality follow-up
+Prompt:
+```text
+Show mortality follow-up
+```
+
+Observed response:
+
+- message: `These mortality records still need necropsy or veterinary follow-up.`
+
+Mortality follow-up pressure:
+
+- `20` open records
+- `20` animals represented
+
+First follow-up rows:
+
+- `#40` · cage `F1-L02-C0037` · cause `found dead` · necropsy `pending`
+- `#39` · cage `F1-L02-C0035` · cause `found dead` · necropsy `pending`
+- `#38` · cage `F1-L02-C0033` · cause `found dead` · necropsy `pending`
+
+The response also includes a direct `Mortality CSV` export link.
+
+### 9. Batch-print the next room pass
+Prompt:
+```text
+Generate cage cards for Room A1
+```
+
+Observed response:
+
+- message: `Batch cage cards are ready for Room A1. The print view includes up to 40 cages so the URL remains browser-safe.`
+
+Batch print set:
+
+- room: `Room A1`
+- cards: `40`
+
+First included cards:
+
+- `F1-L01-C0001`
+- `F1-L01-C0002`
+- `F1-L01-C0003`
+
+The response includes a link like `/print/cards?ids=...` that opens the print view.
+
 ## Technician overlap you should not skip
 Even though these also matter to managers and researchers, a technician should practice them explicitly:
 - printing the card
@@ -334,8 +410,10 @@ Even though these also matter to managers and researchers, a technician should p
 1. Print `F1-L01-C0008`.
 2. Scan the printed card with a phone.
 3. Open the cage in chat.
-4. Ask `Show overdue tasks`.
-5. Return to the workspace and visually confirm alerts for the same room.
+4. Ask `What needs weaning this week?`.
+5. Ask `Show mortality follow-up`.
+6. Ask `Show overdue tasks`.
+7. Return to the workspace and visually confirm alerts for the same room.
 
 # Role 2: Facility Manager
 ## What a facility manager cares about daily
@@ -466,6 +544,40 @@ Observed response:
 
 Prompt:
 ```text
+Which labs are above expected load?
+```
+
+Observed response in the refreshed seeded training environment on **April 24, 2026**:
+
+- message: `These labs are above expected load or close enough to quota to deserve attention.`
+
+Load pressure:
+
+- `5` labs above expected load
+- `7` labs at or above `90%`
+
+First quota-watch rows:
+
+- `Renal Physiology Unit` · `362` current cages · `271` expected · utilization `133.58%`
+- `Molecular Pathology Group` · `362` current cages · `272` expected · utilization `133.09%`
+- `Pain Mechanisms Program` · `152` current cages · `121` expected · utilization `125.62%`
+
+Prompt:
+```text
+What requests breached SLA?
+```
+
+Observed response:
+
+- message: `Facility requests at or above 48 hours are treated as SLA breaches for this chat review.`
+
+Request SLA pressure in this refreshed seed:
+
+- `0` open submitted/approved requests
+- `0` breached SLA requests
+
+Prompt:
+```text
 Show reports
 ```
 
@@ -495,9 +607,11 @@ Do not skip:
 ## Facility manager mini-mission
 1. In chat, ask `Give me the facility morning brief`.
 2. Ask `Show room utilization`.
-3. Switch to the workspace and open analytics.
-4. Export a cohort or handoff report.
-5. Return to chat and ask `Show protocol alerts`.
+3. Ask `Which labs are above expected load?`.
+4. Ask `What requests breached SLA?`.
+5. Switch to the workspace and open analytics.
+6. Export a cohort or handoff report.
+7. Return to chat and ask `Show protocol alerts`.
 
 # Role 3: Researcher / PI
 ## What a researcher cares about daily
@@ -632,6 +746,24 @@ First ready animals returned:
 
 Prompt:
 ```text
+Reserve 1 matching animal for project L01-PRJ-01
+```
+
+Observed response in the refreshed seeded training environment on **April 24, 2026**:
+
+- message: `Reserved 1 matching animal(s) for project L01-PRJ-01.`
+
+Reserved animal:
+
+- `F1-L01-C0042-P06`
+- sex `F`
+- genotype `fl/+`
+- cage `F1-L01-C0042`
+
+This is a write action. It is intentionally explicit: the user must name the project and count.
+
+Prompt:
+```text
 Show stalled cohort handoffs
 ```
 
@@ -651,6 +783,37 @@ The tutorial-ready seed includes:
 
 Use that chain to practice moving from colony context to sample context and back again.
 
+Prompt:
+```text
+Show recent sample results
+```
+
+Observed response:
+
+- message: `These are the most recent samples with received, resulted, or rejected states.`
+
+Sample result state:
+
+- `5` recent review rows
+- `2` resulted
+
+First result rows:
+
+- `SMP-0011` · animal `F1-L01-C0042-P01` · cage `F1-L01-C0042` · status `received` · result/genotype `WT/WT`
+- `SMP-0008` · animal `F1-L01-C0023-P01` · cage `F1-L01-C0023` · status `resulted` · result/genotype `fl/+`
+- `SMP-0007` · animal `F1-L01-C0017-P01` · cage `F1-L01-C0017` · status `received` · result/genotype `tg/tg`
+
+Prompt:
+```text
+Generate a project closeout report
+```
+
+Observed response:
+
+- message: `Here is the closeout report shortcut. Use the links for exportable evidence, and the table for fast review.`
+- the refreshed seed had no closeout rows yet
+- links included `Cohort closeouts CSV` and `Cohort closeouts PDF`
+
 ## Researcher overlap you should not skip
 Researchers should still be able to:
 - read a printed cage card
@@ -663,7 +826,9 @@ Researchers should still be able to:
 2. Open `F1-L01-C0012`.
 3. In the workspace, inspect samples/genotyping.
 4. Review `SMP-0004` and the linked animal context.
-5. Return to chat and ask `Show reports`.
+5. Return to chat and ask `Show recent sample results`.
+6. Ask `Reserve 1 matching animal for project L01-PRJ-01`.
+7. Ask `Generate a project closeout report`.
 
 # Shared Cross-Role Workflows
 ## Workflow: Print a cage card

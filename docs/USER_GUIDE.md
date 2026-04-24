@@ -79,6 +79,7 @@ Notes:
 
 ### Recommended mode usage
 - Use **chat** for `Open cage ...`, `Update cage ...`, `Complete task ...`, `Show overdue tasks`
+- Use **chat** for `What needs weaning this week?`, `Show mortality follow-up`, and `Generate cage cards for Room A1`
 - Use **workspace** for visual cage review, alert color scanning, pedigree inspection, and batch card printing
 
 ## Facility Manager Quick Reference
@@ -105,6 +106,7 @@ Notes:
 ### Recommended mode usage
 - Use **workspace** for utilization, analytics, cohort flow, and exports
 - Use **chat** for morning briefs, exception triage, request checks, and direct report requests
+- Use **chat** for `Which labs are above expected load?`, `What requests breached SLA?`, and `Show chargeback summary`
 
 ## Researcher / PI Quick Reference
 ### Typical data entries
@@ -126,6 +128,7 @@ Notes:
 ### Recommended mode usage
 - Use **workspace** for visual cohort review, pedigree, samples/genotyping, and planner scenarios
 - Use **chat** for direct project summaries, cage lookup, and report retrieval on phone
+- Use **chat** for `Show recent sample results`, `Reserve 1 matching animal for project ...`, and `Generate a project closeout report`
 
 ## Samples And Genotyping
 Use the `Reports` workspace for the samples/genotyping area, or use chat to jump directly into sample and project context.

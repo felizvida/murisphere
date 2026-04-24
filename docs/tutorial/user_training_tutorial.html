@@ -201,6 +201,14 @@ id="toc-still-do-useful-work-complete-the-due-task">5. Still do useful
 work: complete the due task</a></li>
 <li><a href="#re-check-the-queue" id="toc-re-check-the-queue">6.
 Re-check the queue</a></li>
+<li><a href="#ask-for-the-weaning-queue"
+id="toc-ask-for-the-weaning-queue">7. Ask for the weaning queue</a></li>
+<li><a href="#ask-for-mortality-follow-up"
+id="toc-ask-for-mortality-follow-up">8. Ask for mortality
+follow-up</a></li>
+<li><a href="#batch-print-the-next-room-pass"
+id="toc-batch-print-the-next-room-pass">9. Batch-print the next room
+pass</a></li>
 </ul></li>
 <li><a href="#technician-overlap-you-should-not-skip"
 id="toc-technician-overlap-you-should-not-skip">Technician overlap you
@@ -581,10 +589,22 @@ card</figcaption>
 <h2 id="common-prompts-used-across-all-roles">Common prompts used across
 all roles</h2>
 <p>The tutorial sections below show the exact seeded responses for these
-prompts: - <code>What needs attention today?</code> -
-<code>Open cage F1-L01-C0006</code> - <code>Show reports</code> -
-<code>Print cage card for F1-L01-C0006</code> -
-<code>Show project L01-PRJ-01</code></p>
+prompts:</p>
+<ul>
+<li><code>What needs attention today?</code></li>
+<li><code>Open cage F1-L01-C0006</code></li>
+<li><code>Show reports</code></li>
+<li><code>Print cage card for F1-L01-C0006</code></li>
+<li><code>Show project L01-PRJ-01</code></li>
+<li><code>What needs weaning this week?</code></li>
+<li><code>Show mortality follow-up</code></li>
+<li><code>Generate cage cards for Room A1</code></li>
+<li><code>Which labs are above expected load?</code></li>
+<li><code>What requests breached SLA?</code></li>
+<li><code>Show recent sample results</code></li>
+<li><code>Reserve 1 matching animal for project L01-PRJ-01</code></li>
+<li><code>Generate a project closeout report</code></li>
+</ul>
 <h1 id="role-1-technician">Role 1: Technician</h1>
 <h2 id="what-a-technician-cares-about-daily">What a technician cares
 about daily</h2>
@@ -757,6 +777,78 @@ first rows in the open-task table included: - <code>F1-L01-C0042</code>
 - <code>F1-L01-C0041</code> - <code>F1-L01-C0040</code> -
 <code>F1-L01-C0039</code> - all four were still <code>pending</code> and
 assigned to <code>Admin User</code></p>
+<h3 id="ask-for-the-weaning-queue">7. Ask for the weaning queue</h3>
+<p>Prompt:</p>
+<pre class="text"><code>What needs weaning this week?</code></pre>
+<p>Observed response in the refreshed seeded training environment on
+<strong>April 24, 2026</strong>:</p>
+<ul>
+<li>message:
+<code>These litters are due or coming due for weaning in the next 7 days.</code></li>
+</ul>
+<p>Weaning pressure:</p>
+<ul>
+<li><code>11</code> litters due within 7 days</li>
+<li><code>0</code> overdue</li>
+</ul>
+<p>First rows in the weaning queue:</p>
+<ul>
+<li><code>F1-L01-C0015</code> · litter DOB <code>2026-04-03</code> · due
+to wean <code>2026-04-24</code> · <code>5</code> survived ·
+<code>Room A1 / Rack R1</code></li>
+<li><code>F1-L01-C0033</code> · litter DOB <code>2026-04-03</code> · due
+to wean <code>2026-04-24</code> · <code>5</code> survived ·
+<code>Room A1 / Rack R1</code></li>
+<li><code>F1-L01-C0012</code> · litter DOB <code>2026-04-04</code> · due
+to wean <code>2026-04-25</code> · <code>5</code> survived ·
+<code>Room A1 / Rack R1</code></li>
+</ul>
+<h3 id="ask-for-mortality-follow-up">8. Ask for mortality follow-up</h3>
+<p>Prompt:</p>
+<pre class="text"><code>Show mortality follow-up</code></pre>
+<p>Observed response:</p>
+<ul>
+<li>message:
+<code>These mortality records still need necropsy or veterinary follow-up.</code></li>
+</ul>
+<p>Mortality follow-up pressure:</p>
+<ul>
+<li><code>20</code> open records</li>
+<li><code>20</code> animals represented</li>
+</ul>
+<p>First follow-up rows:</p>
+<ul>
+<li><code>#40</code> · cage <code>F1-L02-C0037</code> · cause
+<code>found dead</code> · necropsy <code>pending</code></li>
+<li><code>#39</code> · cage <code>F1-L02-C0035</code> · cause
+<code>found dead</code> · necropsy <code>pending</code></li>
+<li><code>#38</code> · cage <code>F1-L02-C0033</code> · cause
+<code>found dead</code> · necropsy <code>pending</code></li>
+</ul>
+<p>The response also includes a direct <code>Mortality CSV</code> export
+link.</p>
+<h3 id="batch-print-the-next-room-pass">9. Batch-print the next room
+pass</h3>
+<p>Prompt:</p>
+<pre class="text"><code>Generate cage cards for Room A1</code></pre>
+<p>Observed response:</p>
+<ul>
+<li>message:
+<code>Batch cage cards are ready for Room A1. The print view includes up to 40 cages so the URL remains browser-safe.</code></li>
+</ul>
+<p>Batch print set:</p>
+<ul>
+<li>room: <code>Room A1</code></li>
+<li>cards: <code>40</code></li>
+</ul>
+<p>First included cards:</p>
+<ul>
+<li><code>F1-L01-C0001</code></li>
+<li><code>F1-L01-C0002</code></li>
+<li><code>F1-L01-C0003</code></li>
+</ul>
+<p>The response includes a link like <code>/print/cards?ids=...</code>
+that opens the print view.</p>
 <h2 id="technician-overlap-you-should-not-skip">Technician overlap you
 should not skip</h2>
 <p>Even though these also matter to managers and researchers, a
@@ -769,6 +861,8 @@ completing tasks in real time rather than later</p>
 <li>Print <code>F1-L01-C0008</code>.</li>
 <li>Scan the printed card with a phone.</li>
 <li>Open the cage in chat.</li>
+<li>Ask <code>What needs weaning this week?</code>.</li>
+<li>Ask <code>Show mortality follow-up</code>.</li>
 <li>Ask <code>Show overdue tasks</code>.</li>
 <li>Return to the workspace and visually confirm alerts for the same
 room.</li>
@@ -927,6 +1021,42 @@ charge <code>9231.0</code> - <code>Renal Physiology Unit</code> ·
 <code>362</code> cages · <code>10,860</code> cage-days · estimated
 charge <code>9231.0</code></p>
 <p>Prompt:</p>
+<pre class="text"><code>Which labs are above expected load?</code></pre>
+<p>Observed response in the refreshed seeded training environment on
+<strong>April 24, 2026</strong>:</p>
+<ul>
+<li>message:
+<code>These labs are above expected load or close enough to quota to deserve attention.</code></li>
+</ul>
+<p>Load pressure:</p>
+<ul>
+<li><code>5</code> labs above expected load</li>
+<li><code>7</code> labs at or above <code>90%</code></li>
+</ul>
+<p>First quota-watch rows:</p>
+<ul>
+<li><code>Renal Physiology Unit</code> · <code>362</code> current cages
+· <code>271</code> expected · utilization <code>133.58%</code></li>
+<li><code>Molecular Pathology Group</code> · <code>362</code> current
+cages · <code>272</code> expected · utilization
+<code>133.09%</code></li>
+<li><code>Pain Mechanisms Program</code> · <code>152</code> current
+cages · <code>121</code> expected · utilization
+<code>125.62%</code></li>
+</ul>
+<p>Prompt:</p>
+<pre class="text"><code>What requests breached SLA?</code></pre>
+<p>Observed response:</p>
+<ul>
+<li>message:
+<code>Facility requests at or above 48 hours are treated as SLA breaches for this chat review.</code></li>
+</ul>
+<p>Request SLA pressure in this refreshed seed:</p>
+<ul>
+<li><code>0</code> open submitted/approved requests</li>
+<li><code>0</code> breached SLA requests</li>
+</ul>
+<p>Prompt:</p>
 <pre class="text"><code>Show reports</code></pre>
 <p>Observed response: - message:
 <code>These are the reports and exports currently available from chat.</code>
@@ -950,6 +1080,8 @@ mini-mission</h2>
 <ol type="1">
 <li>In chat, ask <code>Give me the facility morning brief</code>.</li>
 <li>Ask <code>Show room utilization</code>.</li>
+<li>Ask <code>Which labs are above expected load?</code>.</li>
+<li>Ask <code>What requests breached SLA?</code>.</li>
 <li>Switch to the workspace and open analytics.</li>
 <li>Export a cohort or handoff report.</li>
 <li>Return to chat and ask <code>Show protocol alerts</code>.</li>
@@ -1093,6 +1225,23 @@ First ready animals returned: - <code>F1-L01-C0042-P06</code> ·
 <code>F1-L01-C0042-P04</code> · <code>tg/tg</code> - each matched
 <code>L01-PRJ-01</code> and was currently <code>unassigned</code></p>
 <p>Prompt:</p>
+<pre class="text"><code>Reserve 1 matching animal for project L01-PRJ-01</code></pre>
+<p>Observed response in the refreshed seeded training environment on
+<strong>April 24, 2026</strong>:</p>
+<ul>
+<li>message:
+<code>Reserved 1 matching animal(s) for project L01-PRJ-01.</code></li>
+</ul>
+<p>Reserved animal:</p>
+<ul>
+<li><code>F1-L01-C0042-P06</code></li>
+<li>sex <code>F</code></li>
+<li>genotype <code>fl/+</code></li>
+<li>cage <code>F1-L01-C0042</code></li>
+</ul>
+<p>This is a write action. It is intentionally explicit: the user must
+name the project and count.</p>
+<p>Prompt:</p>
 <pre class="text"><code>Show stalled cohort handoffs</code></pre>
 <p>Observed response: - message:
 <code>These are the current stalled cohort handoffs in your scope.</code>
@@ -1108,6 +1257,40 @@ animal <code>F1-L01-C0012-P01</code> - cage
 <code>F1-L01-C0012</code></p>
 <p>Use that chain to practice moving from colony context to sample
 context and back again.</p>
+<p>Prompt:</p>
+<pre class="text"><code>Show recent sample results</code></pre>
+<p>Observed response:</p>
+<ul>
+<li>message:
+<code>These are the most recent samples with received, resulted, or rejected states.</code></li>
+</ul>
+<p>Sample result state:</p>
+<ul>
+<li><code>5</code> recent review rows</li>
+<li><code>2</code> resulted</li>
+</ul>
+<p>First result rows:</p>
+<ul>
+<li><code>SMP-0011</code> · animal <code>F1-L01-C0042-P01</code> · cage
+<code>F1-L01-C0042</code> · status <code>received</code> ·
+result/genotype <code>WT/WT</code></li>
+<li><code>SMP-0008</code> · animal <code>F1-L01-C0023-P01</code> · cage
+<code>F1-L01-C0023</code> · status <code>resulted</code> ·
+result/genotype <code>fl/+</code></li>
+<li><code>SMP-0007</code> · animal <code>F1-L01-C0017-P01</code> · cage
+<code>F1-L01-C0017</code> · status <code>received</code> ·
+result/genotype <code>tg/tg</code></li>
+</ul>
+<p>Prompt:</p>
+<pre class="text"><code>Generate a project closeout report</code></pre>
+<p>Observed response:</p>
+<ul>
+<li>message:
+<code>Here is the closeout report shortcut. Use the links for exportable evidence, and the table for fast review.</code></li>
+<li>the refreshed seed had no closeout rows yet</li>
+<li>links included <code>Cohort closeouts CSV</code> and
+<code>Cohort closeouts PDF</code></li>
+</ul>
 <h2 id="researcher-overlap-you-should-not-skip">Researcher overlap you
 should not skip</h2>
 <p>Researchers should still be able to: - read a printed cage card -
@@ -1121,7 +1304,10 @@ understand why a protocol or welfare block changes the meaning of
 <li>Open <code>F1-L01-C0012</code>.</li>
 <li>In the workspace, inspect samples/genotyping.</li>
 <li>Review <code>SMP-0004</code> and the linked animal context.</li>
-<li>Return to chat and ask <code>Show reports</code>.</li>
+<li>Return to chat and ask <code>Show recent sample results</code>.</li>
+<li>Ask
+<code>Reserve 1 matching animal for project L01-PRJ-01</code>.</li>
+<li>Ask <code>Generate a project closeout report</code>.</li>
 </ol>
 <h1 id="shared-cross-role-workflows">Shared Cross-Role Workflows</h1>
 <h2 id="workflow-print-a-cage-card">Workflow: Print a cage card</h2>

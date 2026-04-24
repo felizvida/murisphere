@@ -6,3 +6,4 @@ __pycache__/
 .DS_Store
 desktop/node_modules/
 desktop/src-tauri/target/
+docs/test_reports/ALERT_FIXTURE_RESULT.json

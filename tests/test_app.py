@@ -637,6 +637,89 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertTrue(any(card["kind"] == "stats" for card in stalled_payload["cards"]))
         self.assertTrue(any(card["title"] == "Stalled handoffs" for card in stalled_payload["cards"]))
 
+    def test_chat_supports_first_principles_role_workflows(self) -> None:
+        admin = self.login("admin@murisphere.local", "admin1234")
+        tech = self.login("tech@murisphere.local", "tech1234")
+
+        with sqlite3.connect(appmod.DB_PATH) as conn:
+            now = datetime.now(UTC).isoformat()
+            conn.execute(
+                """
+                INSERT INTO litters (cage_id, birth_date, litter_size, survived_count, weaned_on, created_at)
+                VALUES (1, ?, 6, 5, NULL, ?)
+                """,
+                ((date.today() - timedelta(days=24)).isoformat(), now),
+            )
+            conn.execute(
+                """
+                INSERT INTO animals (animal_code, sex, dob, strain, genotype, status, cage_id, litter_id, sire_id, dam_id, created_at, updated_at)
+                VALUES ('CHAT-RESERVE-001', 'M', ?, 'C57BL/6J', 'Cre/+', 'Active', 1, NULL, NULL, NULL, ?, ?)
+                """,
+                (date.today().isoformat(), now, now),
+            )
+            animal_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.commit()
+
+        project = self.client.post(
+            "/api/projects",
+            headers=self.auth_headers(admin),
+            json={"labId": 1, "projectCode": "PRJ-CHAT-001", "title": "Chat Reservation", "status": "active", "targetAnimals": 1},
+        )
+        self.assertEqual(project.status_code, 201)
+
+        request_res = self.client.post(
+            "/api/requests",
+            headers=self.auth_headers(admin),
+            json={"labId": 1, "requestType": "room_support", "details": {"room": "Room A1"}},
+        )
+        self.assertEqual(request_res.status_code, 201)
+        stale_request_time = (datetime.now(UTC) - timedelta(days=3)).isoformat()
+        with sqlite3.connect(appmod.DB_PATH) as conn:
+            conn.execute(
+                "UPDATE facility_requests SET created_at = ?, updated_at = ? WHERE id = ?",
+                (stale_request_time, stale_request_time, request_res.get_json()["id"]),
+            )
+            conn.commit()
+
+        sample = self.client.post(
+            "/api/samples",
+            headers=self.auth_headers(tech),
+            json={"animalId": animal_id, "sampleType": "ear", "sampleCode": "CHAT-SMP-001", "provider": "Transnetyx", "status": "resulted"},
+        )
+        self.assertEqual(sample.status_code, 201)
+
+        mortality = self.client.post(
+            "/api/cages/1/mortality",
+            headers=self.auth_headers(admin),
+            json={"male": 1, "female": 0, "cause": "found dead", "necropsyRequired": True},
+        )
+        self.assertEqual(mortality.status_code, 201)
+
+        cages = self.client.get("/api/cages", headers=self.auth_headers(admin)).get_json()
+        room_name = cages[0]["room"]
+
+        prompt_expectations = [
+            (tech, "What needs weaning this week?", "weaning_queue"),
+            (admin, "Show mortality follow-up", "mortality_followup"),
+            (admin, f"Generate cage cards for {room_name}", "print_room_cards"),
+            (admin, "Which labs are above expected load?", "load_pressure"),
+            (admin, "What requests breached SLA?", "request_sla"),
+            (tech, "Show recent sample results", "sample_results"),
+            (admin, "Generate a project closeout report", "project_closeout_report"),
+            (admin, "Reserve 1 matching animal for project PRJ-CHAT-001", "reserve_matching"),
+        ]
+        for token, prompt, intent in prompt_expectations:
+            with self.subTest(prompt=prompt):
+                res = self.client.post("/api/chat", headers=self.auth_headers(token), json={"message": prompt})
+                self.assertEqual(res.status_code, 200)
+                payload = res.get_json()
+                self.assertEqual(payload["intent"], intent)
+                self.assertTrue(payload["cards"])
+
+        assignments = self.client.get(f"/api/projects/{project.get_json()['id']}/assignments", headers=self.auth_headers(tech))
+        self.assertEqual(assignments.status_code, 200)
+        self.assertTrue(any(row["animal_code"] == "CHAT-RESERVE-001" for row in assignments.get_json()))
+
     def test_cage_card_batch_order_is_preserved(self) -> None:
         token = self.login("admin@murisphere.local", "admin1234")
         cages = self.client.get("/api/cages", headers=self.auth_headers(token)).get_json()

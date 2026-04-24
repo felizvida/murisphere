@@ -276,32 +276,40 @@ We should instead:
 
 ## The First Chat Workflows We Should Support
 ### Technician Flows
-- “What needs attention today?”
-- “Show my overdue tasks.”
-- “Open cage C-A1-001.”
-- “Update cage C-A1-001 to 2 males and 3 females.”
-- “Add note to cage C-A1-001: one pup runted.”
-- “Show cages with active alerts.”
-- “What needs weaning this week?”
-- “Show mortality follow-up.”
-- “Generate cage cards for Room 2.”
+- “What needs attention today?” — implemented.
+- “Show my overdue tasks.” — implemented.
+- “Open cage C-A1-001.” — implemented.
+- “Update cage C-A1-001 to 2 males and 3 females.” — implemented.
+- “Add note to cage C-A1-001: one pup runted.” — implemented.
+- “Show cages with active alerts.” — implemented.
+- “What needs weaning this week?” — implemented.
+- “Show mortality follow-up.” — implemented.
+- “Generate cage cards for Room 2.” — implemented as room batch print links.
 
 ### Manager Flows
-- “Give me the facility morning brief.”
-- “Show room utilization.”
-- “Which labs are above expected load?”
-- “Show protocol alerts and upcoming expirations.”
-- “What requests breached SLA?”
-- “Show chargeback summary for 30 days.”
-- “Generate survival and breeder productivity reports.”
-- “What cohorts are stalled?”
+- “Give me the facility morning brief.” — implemented.
+- “Show room utilization.” — implemented.
+- “Which labs are above expected load?” — implemented.
+- “Show protocol alerts and upcoming expirations.” — implemented.
+- “What requests breached SLA?” — implemented with a 48-hour chat SLA review threshold.
+- “Show chargeback summary for 30 days.” — implemented through facility snapshot/report links.
+- “Generate survival and breeder productivity reports.” — implemented through report links.
+- “What cohorts are stalled?” — implemented.
 
 ### Researcher Flows
-- “Show project L01-PRJ-01.”
-- “Show genotype-ready animals.”
-- “Reserve matching animals for this project.”
-- “Show recent sample results.”
-- “Generate a project closeout report.”
+- “Show project L01-PRJ-01.” — implemented.
+- “Show genotype-ready animals.” — implemented.
+- “Reserve matching animals for project L01-PRJ-01.” — implemented for explicit PI/Admin reservations.
+- “Show recent sample results.” — implemented.
+- “Generate a project closeout report.” — implemented with table summary and export links.
+
+## Current Dual-Mode Parity Checkpoint
+As of `v0.4.x` development, the chat layer now covers the first-principles daily prompts above while the traditional workspace remains the visual/batch surface.
+
+Design guardrails:
+- chat write actions must be explicit, role-scoped, and audit-logged
+- scan, cage, project, and report links should let the user jump between chat and the workspace
+- chat should summarize the next decision, not replace rich visual review when a large table or chart is better
 
 ## Recommendation
 Keep both lines active and deliberate:

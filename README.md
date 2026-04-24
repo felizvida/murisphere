@@ -52,6 +52,7 @@ A complete Murisphere cage card includes:
 - Compliance coverage for protocol expiry hard-stops, deviations, quarantine, signatures, and audit history.
 - Research support for pedigree, genotyping orders/callbacks, cohort planning, reservations, handoffs, and closeouts.
 - Dual-mode UI so users can work visually in the workspace or conversationally in chat.
+- Chat-first daily workflows for weaning queues, mortality follow-up, room batch cage-card printing, quota pressure, request SLA review, sample results, matching animal reservations, and closeout report shortcuts.
 
 ## Technology
 - Backend: Flask + SQLite today, with explicit PostgreSQL runtime support through `storage.py`, `storage_sqlite.py`, and `storage_postgres.py`
