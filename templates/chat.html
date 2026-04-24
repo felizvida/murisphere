@@ -1,0 +1,135 @@
+<!doctype html>
+<!--
+  Copyright 2026 Murisphere Contributors
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#10392f" />
+    <title>{{ app_name }} | Chat Operations Console</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/chat.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-a"></div>
+    <div class="ambient ambient-b"></div>
+
+    <header class="topbar">
+      <div>
+        <p class="eyebrow">Mouse colony operations</p>
+        <h1>{{ app_name }}</h1>
+        <p class="tagline">A chat-first console for technicians, investigators, and animal facility managers.</p>
+      </div>
+      <div id="sessionChip" class="session-chip hidden"></div>
+    </header>
+
+    <main class="shell">
+      <section id="loginPanel" class="panel login-panel">
+        <div>
+          <p class="eyebrow">Secure access</p>
+          <h2>Sign in and start with the work, not the tabs.</h2>
+          <p class="muted">Use Murisphere as an operations conversation: open cages, review alerts, update counts, and generate reports from one thread.</p>
+        </div>
+        <form id="loginForm" class="stack-form">
+          <label>Email<input type="email" id="email" required /></label>
+          <label>Password<input type="password" id="password" required /></label>
+          <button type="submit">Sign In</button>
+        </form>
+        <div class="login-meta">
+          <p class="hint">Demo admin: <code>admin@murisphere.local</code> / <code>admin1234</code></p>
+          <div class="doc-links compact-links">
+            <a class="soft-link" href="/">Traditional workspace</a>
+            <a class="soft-link" href="/learn/">Tutorial</a>
+            <a class="soft-link" href="/learn/user_training_tutorial.pdf">Tutorial PDF</a>
+            <a class="soft-link" href="/docs/first-principles-rethink">First principles</a>
+          </div>
+        </div>
+      </section>
+
+      <section id="appPanel" class="app-layout hidden">
+        <section class="panel chat-panel">
+          <div class="chat-toolbar">
+            <div>
+              <p class="eyebrow">Operations console</p>
+              <h2>Ask what changed, what is due, or what needs a decision.</h2>
+            </div>
+            <div class="toolbar-actions">
+              <a class="soft-link" href="/">Workspace</a>
+              <button id="dailyBriefingBtn" type="button">Morning Brief</button>
+              <button id="technicianChecklistBtn" type="button">Tech Loop</button>
+              <button id="managerChecklistBtn" type="button">Manager Loop</button>
+              <button id="clearConversationBtn" type="button">Clear</button>
+              <button id="logoutBtn" type="button">Sign Out</button>
+            </div>
+          </div>
+
+          <div id="quickPromptStrip" class="prompt-strip">
+            <button type="button" data-chat-prompt="What needs attention today?">What needs attention today?</button>
+            <button type="button" data-chat-prompt="Give me the facility morning brief">Give me the facility morning brief</button>
+            <button type="button" data-chat-prompt="Show alerts">Show alerts</button>
+            <button type="button" data-chat-prompt="Show overdue tasks">Show overdue tasks</button>
+            <button type="button" data-chat-prompt="Show reports">Show reports</button>
+          </div>
+
+          <div id="chatTranscript" class="chat-transcript" aria-live="polite"></div>
+
+          <form id="chatForm" class="composer">
+            <label class="sr-only" for="chatInput">Chat with Murisphere</label>
+            <textarea
+              id="chatInput"
+              rows="1"
+              placeholder="Example: Open cage <cage code> or Show reports"
+              required
+            ></textarea>
+            <button id="sendChatBtn" type="submit">Send</button>
+          </form>
+        </section>
+
+        <aside class="panel side-panel">
+          <div class="side-block">
+            <p class="eyebrow">Conversation starter</p>
+            <h3>Good prompts map to real work.</h3>
+            <ul class="side-list">
+              <li>What needs attention today?</li>
+              <li>Technician checklist</li>
+              <li>Give me the facility morning brief</li>
+              <li>Open cage &lt;cage code&gt;</li>
+              <li>Update cage &lt;cage code&gt; males=3 females=4</li>
+              <li>Note cage &lt;cage code&gt;: one pup runted</li>
+              <li>Show project &lt;project code&gt;</li>
+              <li>Show room utilization</li>
+              <li>Show reports</li>
+            </ul>
+          </div>
+
+          <div class="side-block">
+            <p class="eyebrow">Read while you work</p>
+            <div class="doc-links">
+              <a class="soft-link" href="/learn/">Self-paced tutorial</a>
+              <a class="soft-link" href="/learn/user_training_tutorial.pdf">Tutorial PDF</a>
+              <a class="soft-link" href="/docs/first-principles-rethink">First-principles rethink</a>
+            </div>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <div id="globalMessage" class="global-message hidden"></div>
+    <script src="/static/chat.js"></script>
+  </body>
+</html>

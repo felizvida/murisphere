@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-03-23T20:01:40.510687+00:00",
+  "generatedAt": "2026-04-24T01:30:42.722980+00:00",
   "summary": {
-    "passed": 55,
+    "passed": 58,
     "failed": 0,
     "skipped": 9,
     "score": 100.0
@@ -348,6 +348,24 @@
       "item": "#loadSlaBtn",
       "status": "pass",
       "detail": "clickable via direct or form submit listener"
+    },
+    {
+      "category": "link",
+      "item": "/chat/",
+      "status": "pass",
+      "detail": "matched Flask route map"
+    },
+    {
+      "category": "link",
+      "item": "/chat/",
+      "status": "pass",
+      "detail": "matched Flask route map"
+    },
+    {
+      "category": "link",
+      "item": "/learn/",
+      "status": "pass",
+      "detail": "matched Flask route map"
     },
     {
       "category": "link",

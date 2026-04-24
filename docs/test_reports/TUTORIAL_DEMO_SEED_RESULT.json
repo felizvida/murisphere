@@ -1,0 +1,37 @@
+{
+  "db": "/tmp/murisphere-tutorial-docs.db",
+  "base": {
+    "labs": 20,
+    "cages": 3000,
+    "projects": 73,
+    "labSizeDistribution": {
+      "large": 4,
+      "medium": 8,
+      "small": 8
+    }
+  },
+  "advanced": {
+    "animals": 372,
+    "litters": 48,
+    "pairs": 48,
+    "samples": 48,
+    "scenarios": 6
+  },
+  "alerts": {
+    "db": "/tmp/murisphere-tutorial-docs.db",
+    "cagesTouched": 80,
+    "expiredProtocols": 4,
+    "tasksInserted": 80,
+    "deviationsInserted": 80,
+    "mortalityInserted": 40,
+    "vetCasesInserted": 80
+  },
+  "enriched": {
+    "animals": 372,
+    "litters": 48,
+    "breedingPairs": 48,
+    "sampleRecords": 48,
+    "plannerScenarios": 6,
+    "alertingTasks": 80
+  }
+}

@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import io
+import json
 import sqlite3
 import tempfile
 import unittest
@@ -264,17 +265,32 @@ class AppIntegrationTests(unittest.TestCase):
         body = page.data.decode("utf-8")
         self.assertNotIn("cdn.jsdelivr.net/npm/qrcode", body)
         self.assertNotIn("cdn.jsdelivr.net/npm/jsbarcode", body)
-        self.assertIn('id="dashboardLearning"', body)
+        self.assertIn('data-tab="dashboard"', body)
+        self.assertIn('data-tab="scan"', body)
+        self.assertIn('id="scanBtn"', body)
+        self.assertIn('id="printCardsBtn"', body)
         self.assertIn('id="plannerScenarioForm"', body)
-        self.assertIn('id="loadPlannerBtn"', body)
         self.assertIn('id="sampleCreateForm"', body)
-        self.assertIn('id="loadSamplesBtn"', body)
-        self.assertIn('id="genotypingCallbackForm"', body)
-        self.assertIn('id="genotypingOverview"', body)
-        self.assertIn('id="genotypingImportForm"', body)
-        self.assertIn('id="downloadProviderTemplateBtn"', body)
-        self.assertIn('id="providerPresetList"', body)
         self.assertIn('id="cohortInsights"', body)
+        self.assertIn('href="/chat/"', body)
+
+    def test_chat_route_serves_console_ui(self) -> None:
+        redirect_res = self.client.get("/chat", follow_redirects=False)
+        self.assertEqual(redirect_res.status_code, 308)
+        self.assertEqual(redirect_res.headers["Location"], "/chat/")
+
+        page = self.client.get("/chat/")
+        self.assertEqual(page.status_code, 200)
+        body = page.data.decode("utf-8")
+        self.assertIn('id="chatForm"', body)
+        self.assertIn('id="chatTranscript"', body)
+        self.assertIn('id="dailyBriefingBtn"', body)
+        self.assertIn('id="technicianChecklistBtn"', body)
+        self.assertIn('id="managerChecklistBtn"', body)
+        self.assertIn('id="clearConversationBtn"', body)
+        self.assertIn('id="logoutBtn"', body)
+        self.assertIn("/docs/first-principles-rethink", body)
+        self.assertIn('href="/"', body)
 
     def test_learning_routes_serve_tutorial_assets(self) -> None:
         redirect_res = self.client.get("/learn", follow_redirects=False)
@@ -284,7 +300,10 @@ class AppIntegrationTests(unittest.TestCase):
         page = self.client.get("/learn/")
         self.assertEqual(page.status_code, 200)
         body = page.data.decode("utf-8")
-        self.assertIn("self-paced learning", body)
+        self.assertIn("Murisphere Role-Based Tutorial", body)
+        self.assertIn("Role 1: Technician", body)
+        self.assertIn("Role 2: Facility Manager", body)
+        self.assertIn("Role 3: Researcher / PI", body)
         self.assertIn("tutorial.css", body)
         self.assertIn("assets/cage_card_complete.svg", body)
 
@@ -302,6 +321,15 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertEqual(pdf.status_code, 200)
         self.assertIn("application/pdf", pdf.content_type)
         self.assertTrue(pdf.data.startswith(b"%PDF-"))
+
+    def test_first_principles_rethink_route_serves_markdown(self) -> None:
+        page = self.client.get("/docs/first-principles-rethink")
+        self.assertEqual(page.status_code, 200)
+        self.assertIn("text/markdown", page.content_type)
+        body = page.data.decode("utf-8")
+        self.assertIn("Two Active Product Lines", body)
+        self.assertIn("Technician: What They Care About Daily", body)
+        self.assertIn("Animal Facility Manager", body)
 
     def test_learning_overview_reports_scope_and_seeded_examples(self) -> None:
         token = self.login("admin@murisphere.local", "admin1234")
@@ -458,54 +486,189 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertIn("${esc(c.genotypeSummary)}", body)
         self.assertIn("${esc(c.protocol || \"N/A\")}", body)
         self.assertIn("${esc(e.message)}", body)
+        self.assertIn("/?scanToken=${encodeURIComponent(token)}", body)
+        self.assertIn("/chat/?scanToken=${encodeURIComponent(token)}", body)
 
     def test_frontend_handles_session_expiry_contract(self) -> None:
-        js = Path("static/app.js").read_text(encoding="utf-8")
-        self.assertIn("function handleSessionExpired(", js)
-        self.assertIn("function handleBackgroundError(", js)
-        self.assertIn("err.status = res.status", js)
-        self.assertIn("if (err && Number(err.status) === 401)", js)
-        self.assertIn("loadActiveAlertFeed().catch((err) => handleBackgroundError(err", js)
+        workspace_js = Path("static/app.js").read_text(encoding="utf-8")
+        chat_js = Path("static/chat.js").read_text(encoding="utf-8")
+        self.assertIn("function handleSessionExpired(", workspace_js)
+        self.assertIn("function handleBackgroundError(", workspace_js)
+        self.assertIn('await api("/api/auth/me"', workspace_js)
+        self.assertIn("handleSessionExpired();", workspace_js)
+        self.assertIn("function handleSessionExpired(", chat_js)
+        self.assertIn("err.status = res.status", chat_js)
+        self.assertIn("if (err && Number(err.status) === 401)", chat_js)
+        self.assertIn('await api("/api/auth/me"', chat_js)
+        self.assertIn("handleSessionExpired();", chat_js)
 
-    def test_frontend_learning_and_planner_contract(self) -> None:
+    def test_frontend_chat_contract(self) -> None:
+        js = Path("static/chat.js").read_text(encoding="utf-8")
+        self.assertIn('api("/api/chat"', js)
+        self.assertIn('el("chatForm").addEventListener("submit"', js)
+        self.assertIn('el("dailyBriefingBtn").addEventListener("click"', js)
+        self.assertIn('el("technicianChecklistBtn").addEventListener("click"', js)
+        self.assertIn('el("managerChecklistBtn").addEventListener("click"', js)
+        self.assertIn('el("clearConversationBtn").addEventListener("click"', js)
+        self.assertIn('el("logoutBtn").addEventListener("click"', js)
+        self.assertIn("function rememberPendingScanFromUrl()", js)
+        self.assertIn("function consumePendingScan()", js)
+        self.assertIn("data-chat-prompt", js)
+        self.assertIn("function appendAssistantReply(", js)
+        self.assertIn("function renderCard(", js)
+        self.assertIn('await api("/api/auth/me"', js)
+        self.assertIn('await sendChat(`Open cage ${pendingScan}`', js)
+
+    def test_frontend_workspace_contract(self) -> None:
         js = Path("static/app.js").read_text(encoding="utf-8")
-        self.assertIn("const LEARNING_PROGRESS_KEY =", js)
+        self.assertIn("function activateTab(", js)
         self.assertIn('el("plannerScenarioForm").addEventListener("submit"', js)
-        self.assertIn('el("generateRecommendationsBtn").addEventListener("click"', js)
-        self.assertIn('api("/api/planner/scenarios"', js)
-        self.assertIn('data-learning-toggle-module', js)
-        self.assertIn('el("sampleCreateForm").addEventListener("submit"', js)
-        self.assertIn('el("genotypingOrderForm").addEventListener("submit"', js)
-        self.assertIn('el("genotypingCallbackForm").addEventListener("submit"', js)
-        self.assertIn('el("genotypingImportForm").addEventListener("submit"', js)
         self.assertIn('el("downloadProviderTemplateBtn").addEventListener("click"', js)
-        self.assertIn('data-provider-preset', js)
-        self.assertIn('api("/api/genotyping/dashboard"', js)
-        self.assertIn('api("/api/genotyping/providers"', js)
-        self.assertIn('api("/api/genotyping/cohorts"', js)
-        self.assertIn('api("/api/genotyping/target-templates"', js)
-        self.assertIn('reserveCohortAnimalsBtn', js)
-        self.assertIn("applyCohortTemplateBtn", js)
-        self.assertIn("advanceCohortStatusBtn", js)
-        self.assertIn("saveProjectCloseoutBtn", js)
-        self.assertIn("projectCloseoutOutcome", js)
-        self.assertIn("/genotype-targets", js)
-        self.assertIn("/apply-target-template", js)
-        self.assertIn("/reserve-animals", js)
-        self.assertIn("/assignment-status", js)
-        self.assertIn("/assignment-timeline", js)
-        self.assertIn("/closeouts", js)
-        self.assertIn("/handoff-sla", js)
-        self.assertIn('/api/analytics/cohort-handoffs', js)
-        self.assertIn("loadCohortHandoffsBtn", js)
-        self.assertIn("saveProjectHandoffSlaBtn", js)
-        self.assertIn("exportCohortCloseoutsCsvBtn", js)
-        self.assertIn("exportStalledHandoffsPdfBtn", js)
-        self.assertIn('inspectGenotypingOrder(orderId)', js)
-        self.assertIn('"/api/genotyping/orders"', js)
-        self.assertIn('"/api/genotyping/orders/callback"', js)
-        self.assertIn("provider-template.csv", js)
-        self.assertIn("/import-results", js)
+        self.assertIn('await openPendingScanIfAny()', js)
+        self.assertIn('loadActiveAlertFeed().catch((err) => handleBackgroundError(err, "Background alert refresh failed"))', js)
+
+    def test_chat_api_supports_daily_brief_and_write_workflow(self) -> None:
+        token = self.login("admin@murisphere.local", "admin1234")
+        cages = self.client.get("/api/cages", headers=self.auth_headers(token)).get_json()
+        cage_code = cages[0]["cageCode"]
+
+        welcome = self.client.post("/api/chat", headers=self.auth_headers(token), json={"message": ""})
+        self.assertEqual(welcome.status_code, 200)
+        welcome_payload = welcome.get_json()
+        self.assertEqual(welcome_payload["intent"], "welcome")
+        self.assertTrue(welcome_payload["cards"])
+        self.assertIn("First-principles rethink", json.dumps(welcome_payload))
+
+        brief = self.client.post("/api/chat", headers=self.auth_headers(token), json={"message": "What needs attention today?"})
+        self.assertEqual(brief.status_code, 200)
+        brief_payload = brief.get_json()
+        self.assertEqual(brief_payload["intent"], "today")
+        self.assertTrue(any(card["kind"] == "stats" for card in brief_payload["cards"]))
+
+        cage = self.client.post("/api/chat", headers=self.auth_headers(token), json={"message": f"Open cage {cage_code}"})
+        self.assertEqual(cage.status_code, 200)
+        cage_payload = cage.get_json()
+        self.assertEqual(cage_payload["intent"], "cage_detail")
+        self.assertTrue(any(card["kind"] == "cage" for card in cage_payload["cards"]))
+
+        update = self.client.post(
+            "/api/chat",
+            headers=self.auth_headers(token),
+            json={"message": f"Update cage {cage_code} males=2 females=3 status=Holding note=chat updated"},
+        )
+        self.assertEqual(update.status_code, 200)
+        update_payload = update.get_json()
+        self.assertEqual(update_payload["intent"], "cage_updated")
+
+        detail = self.client.get(f"/api/scan/{cage_code}", headers=self.auth_headers(token))
+        self.assertEqual(detail.status_code, 200)
+        cage_after = detail.get_json()["cage"]
+        self.assertEqual(cage_after["maleCount"], 2)
+        self.assertEqual(cage_after["femaleCount"], 3)
+        self.assertEqual(cage_after["breedingStatus"], "Holding")
+
+        note = self.client.post(
+            "/api/chat",
+            headers=self.auth_headers(token),
+            json={"message": f"Note cage {cage_code}: observed stable nesting"},
+        )
+        self.assertEqual(note.status_code, 200)
+        self.assertEqual(note.get_json()["intent"], "cage_note_saved")
+
+        with sqlite3.connect(appmod.DB_PATH) as conn:
+            row = conn.execute(
+                "SELECT text FROM notes WHERE entity_type = 'cage' AND entity_id = (SELECT id FROM cages WHERE cage_code = ?) ORDER BY id DESC LIMIT 1",
+                (cage_code,),
+            ).fetchone()
+        self.assertIsNotNone(row)
+        self.assertEqual(row[0], "observed stable nesting")
+
+    def test_chat_can_prepare_printable_cage_card(self) -> None:
+        token = self.login("tech@murisphere.local", "tech1234")
+        cages = self.client.get("/api/cages", headers=self.auth_headers(token))
+        self.assertEqual(cages.status_code, 200)
+        cage_payload = cages.get_json()
+        self.assertTrue(cage_payload)
+        cage = cage_payload[0]
+        cage_code = cage["cageCode"]
+        cage_id = cage["id"]
+
+        print_reply = self.client.post(
+            "/api/chat",
+            headers=self.auth_headers(token),
+            json={"message": f"Print cage card for {cage_code}"},
+        )
+        self.assertEqual(print_reply.status_code, 200)
+        payload = print_reply.get_json()
+        self.assertEqual(payload["intent"], "print_card")
+        payload_json = json.dumps(payload)
+        self.assertIn("Open print view", payload_json)
+        self.assertIn(f"/print/cards?ids={cage_id}", payload_json)
+
+        print_page = self.client.get(f"/print/cards?ids={cage_id}", headers=self.auth_headers(token))
+        self.assertEqual(print_page.status_code, 200)
+        body = print_page.data.decode("utf-8")
+        self.assertIn("window.print()", body)
+        self.assertIn("/api/assets/qrcode.png?v=", body)
+        self.assertIn(f"Cage {cage_code}", body)
+
+    def test_chat_supports_genotype_ready_and_stalled_handoff_prompts(self) -> None:
+        token = self.login("pi@murisphere.local", "pi1234")
+
+        ready = self.client.post(
+            "/api/chat",
+            headers=self.auth_headers(token),
+            json={"message": "Show genotype-ready animals"},
+        )
+        self.assertEqual(ready.status_code, 200)
+        ready_payload = ready.get_json()
+        self.assertEqual(ready_payload["intent"], "genotype_ready")
+        self.assertTrue(any(card["kind"] == "stats" for card in ready_payload["cards"]))
+        self.assertTrue(any(card["title"] == "Project readiness" for card in ready_payload["cards"]))
+
+        stalled = self.client.post(
+            "/api/chat",
+            headers=self.auth_headers(token),
+            json={"message": "Show stalled cohort handoffs"},
+        )
+        self.assertEqual(stalled.status_code, 200)
+        stalled_payload = stalled.get_json()
+        self.assertEqual(stalled_payload["intent"], "stalled_handoffs")
+        self.assertTrue(any(card["kind"] == "stats" for card in stalled_payload["cards"]))
+        self.assertTrue(any(card["title"] == "Stalled handoffs" for card in stalled_payload["cards"]))
+
+    def test_cage_card_batch_order_is_preserved(self) -> None:
+        token = self.login("admin@murisphere.local", "admin1234")
+        cages = self.client.get("/api/cages", headers=self.auth_headers(token)).get_json()
+        ordered_ids = [cages[1]["id"], cages[0]["id"]]
+        cards = self.client.post("/api/cages/cards", headers=self.auth_headers(token), json={"ids": ordered_ids})
+        self.assertEqual(cards.status_code, 200)
+        payload = cards.get_json()
+        self.assertEqual([card["cageId"] for card in payload], ordered_ids)
+
+    def test_cage_card_endpoints_reject_invalid_ids(self) -> None:
+        token = self.login("admin@murisphere.local", "admin1234")
+
+        bad_json = self.client.post("/api/cages/cards", headers=self.auth_headers(token), json={"ids": ["abc"]})
+        self.assertEqual(bad_json.status_code, 400)
+        self.assertIn("Cage IDs must be integers", bad_json.get_json()["error"])
+
+        bad_print = self.client.get("/print/cards?ids=1,abc", headers=self.auth_headers(token))
+        self.assertEqual(bad_print.status_code, 400)
+        self.assertIn("Cage IDs must be integers", bad_print.get_json()["error"])
+
+    def test_chat_api_respects_role_scope_for_facility_views(self) -> None:
+        tech = self.login("tech@murisphere.local", "tech1234")
+        tech_res = self.client.post("/api/chat", headers=self.auth_headers(tech), json={"message": "Show room utilization"})
+        self.assertEqual(tech_res.status_code, 200)
+        self.assertEqual(tech_res.get_json()["intent"], "facility_forbidden")
+
+        admin = self.login("admin@murisphere.local", "admin1234")
+        admin_res = self.client.post("/api/chat", headers=self.auth_headers(admin), json={"message": "Show room utilization"})
+        self.assertEqual(admin_res.status_code, 200)
+        payload = admin_res.get_json()
+        self.assertEqual(payload["intent"], "facility")
+        self.assertTrue(any(card["kind"] == "table" for card in payload["cards"]))
 
     def test_breeding_calendar_forecast_and_analytics(self) -> None:
         token = self.login("admin@murisphere.local", "admin1234")
@@ -640,6 +803,33 @@ class AppIntegrationTests(unittest.TestCase):
         audit = self.client.get("/api/audit", headers=self.auth_headers(token))
         self.assertEqual(audit.status_code, 200)
         self.assertIsInstance(audit.get_json(), list)
+
+    def test_protocol_alerts_are_lab_scoped(self) -> None:
+        tech = self.login("tech@murisphere.local", "tech1234")
+        admin = self.login("admin@murisphere.local", "admin1234")
+
+        with sqlite3.connect(appmod.DB_PATH) as conn:
+            now = datetime.now(UTC).isoformat()
+            conn.execute(
+                "INSERT INTO labs (name, pi_name, facility_id, created_at) VALUES (?, ?, ?, ?)",
+                ("Scoped Protocol Lab", "Dr. Scoped", 1, now),
+            )
+            other_lab_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+            conn.execute(
+                "INSERT INTO iacuc_protocols (protocol_number, title, lab_id, expires_on, created_at) VALUES (?, ?, ?, ?, ?)",
+                ("IACUC-OTHER-001", "Other Lab Protocol", other_lab_id, "2020-01-01", now),
+            )
+            conn.commit()
+
+        tech_alerts = self.client.get("/api/compliance/protocol-alerts", headers=self.auth_headers(tech))
+        self.assertEqual(tech_alerts.status_code, 200)
+        tech_numbers = {row["protocol_number"] for row in tech_alerts.get_json()}
+        self.assertNotIn("IACUC-OTHER-001", tech_numbers)
+
+        admin_alerts = self.client.get("/api/compliance/protocol-alerts", headers=self.auth_headers(admin))
+        self.assertEqual(admin_alerts.status_code, 200)
+        admin_numbers = {row["protocol_number"] for row in admin_alerts.get_json()}
+        self.assertIn("IACUC-OTHER-001", admin_numbers)
 
     def test_project_management_assignment_and_scope(self) -> None:
         admin = self.login("admin@murisphere.local", "admin1234")
@@ -1195,25 +1385,35 @@ class AppIntegrationTests(unittest.TestCase):
         )
         self.assertEqual(bad.status_code, 400)
 
-    def test_offline_queue_storage_is_user_scoped(self) -> None:
-        src = Path("static/app.js").read_text(encoding="utf-8")
-        self.assertIn("function mutationQueueKey()", src)
-        self.assertIn("state.user?.id", src)
+    def test_pending_scan_storage_contract(self) -> None:
+        workspace_src = Path("static/app.js").read_text(encoding="utf-8")
+        chat_src = Path("static/chat.js").read_text(encoding="utf-8")
+        self.assertIn('const PENDING_SCAN_KEY = "murisphere_pending_scan"', workspace_src)
+        self.assertIn("function readPendingScanToken()", workspace_src)
+        self.assertIn("async function openPendingScanIfAny()", workspace_src)
+        self.assertIn("localStorage.setItem(PENDING_SCAN_KEY, fromUrl)", workspace_src)
+        self.assertIn('params.delete("scanToken")', workspace_src)
+        self.assertIn("window.history.replaceState({}, \"\", nextUrl)", workspace_src)
+        self.assertIn('const PENDING_SCAN_KEY = "murisphere_pending_scan"', chat_src)
+        self.assertIn("function rememberPendingScanFromUrl()", chat_src)
+        self.assertIn("function consumePendingScan()", chat_src)
+        self.assertIn("localStorage.setItem(PENDING_SCAN_KEY, scanToken)", chat_src)
 
-    def test_visualization_panels_present_in_ui(self) -> None:
-        page = self.client.get("/")
+    def test_chat_panels_present_in_ui(self) -> None:
+        page = self.client.get("/chat/")
         self.assertEqual(page.status_code, 200)
         body = page.data.decode("utf-8")
-        self.assertIn('id="pedigreeViz"', body)
-        self.assertIn('id="cageVisuals"', body)
-        self.assertIn('id="breedingVisuals"', body)
-        self.assertIn('id="analyticsVisuals"', body)
-        self.assertIn('id="complianceVisuals"', body)
+        self.assertIn('id="chatTranscript"', body)
+        self.assertIn('id="quickPromptStrip"', body)
+        self.assertIn('id="chatForm"', body)
+        self.assertIn('id="sendChatBtn"', body)
+        self.assertIn('id="managerChecklistBtn"', body)
+        self.assertIn('id="dailyBriefingBtn"', body)
 
-        js = Path("static/app.js").read_text(encoding="utf-8")
-        self.assertIn("renderPedigreeGraph", js)
-        self.assertIn("renderAnalyticsVisuals", js)
-        self.assertIn("renderCageVisuals", js)
+        js = Path("static/chat.js").read_text(encoding="utf-8")
+        self.assertIn("function renderCard(", js)
+        self.assertIn("function appendAssistantReply(", js)
+        self.assertIn("function updatePromptStrip(", js)
 
     def test_technician_cannot_access_other_lab_cage(self) -> None:
         tech_token = self.login("tech@murisphere.local", "tech1234")

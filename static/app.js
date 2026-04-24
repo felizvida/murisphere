@@ -2995,6 +2995,10 @@ function readPendingScanToken() {
   const fromUrl = params.get("scanToken");
   if (fromUrl) {
     localStorage.setItem(PENDING_SCAN_KEY, fromUrl);
+    params.delete("scanToken");
+    const nextQuery = params.toString();
+    const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash || ""}`;
+    window.history.replaceState({}, "", nextUrl);
     return fromUrl;
   }
   return localStorage.getItem(PENDING_SCAN_KEY) || "";

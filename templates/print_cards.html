@@ -1,0 +1,142 @@
+<!doctype html>
+<!--
+  Copyright 2026 Murisphere Contributors
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ app_name }} Cage Cards</title>
+    <style>
+      :root {
+        --ink: #11292e;
+        --line: #26424d;
+        --soft: #eef5f4;
+        --brand: #0f6d52;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: Arial, sans-serif; color: var(--ink); background: #dfe9e5; }
+      .toolbar { position: sticky; top: 0; z-index: 10; display: flex; gap: 12px; justify-content: space-between; align-items: center; padding: 12px 18px; background: rgba(17,41,46,.95); color: #eef8f5; }
+      .toolbar button, .toolbar a { border: none; border-radius: 999px; padding: 10px 14px; background: var(--brand); color: #fff; text-decoration: none; font-weight: 700; cursor: pointer; }
+      .wrap { padding: 16px; display: grid; gap: 16px; }
+      .card { background: #fff; border: 2px solid var(--line); border-radius: 18px; padding: 16px; page-break-inside: avoid; }
+      .head { display: grid; grid-template-columns: 1.35fr 0.9fr 120px; gap: 16px; align-items: start; }
+      .title { font-size: 30px; font-weight: 800; line-height: 1.05; margin-bottom: 6px; }
+      .meta { display: grid; gap: 6px; font-size: 15px; }
+      .meta strong { display: inline-block; min-width: 110px; }
+      .qr { width: 112px; height: 112px; border: 1px solid #cfd9d6; padding: 6px; border-radius: 12px; justify-self: end; background: #fff; }
+      .counts { margin-top: 12px; display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; }
+      .count { background: var(--soft); border: 1px solid #dbe7e4; border-radius: 12px; padding: 10px; }
+      .count .k { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #50656c; }
+      .count .v { font-size: 22px; font-weight: 800; margin-top: 4px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+      th, td { border: 1.5px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; font-size: 13px; }
+      th { background: var(--soft); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+      .section-title { margin-top: 16px; margin-bottom: 6px; font-size: 18px; font-weight: 800; }
+      .scan-url { margin-top: 10px; font-size: 11px; color: #4f6369; word-break: break-all; }
+      @media print {
+        body { background: #fff; }
+        .toolbar { display: none; }
+        .wrap { padding: 0; }
+        .card { border-radius: 0; break-after: page; margin: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="toolbar">
+      <div>Print cage cards at 100% scale, then scan the QR with a phone camera.</div>
+      <div>
+        <button type="button" onclick="window.print()">Print</button>
+        <a href="/">Back to Murisphere</a>
+      </div>
+    </div>
+    <div class="wrap">
+      {% for card in cards %}
+      <section class="card">
+        <div class="head">
+          <div>
+            <div class="title">Cage {{ card.cageCode }}</div>
+            <div class="meta">
+              <div><strong>Group Owner:</strong> {{ card.groupOwner }}</div>
+              <div><strong>Group Name:</strong> {{ card.groupName }}</div>
+              <div><strong>Projects:</strong> {{ card.projects|join(', ') if card.projects else 'None' }}</div>
+              <div><strong>Location:</strong> {{ card.location }}</div>
+            </div>
+          </div>
+          <div class="meta">
+            <div><strong>Protocol:</strong> {{ card.protocol or 'Unassigned' }}</div>
+            <div><strong>Description:</strong> {{ card.protocolDescription or 'N/A' }}</div>
+            <div><strong>Breeding:</strong> {{ card.breedingStatus }}</div>
+            <div><strong>DOB:</strong> {{ card.dob or 'Unknown' }}</div>
+          </div>
+          <img class="qr" src="/api/assets/qrcode.png?v={{ card.absoluteScanUrl|urlencode }}" alt="QR code for {{ card.cageCode }}" />
+        </div>
+
+        <div class="counts">
+          <div class="count"><div class="k">Strain</div><div class="v">{{ card.strain }}</div></div>
+          <div class="count"><div class="k">Genotype</div><div class="v">{{ card.genotype }}</div></div>
+          <div class="count"><div class="k">Male / Female</div><div class="v">{{ card.animalCount.M }} / {{ card.animalCount.F }}</div></div>
+          <div class="count"><div class="k">Total</div><div class="v">{{ card.animalCount.M + card.animalCount.F }}</div></div>
+        </div>
+
+        <div class="section-title">Animals</div>
+        <table>
+          <thead>
+            <tr><th>ID</th><th>Sex</th><th>DOB</th><th>Genotype</th><th>Status</th></tr>
+          </thead>
+          <tbody>
+            {% for animal in card.animals %}
+            <tr>
+              <td>{{ animal.animalCode }}</td>
+              <td>{{ animal.sex }}</td>
+              <td>{{ animal.dob }}</td>
+              <td>{{ animal.genotype }}</td>
+              <td>{{ animal.status }}</td>
+            </tr>
+            {% endfor %}
+            {% if not card.animals %}
+            <tr><td colspan="5">No tracked animals listed.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+
+        <div class="section-title">Litters</div>
+        <table>
+          <thead>
+            <tr><th>#</th><th>DOB</th><th>Born</th><th>Survived</th><th>M/F</th><th>DoW</th></tr>
+          </thead>
+          <tbody>
+            {% for litter in card.litters %}
+            <tr>
+              <td>{{ loop.index }}</td>
+              <td>{{ litter.birthDate }}</td>
+              <td>{{ litter.born }}</td>
+              <td>{{ litter.survived }}</td>
+              <td>{{ litter.maleCount }}/{{ litter.femaleCount }}</td>
+              <td>{{ litter.dow or '-' }}</td>
+            </tr>
+            {% endfor %}
+            {% if not card.litters %}
+            <tr><td colspan="6">No litter records listed.</td></tr>
+            {% endif %}
+          </tbody>
+        </table>
+
+        <div class="scan-url">Phone scan target: {{ card.absoluteScanUrl }}</div>
+      </section>
+      {% endfor %}
+    </div>
+  </body>
+</html>

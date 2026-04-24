@@ -5,8 +5,8 @@
   <meta name="generator" content="pandoc" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
   <meta name="author" content="Murisphere Operations" />
-  <meta name="dcterms.date" content="2026-03-23" />
-  <title>Murisphere Self-Paced Tutorial</title>
+  <meta name="dcterms.date" content="2026-04-13" />
+  <title>Murisphere Role-Based Tutorial</title>
   <style>
     /* Default styles provided by pandoc.
     ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -96,337 +96,292 @@
 </head>
 <body>
 <header id="title-block-header">
-<h1 class="title">Murisphere Self-Paced Tutorial</h1>
-<p class="subtitle">Mouse Colony Management, Biology Background, and
-Hands-On Practice</p>
+<h1 class="title">Murisphere Role-Based Tutorial</h1>
+<p class="subtitle">Technician, Facility Manager, and Researcher
+Workflows Across Workspace and Chat</p>
 <p class="author">Murisphere Operations</p>
-<p class="date">2026-03-23</p>
+<p class="date">2026-04-13</p>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
 <li><a href="#purpose" id="toc-purpose">Purpose</a></li>
-<li><a href="#how-to-use-this-tutorial"
-id="toc-how-to-use-this-tutorial">How To Use This Tutorial</a>
+<li><a href="#training-setup" id="toc-training-setup">Training Setup</a>
 <ul>
-<li><a href="#suggested-learning-pace"
-id="toc-suggested-learning-pace">Suggested learning pace</a></li>
-<li><a href="#best-practice-for-self-paced-learning"
-id="toc-best-practice-for-self-paced-learning">Best practice for
-self-paced learning</a></li>
-</ul></li>
-<li><a href="#training-environment-and-data-readiness"
-id="toc-training-environment-and-data-readiness">Training Environment
-and Data Readiness</a>
-<ul>
-<li><a href="#recommended-training-command-sequence"
-id="toc-recommended-training-command-sequence">Recommended training
-command sequence</a></li>
-<li><a href="#what-the-tutorial-ready-seed-gives-you"
-id="toc-what-the-tutorial-ready-seed-gives-you">What the tutorial-ready
-seed gives you</a></li>
+<li><a href="#create-the-tutorial-database"
+id="toc-create-the-tutorial-database">Create the tutorial
+database</a></li>
 <li><a href="#training-accounts" id="toc-training-accounts">Training
 accounts</a></li>
-<li><a href="#recommended-example-records-used-in-this-tutorial"
-id="toc-recommended-example-records-used-in-this-tutorial">Recommended
-example records used in this tutorial</a></li>
+<li><a href="#what-this-seed-contains"
+id="toc-what-this-seed-contains">What this seed contains</a></li>
+<li><a href="#real-examples-used-in-this-guide"
+id="toc-real-examples-used-in-this-guide">Real examples used in this
+guide</a></li>
 </ul></li>
-<li><a href="#mouse-colony-biology-primer"
-id="toc-mouse-colony-biology-primer">Mouse Colony Biology Primer</a>
+<li><a href="#how-to-use-this-guide" id="toc-how-to-use-this-guide">How
+To Use This Guide</a>
 <ul>
-<li><a href="#why-mouse-colony-data-matters-biologically"
-id="toc-why-mouse-colony-data-matters-biologically">Why mouse colony
-data matters biologically</a></li>
-<li><a href="#key-biological-terms" id="toc-key-biological-terms">Key
-biological terms</a></li>
-<li><a href="#why-cage-centric-work-wins-in-real-vivaria"
-id="toc-why-cage-centric-work-wins-in-real-vivaria">Why cage-centric
-work wins in real vivaria</a></li>
+<li><a href="#best-device-mix" id="toc-best-device-mix">Best device
+mix</a></li>
+<li><a href="#which-mode-should-you-use"
+id="toc-which-mode-should-you-use">Which mode should you use?</a></li>
+<li><a href="#shared-rule-for-all-roles"
+id="toc-shared-rule-for-all-roles">Shared rule for all roles</a></li>
 </ul></li>
-<li><a href="#learning-map" id="toc-learning-map">Learning Map</a>
+<li><a href="#biological-background-you-learn-along-the-way"
+id="toc-biological-background-you-learn-along-the-way">Biological
+Background You Learn Along The Way</a>
 <ul>
-<li><a href="#module-1-orientation-and-safe-setup"
-id="toc-module-1-orientation-and-safe-setup">Module 1: Orientation and
-safe setup</a></li>
-<li><a href="#module-2-cage-card-literacy"
-id="toc-module-2-cage-card-literacy">Module 2: Cage card
-literacy</a></li>
-<li><a href="#module-3-scan-to-edit-and-audit-trail"
-id="toc-module-3-scan-to-edit-and-audit-trail">Module 3: Scan-to-edit
-and audit trail</a></li>
-<li><a href="#module-4-breeding-litters-and-pedigree"
-id="toc-module-4-breeding-litters-and-pedigree">Module 4: Breeding,
-litters, and pedigree</a></li>
-<li><a href="#module-5-samples-genotyping-and-research-readiness"
-id="toc-module-5-samples-genotyping-and-research-readiness">Module 5:
-Samples, genotyping, and research readiness</a></li>
-<li><a href="#module-6-compliance-welfare-and-abnormal-conditions"
-id="toc-module-6-compliance-welfare-and-abnormal-conditions">Module 6:
-Compliance, welfare, and abnormal conditions</a></li>
-<li><a href="#module-7-planner-and-manager-workflows"
-id="toc-module-7-planner-and-manager-workflows">Module 7: Planner and
-manager workflows</a></li>
+<li><a href="#why-timing-matters" id="toc-why-timing-matters">Why timing
+matters</a></li>
+<li><a href="#why-genotype-matters" id="toc-why-genotype-matters">Why
+genotype matters</a></li>
+<li><a href="#why-pedigree-matters" id="toc-why-pedigree-matters">Why
+pedigree matters</a></li>
+<li><a href="#why-compliance-fields-matter-biologically"
+id="toc-why-compliance-fields-matter-biologically">Why compliance fields
+matter biologically</a></li>
 </ul></li>
-<li><a href="#module-1.-orientation-and-safe-setup"
-id="toc-module-1.-orientation-and-safe-setup">Module 1. Orientation and
-Safe Setup</a>
+<li><a href="#shared-foundations-for-all-roles"
+id="toc-shared-foundations-for-all-roles">Shared Foundations For All
+Roles</a>
 <ul>
-<li><a href="#learning-goal" id="toc-learning-goal">Learning
-goal</a></li>
-<li><a href="#steps" id="toc-steps">Steps</a></li>
-<li><a href="#why-this-matters-biologically"
-id="toc-why-this-matters-biologically">Why this matters
-biologically</a></li>
-<li><a href="#exercise" id="toc-exercise">Exercise</a></li>
+<li><a href="#what-a-cage-card-must-do"
+id="toc-what-a-cage-card-must-do">What a cage card must do</a></li>
+<li><a href="#phone-qr-workflow" id="toc-phone-qr-workflow">Phone QR
+workflow</a></li>
+<li><a href="#common-prompts-used-across-all-roles"
+id="toc-common-prompts-used-across-all-roles">Common prompts used across
+all roles</a></li>
 </ul></li>
-<li><a href="#module-2.-cage-card-literacy"
-id="toc-module-2.-cage-card-literacy">Module 2. Cage Card Literacy</a>
+<li><a href="#role-1-technician" id="toc-role-1-technician">Role 1:
+Technician</a>
 <ul>
-<li><a href="#learning-goal-1" id="toc-learning-goal-1">Learning
-goal</a></li>
-<li><a href="#recommended-example"
-id="toc-recommended-example">Recommended example</a></li>
-<li><a href="#what-to-look-for-on-the-card"
-id="toc-what-to-look-for-on-the-card">What to look for on the
-card</a></li>
-<li><a href="#biology-background" id="toc-biology-background">Biology
-background</a></li>
-<li><a href="#exercise-1" id="toc-exercise-1">Exercise</a></li>
+<li><a href="#what-a-technician-cares-about-daily"
+id="toc-what-a-technician-cares-about-daily">What a technician cares
+about daily</a></li>
+<li><a href="#typical-technician-data-entries"
+id="toc-typical-technician-data-entries">Typical technician data
+entries</a></li>
+<li><a href="#typical-technician-reports"
+id="toc-typical-technician-reports">Typical technician reports</a></li>
+<li><a href="#technician-workflow-in-the-workspace"
+id="toc-technician-workflow-in-the-workspace">Technician workflow in the
+workspace</a>
+<ul>
+<li><a href="#start-from-the-dashboard-or-cages"
+id="toc-start-from-the-dashboard-or-cages">1. Start from the dashboard
+or <code>Cages</code></a></li>
+<li><a href="#generate-a-cage-card" id="toc-generate-a-cage-card">2.
+Generate a cage card</a></li>
+<li><a href="#scan-in-the-room-and-reopen-the-cage"
+id="toc-scan-in-the-room-and-reopen-the-cage">3. Scan in the room and
+reopen the cage</a></li>
+<li><a href="#use-the-workspace-for-visual-review"
+id="toc-use-the-workspace-for-visual-review">4. Use the workspace for
+visual review</a></li>
 </ul></li>
-<li><a href="#module-3.-scan-to-edit-and-audit-trail"
-id="toc-module-3.-scan-to-edit-and-audit-trail">Module 3. Scan-To-Edit
-and Audit Trail</a>
+<li><a href="#technician-workflow-in-chat"
+id="toc-technician-workflow-in-chat">Technician workflow in chat</a>
 <ul>
-<li><a href="#learning-goal-2" id="toc-learning-goal-2">Learning
-goal</a></li>
-<li><a href="#steps-1" id="toc-steps-1">Steps</a></li>
-<li><a href="#why-this-matters-biologically-1"
-id="toc-why-this-matters-biologically-1">Why this matters
-biologically</a></li>
-<li><a href="#exercise-2" id="toc-exercise-2">Exercise</a></li>
+<li><a href="#start-the-shift-with-the-morning-brief"
+id="toc-start-the-shift-with-the-morning-brief">1. Start the shift with
+the morning brief</a></li>
+<li><a href="#open-the-same-cage-directly"
+id="toc-open-the-same-cage-directly">2. Open the same cage
+directly</a></li>
+<li><a href="#notice-the-abnormal-condition-before-editing"
+id="toc-notice-the-abnormal-condition-before-editing">3. Notice the
+abnormal condition before editing</a></li>
+<li><a href="#attempt-the-update-and-observe-the-hard-stop"
+id="toc-attempt-the-update-and-observe-the-hard-stop">4. Attempt the
+update and observe the hard-stop</a></li>
+<li><a href="#still-do-useful-work-complete-the-due-task"
+id="toc-still-do-useful-work-complete-the-due-task">5. Still do useful
+work: complete the due task</a></li>
+<li><a href="#re-check-the-queue" id="toc-re-check-the-queue">6.
+Re-check the queue</a></li>
 </ul></li>
-<li><a href="#module-4.-breeding-litters-and-pedigree"
-id="toc-module-4.-breeding-litters-and-pedigree">Module 4. Breeding,
-Litters, and Pedigree</a>
-<ul>
-<li><a href="#learning-goal-3" id="toc-learning-goal-3">Learning
-goal</a></li>
-<li><a href="#recommended-examples"
-id="toc-recommended-examples">Recommended examples</a></li>
-<li><a href="#biology-background-1"
-id="toc-biology-background-1">Biology background</a></li>
-<li><a href="#what-the-seeded-tutorial-data-includes"
-id="toc-what-the-seeded-tutorial-data-includes">What the seeded tutorial
-data includes</a></li>
-<li><a href="#guided-walkthrough" id="toc-guided-walkthrough">Guided
-walkthrough</a></li>
-<li><a href="#exercise-3" id="toc-exercise-3">Exercise</a></li>
-<li><a href="#fun-application" id="toc-fun-application">Fun
-application</a></li>
+<li><a href="#technician-overlap-you-should-not-skip"
+id="toc-technician-overlap-you-should-not-skip">Technician overlap you
+should not skip</a></li>
+<li><a href="#technician-mini-mission"
+id="toc-technician-mini-mission">Technician mini-mission</a></li>
 </ul></li>
-<li><a href="#module-5.-samples-genotyping-and-research-readiness"
-id="toc-module-5.-samples-genotyping-and-research-readiness">Module 5.
-Samples, Genotyping, and Research Readiness</a>
+<li><a href="#role-2-facility-manager"
+id="toc-role-2-facility-manager">Role 2: Facility Manager</a>
 <ul>
-<li><a href="#learning-goal-4" id="toc-learning-goal-4">Learning
-goal</a></li>
-<li><a href="#recommended-examples-1"
-id="toc-recommended-examples-1">Recommended examples</a></li>
-<li><a href="#biology-background-2"
-id="toc-biology-background-2">Biology background</a></li>
-<li><a href="#what-to-observe" id="toc-what-to-observe">What to
-observe</a></li>
-<li><a href="#guided-walkthrough-1" id="toc-guided-walkthrough-1">Guided
-walkthrough</a></li>
-<li><a href="#exercise-4" id="toc-exercise-4">Exercise</a></li>
-<li><a href="#fun-application-1" id="toc-fun-application-1">Fun
-application</a></li>
+<li><a href="#what-a-facility-manager-cares-about-daily"
+id="toc-what-a-facility-manager-cares-about-daily">What a facility
+manager cares about daily</a></li>
+<li><a href="#typical-manager-data-entries"
+id="toc-typical-manager-data-entries">Typical manager data
+entries</a></li>
+<li><a href="#typical-manager-reports"
+id="toc-typical-manager-reports">Typical manager reports</a></li>
+<li><a href="#facility-manager-workflow-in-the-workspace"
+id="toc-facility-manager-workflow-in-the-workspace">Facility manager
+workflow in the workspace</a>
+<ul>
+<li><a href="#start-from-analytics-and-compliance"
+id="toc-start-from-analytics-and-compliance">1. Start from analytics and
+compliance</a></li>
+<li><a href="#move-into-analytics-for-capacity-and-flow"
+id="toc-move-into-analytics-for-capacity-and-flow">2. Move into
+analytics for capacity and flow</a></li>
+<li><a href="#generate-exports" id="toc-generate-exports">3. Generate
+exports</a></li>
 </ul></li>
-<li><a href="#module-6.-compliance-welfare-and-abnormal-conditions"
-id="toc-module-6.-compliance-welfare-and-abnormal-conditions">Module 6.
-Compliance, Welfare, and Abnormal Conditions</a>
+<li><a href="#facility-manager-workflow-in-chat"
+id="toc-facility-manager-workflow-in-chat">Facility manager workflow in
+chat</a>
 <ul>
-<li><a href="#learning-goal-5" id="toc-learning-goal-5">Learning
-goal</a></li>
-<li><a href="#what-the-training-data-guarantees"
-id="toc-what-the-training-data-guarantees">What the training data
-guarantees</a></li>
-<li><a href="#why-this-matters-biologically-2"
-id="toc-why-this-matters-biologically-2">Why this matters
-biologically</a></li>
-<li><a href="#guided-walkthrough-2" id="toc-guided-walkthrough-2">Guided
-walkthrough</a></li>
-<li><a href="#exercise-5" id="toc-exercise-5">Exercise</a></li>
-<li><a href="#fun-application-2" id="toc-fun-application-2">Fun
-application</a></li>
+<li><a href="#start-with-the-morning-brief"
+id="toc-start-with-the-morning-brief">1. Start with the morning
+brief</a></li>
+<li><a href="#ask-the-next-obvious-question"
+id="toc-ask-the-next-obvious-question">2. Ask the next obvious
+question</a></li>
+<li><a href="#check-room-pressure" id="toc-check-room-pressure">3. Check
+room pressure</a></li>
+<li><a href="#pull-chargeback-or-sla-context"
+id="toc-pull-chargeback-or-sla-context">4. Pull chargeback or SLA
+context</a></li>
 </ul></li>
-<li><a href="#module-7.-planner-capacity-and-facility-thinking"
-id="toc-module-7.-planner-capacity-and-facility-thinking">Module 7.
-Planner, Capacity, and Facility Thinking</a>
-<ul>
-<li><a href="#learning-goal-6" id="toc-learning-goal-6">Learning
-goal</a></li>
-<li><a href="#recommended-example-scenarios"
-id="toc-recommended-example-scenarios">Recommended example
-scenarios</a></li>
-<li><a href="#biology-background-3"
-id="toc-biology-background-3">Biology background</a></li>
-<li><a href="#guided-walkthrough-3" id="toc-guided-walkthrough-3">Guided
-walkthrough</a></li>
-<li><a href="#exercise-6" id="toc-exercise-6">Exercise</a></li>
-<li><a href="#fun-application-3" id="toc-fun-application-3">Fun
-application</a></li>
+<li><a href="#facility-manager-overlap-you-should-not-skip"
+id="toc-facility-manager-overlap-you-should-not-skip">Facility manager
+overlap you should not skip</a></li>
+<li><a href="#facility-manager-mini-mission"
+id="toc-facility-manager-mini-mission">Facility manager
+mini-mission</a></li>
 </ul></li>
-<li><a href="#role-based-learning-paths"
-id="toc-role-based-learning-paths">Role-Based Learning Paths</a>
+<li><a href="#role-3-researcher-pi" id="toc-role-3-researcher-pi">Role
+3: Researcher / PI</a>
 <ul>
-<li><a href="#technician-path" id="toc-technician-path">Technician
+<li><a href="#what-a-researcher-cares-about-daily"
+id="toc-what-a-researcher-cares-about-daily">What a researcher cares
+about daily</a></li>
+<li><a href="#typical-researcher-data-entries"
+id="toc-typical-researcher-data-entries">Typical researcher data
+entries</a></li>
+<li><a href="#typical-researcher-reports"
+id="toc-typical-researcher-reports">Typical researcher reports</a></li>
+<li><a href="#researcher-workflow-in-the-workspace"
+id="toc-researcher-workflow-in-the-workspace">Researcher workflow in the
+workspace</a>
+<ul>
+<li><a href="#use-the-workspace-for-samples-cohorts-and-planning"
+id="toc-use-the-workspace-for-samples-cohorts-and-planning">1. Use the
+workspace for samples, cohorts, and planning</a></li>
+<li><a href="#use-pedigree-when-the-biology-matters"
+id="toc-use-pedigree-when-the-biology-matters">2. Use pedigree when the
+biology matters</a></li>
+<li><a href="#use-planner-views-when-demand-is-changing"
+id="toc-use-planner-views-when-demand-is-changing">3. Use planner views
+when demand is changing</a></li>
+</ul></li>
+<li><a href="#researcher-workflow-in-chat"
+id="toc-researcher-workflow-in-chat">Researcher workflow in chat</a>
+<ul>
+<li><a href="#open-the-main-project" id="toc-open-the-main-project">1.
+Open the main project</a></li>
+<li><a href="#move-from-project-to-a-specific-cage"
+id="toc-move-from-project-to-a-specific-cage">2. Move from project to a
+specific cage</a></li>
+<li><a href="#ask-about-reports-or-readiness"
+id="toc-ask-about-reports-or-readiness">3. Ask about reports or
+readiness</a></li>
+<li><a href="#use-the-sampleresult-example"
+id="toc-use-the-sampleresult-example">4. Use the sample/result
+example</a></li>
+</ul></li>
+<li><a href="#researcher-overlap-you-should-not-skip"
+id="toc-researcher-overlap-you-should-not-skip">Researcher overlap you
+should not skip</a></li>
+<li><a href="#researcher-mini-mission"
+id="toc-researcher-mini-mission">Researcher mini-mission</a></li>
+</ul></li>
+<li><a href="#shared-cross-role-workflows"
+id="toc-shared-cross-role-workflows">Shared Cross-Role Workflows</a>
+<ul>
+<li><a href="#workflow-print-a-cage-card"
+id="toc-workflow-print-a-cage-card">Workflow: Print a cage card</a>
+<ul>
+<li><a href="#workspace-path" id="toc-workspace-path">Workspace
 path</a></li>
-<li><a href="#pi-researcher-path" id="toc-pi-researcher-path">PI /
-Researcher path</a></li>
-<li><a href="#facility-manager-path"
-id="toc-facility-manager-path">Facility manager path</a></li>
+<li><a href="#chat-path" id="toc-chat-path">Chat path</a></li>
 </ul></li>
-<li><a href="#visual-walkthrough" id="toc-visual-walkthrough">Visual
-Walkthrough</a>
+<li><a href="#workflow-scan-a-printed-card-with-a-phone"
+id="toc-workflow-scan-a-printed-card-with-a-phone">Workflow: Scan a
+printed card with a phone</a></li>
+<li><a href="#workflow-move-between-modes-without-losing-context"
+id="toc-workflow-move-between-modes-without-losing-context">Workflow:
+Move between modes without losing context</a></li>
+</ul></li>
+<li><a href="#fun-applications-to-learn-together"
+id="toc-fun-applications-to-learn-together">Fun Applications To Learn
+Together</a>
 <ul>
-<li><a href="#login-screen" id="toc-login-screen">Login Screen</a></li>
-<li><a href="#landing-dashboard-cage-alerts-and-density-view"
-id="toc-landing-dashboard-cage-alerts-and-density-view">Landing
-Dashboard, Cage Alerts, and Density View</a></li>
-<li><a href="#cage-card-center-and-batch-printing"
-id="toc-cage-card-center-and-batch-printing">Cage Card Center and Batch
-Printing</a></li>
-<li><a href="#complete-cage-card" id="toc-complete-cage-card">Complete
-Cage Card</a></li>
-<li><a href="#scan-base-url-setup" id="toc-scan-base-url-setup">Scan
-Base URL Setup</a></li>
-<li><a href="#phone-camera-scan-of-printed-qr"
-id="toc-phone-camera-scan-of-printed-qr">Phone Camera Scan of Printed
-QR</a></li>
-<li><a href="#scan-to-edit-cage-workflow"
-id="toc-scan-to-edit-cage-workflow">Scan-to-Edit Cage Workflow</a></li>
-<li><a href="#breeding-pair-productivity"
-id="toc-breeding-pair-productivity">Breeding Pair Productivity</a></li>
-<li><a href="#samples-and-genotyping-workflow"
-id="toc-samples-and-genotyping-workflow">Samples and Genotyping
-Workflow</a></li>
-<li><a href="#recommendations-and-outcomes"
-id="toc-recommendations-and-outcomes">Recommendations and
-Outcomes</a></li>
-<li><a href="#planner-scenario-evaluation"
-id="toc-planner-scenario-evaluation">Planner Scenario
-Evaluation</a></li>
-<li><a href="#compliance-dashboard"
-id="toc-compliance-dashboard">Compliance Dashboard</a></li>
-<li><a href="#pedigree-explorer" id="toc-pedigree-explorer">Pedigree
-Explorer</a></li>
-<li><a href="#scan-troubleshooting-reference"
-id="toc-scan-troubleshooting-reference">Scan Troubleshooting
-Reference</a></li>
+<li><a href="#weekly-colony-huddle" id="toc-weekly-colony-huddle">1.
+Weekly colony huddle</a></li>
+<li><a href="#facility-operations-check-in"
+id="toc-facility-operations-check-in">2. Facility operations
+check-in</a></li>
+<li><a href="#research-planning-conversation"
+id="toc-research-planning-conversation">3. Research planning
+conversation</a></li>
+<li><a href="#pedigree-teaching-moment"
+id="toc-pedigree-teaching-moment">4. Pedigree teaching moment</a></li>
 </ul></li>
-<li><a href="#mini-missions-you-can-learn-together"
-id="toc-mini-missions-you-can-learn-together">Mini Missions You Can
-Learn Together</a>
-<ul>
-<li><a href="#mission-1-rescue-a-delayed-cohort"
-id="toc-mission-1-rescue-a-delayed-cohort">Mission 1: Rescue a delayed
-cohort</a></li>
-<li><a href="#mission-2-find-the-highest-risk-welfare-pattern"
-id="toc-mission-2-find-the-highest-risk-welfare-pattern">Mission 2: Find
-the highest-risk welfare pattern</a></li>
-<li><a href="#mission-3-trace-inheritance-from-card-to-pedigree"
-id="toc-mission-3-trace-inheritance-from-card-to-pedigree">Mission 3:
-Trace inheritance from card to pedigree</a></li>
-<li><a href="#mission-4-choose-a-sample-that-is-experiment-ready"
-id="toc-mission-4-choose-a-sample-that-is-experiment-ready">Mission 4:
-Choose a sample that is experiment-ready</a></li>
-<li><a href="#mission-5-explain-a-genotype-to-a-new-trainee"
-id="toc-mission-5-explain-a-genotype-to-a-new-trainee">Mission 5:
-Explain a genotype to a new trainee</a></li>
-</ul></li>
-<li><a href="#glossary-for-new-learners"
-id="toc-glossary-for-new-learners">Glossary for New Learners</a></li>
-<li><a href="#end-of-shift-and-end-of-day-checklists"
-id="toc-end-of-shift-and-end-of-day-checklists">End-of-Shift and
-End-of-Day Checklists</a>
-<ul>
-<li><a href="#technician" id="toc-technician">Technician</a></li>
-<li><a href="#pi-facility-manager-admin"
-id="toc-pi-facility-manager-admin">PI / Facility Manager /
-Admin</a></li>
-</ul></li>
-<li><a href="#troubleshooting-and-learning-support"
-id="toc-troubleshooting-and-learning-support">Troubleshooting and
-Learning Support</a></li>
+<li><a href="#troubleshooting"
+id="toc-troubleshooting">Troubleshooting</a></li>
+<li><a href="#final-checklist" id="toc-final-checklist">Final
+Checklist</a></li>
 </ul>
 </nav>
 <h1 id="purpose">Purpose</h1>
-<p>This tutorial is designed for <strong>self-paced learning</strong>.
-It teaches Murisphere as an operational system and as a biological
-thinking tool.</p>
-<p>Inside Murisphere, the landing dashboard now includes a <strong>Start
-Learning</strong> section. Use it to launch this tutorial, open the PDF,
-and jump into seeded example workflows directly from the app. You can
-also mark modules complete there, so self-paced learning survives across
-sessions on the same device/browser.</p>
-<p>The goal is not only to click through screens. The goal is to learn
-how a mouse colony actually behaves over time:</p>
-<ul>
-<li>how breeding status changes what a technician should do next</li>
-<li>how strain and genotype shape experimental meaning</li>
-<li>how litter survival, sex balance, and timing affect research
-supply</li>
-<li>how compliance and welfare workflows protect both animals and
-science</li>
-</ul>
-<p>The core operating rule remains simple:</p>
-<p><strong>Print the cage card -&gt; scan the QR with a phone -&gt; open
-the cage in the browser -&gt; complete the task
-immediately.</strong></p>
-<h1 id="how-to-use-this-tutorial">How To Use This Tutorial</h1>
-<p>You can complete the entire guide in one sitting or in short
-modules.</p>
-<h2 id="suggested-learning-pace">Suggested learning pace</h2>
-<ul>
-<li><strong>Quick orientation:</strong> 20-30 minutes</li>
-<li><strong>Technician essentials:</strong> 45-60 minutes</li>
-<li><strong>Biology and breeding module:</strong> 30-45 minutes</li>
-<li><strong>Research support and planning module:</strong> 30-45
-minutes</li>
-<li><strong>Manager and compliance module:</strong> 30-45 minutes</li>
-</ul>
-<h2 id="best-practice-for-self-paced-learning">Best practice for
-self-paced learning</h2>
+<p>This tutorial teaches Murisphere through the three roles that
+actually drive mouse colony work every day:</p>
 <ol type="1">
-<li>Work in a dedicated training database, not in your production
-database.</li>
-<li>Keep the tutorial open on a laptop or tablet while scanning and
-editing on a phone.</li>
-<li>Pause after each module and complete the short exercise before
-moving on.</li>
-<li>Treat the screenshots as orientation, not as a substitute for
-touching the workflow yourself.</li>
+<li><strong>Technician</strong></li>
+<li><strong>Facility manager / vivarium administrator</strong></li>
+<li><strong>Researcher / PI</strong></li>
 </ol>
-<h1 id="training-environment-and-data-readiness">Training Environment
-and Data Readiness</h1>
-<h2 id="recommended-training-command-sequence">Recommended training
-command sequence</h2>
-<p>Use the tutorial-ready seed, not the plain scale-only seed.</p>
+<p>Murisphere now supports <strong>two full operating modes</strong>: -
+a <strong>traditional workspace</strong> for visual review, dashboards,
+lists, reports, and batch actions - a <strong>chat-first
+console</strong> for direct, phone-friendly commands and quick
+operational work</p>
+<p>The important point is not to choose one forever. The important point
+is to use the mode that is fastest and safest for the task in front of
+you.</p>
+<p>This tutorial is built from a <strong>real seeded training
+dataset</strong> generated on <strong>April 13, 2026</strong>. The cage
+codes, projects, sample records, planner scenarios, and alerts below
+come from that training dataset.</p>
+<h1 id="training-setup">Training Setup</h1>
+<h2 id="create-the-tutorial-database">Create the tutorial database</h2>
 <div class="sourceCode" id="cb1"><pre
 class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-m</span> venv .venv</span>
 <span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="bu">source</span> .venv/bin/activate</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="at">-r</span> requirements.txt</span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="ex">./.venv/bin/python</span> seed_tutorial_demo.py <span class="at">--db</span> training_demo.db <span class="at">--force</span></span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="va">MURISPHERE_DB</span><span class="op">=</span>training_demo.db <span class="ex">./.venv/bin/python</span> app.py</span></code></pre></div>
-<h2 id="what-the-tutorial-ready-seed-gives-you">What the tutorial-ready
-seed gives you</h2>
-<p>The tutorial seed is deterministic and creates a stable practice
-environment with:</p>
+<h2 id="training-accounts">Training accounts</h2>
+<ul>
+<li>Admin / facility manager: <code>admin@murisphere.local</code> /
+<code>admin1234</code></li>
+<li>Technician: <code>tech@murisphere.local</code> /
+<code>tech1234</code></li>
+<li>Researcher / PI: <code>pi@murisphere.local</code> /
+<code>pi1234</code></li>
+</ul>
+<h2 id="what-this-seed-contains">What this seed contains</h2>
 <table>
 <thead>
 <tr>
 <th>Category</th>
-<th style="text-align: right;">Ready at start</th>
+<th style="text-align: right;">Count</th>
 </tr>
 </thead>
 <tbody>
@@ -468,77 +423,53 @@ environment with:</p>
 </tr>
 </tbody>
 </table>
-<p>The seeded environment also includes: - variable lab sizes: 8 small,
-8 medium, 4 large - strong cage-status diversity: <code>Breeding</code>,
-<code>Timed Mating</code>, <code>Holding</code>,
-<code>Wean Pending</code> - active welfare and compliance pressure:
-overdue tasks, protocol deviations, necropsy items, and open vet cases -
-pedigree-ready families with sire, dam, and pups linked together -
-sample chain-of-custody states from <code>collected</code> through
-<code>resulted</code></p>
-<h2 id="training-accounts">Training accounts</h2>
-<ul>
-<li>Admin: <code>admin@murisphere.local</code> /
-<code>admin1234</code></li>
-<li>Technician: <code>tech@murisphere.local</code> /
-<code>tech1234</code></li>
-<li>PI: <code>pi@murisphere.local</code> / <code>pi1234</code></li>
-</ul>
-<h2 id="recommended-example-records-used-in-this-tutorial">Recommended
-example records used in this tutorial</h2>
-<p>These records are seeded intentionally so a learner can follow
-specific examples.</p>
+<h2 id="real-examples-used-in-this-guide">Real examples used in this
+guide</h2>
 <table>
 <thead>
 <tr>
-<th>Workflow</th>
+<th>Topic</th>
 <th>Example</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Breeding cage with litter and pedigree</td>
+<td>Technician breeding cage</td>
 <td><code>F1-L01-C0006</code></td>
 </tr>
 <tr>
-<td>Breeding cage with a larger pup set</td>
+<td>Technician larger breeder cage</td>
 <td><code>F1-L01-C0008</code></td>
 </tr>
 <tr>
-<td>Sample chain-of-custody example</td>
+<td>Researcher sample/result cage</td>
+<td><code>F1-L01-C0012</code></td>
+</tr>
+<tr>
+<td>Resulted sample</td>
 <td><code>SMP-0004</code> on <code>F1-L01-C0012-P01</code></td>
 </tr>
 <tr>
-<td>Planner scenario example</td>
+<td>Main project example</td>
+<td><code>L01-PRJ-01</code></td>
+</tr>
+<tr>
+<td>Main planner example</td>
 <td><code>Neurogenetics Lab Cohort Plan</code></td>
 </tr>
 <tr>
-<td>Lab for beginner exercises</td>
-<td><code>Neurogenetics Lab</code></td>
+<td>Non-expired protocol example lab</td>
+<td><code>Developmental Signaling Unit</code></td>
 </tr>
 </tbody>
 </table>
-<h1 id="mouse-colony-biology-primer">Mouse Colony Biology Primer</h1>
-<p>This section is here so a new learner can understand
-<strong>why</strong> Murisphere tracks what it tracks.</p>
-<h2 id="why-mouse-colony-data-matters-biologically">Why mouse colony
-data matters biologically</h2>
-<p>A colony is not just inventory. It is a living, time-dependent
-system.</p>
-<ul>
-<li>A breeding delay changes when pups are available for
-experiments.</li>
-<li>A poor litter survival trend can signal husbandry, genetic, or
-maternal issues.</li>
-<li>A skewed sex ratio can make it hard to hit a study design
-target.</li>
-<li>A genotype mismatch can invalidate an experimental cohort.</li>
-<li>An expired protocol or unresolved welfare issue can halt work
-entirely.</li>
-</ul>
-<p>Murisphere helps teams see those facts early, while the colony is
-still manageable.</p>
-<h2 id="key-biological-terms">Key biological terms</h2>
+<h1 id="how-to-use-this-guide">How To Use This Guide</h1>
+<h2 id="best-device-mix">Best device mix</h2>
+<p>The ideal training setup uses: - a <strong>phone</strong> for
+scanning printed cage cards - a <strong>laptop or tablet</strong> for
+the workspace - an optional second browser tab for the <strong>chat
+console</strong> at <code>/chat/</code></p>
+<h2 id="which-mode-should-you-use">Which mode should you use?</h2>
 <table>
 <colgroup>
 <col style="width: 33%" />
@@ -547,596 +478,742 @@ still manageable.</p>
 </colgroup>
 <thead>
 <tr>
-<th>Term</th>
-<th>What it means</th>
-<th>Why the software tracks it</th>
+<th>Mode</th>
+<th>Best for</th>
+<th>Typical examples</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Strain</td>
-<td>The genetic background, such as <code>C57BL/6J</code> or
-<code>BALB/c</code></td>
-<td>Background strain changes phenotype, breeding behavior, and
-interpretation</td>
+<td>Workspace</td>
+<td>dashboards, list views, analytics, reports, batch printing, visual
+alerts</td>
+<td>room utilization, compliance review, project inspector, genotyping
+workspace</td>
 </tr>
 <tr>
-<td>Genotype</td>
-<td>The allele combination carried by the animal</td>
-<td>Determines whether an animal fits the project need</td>
+<td>Chat</td>
+<td>direct actions, quick lookup, phone work, intent-driven updates</td>
+<td><code>Open cage F1-L01-C0006</code>,
+<code>Show overdue tasks</code>,
+<code>Print cage card for F1-L01-C0006</code></td>
 </tr>
 <tr>
-<td><code>WT/WT</code></td>
-<td>Wild-type at the tracked locus</td>
-<td>Often a control or non-carrier</td>
-</tr>
-<tr>
-<td><code>Cre/+</code> or <code>+/tg</code></td>
-<td>Heterozygous carrier of a transgene or driver</td>
-<td>Common in conditional breeding strategies</td>
-</tr>
-<tr>
-<td><code>fl/fl</code></td>
-<td>Homozygous floxed allele</td>
-<td>Often paired with a Cre driver to generate tissue-specific
-knockouts</td>
-</tr>
-<tr>
-<td>Timed mating</td>
-<td>Breeder setup with a known breeding window</td>
-<td>Makes plug checks and embryo timing meaningful</td>
-</tr>
-<tr>
-<td>Plug check</td>
-<td>Inspection for a vaginal plug after mating</td>
-<td>Helps estimate embryonic age and downstream harvest timing</td>
-</tr>
-<tr>
-<td>Litter</td>
-<td>A birth event and its pups</td>
-<td>Core unit for survival, genotype yield, and weaning workload</td>
-</tr>
-<tr>
-<td>Weaning</td>
-<td>Separation of pups from dam at the appropriate age</td>
-<td>A high-frequency operational milestone</td>
-</tr>
-<tr>
-<td>Pedigree</td>
-<td>Parent-child lineage relationships</td>
-<td>Needed for breeding strategy and genotype interpretation</td>
-</tr>
-<tr>
-<td>Necropsy</td>
-<td>Post-mortem examination</td>
-<td>Important for welfare review and root-cause learning</td>
+<td>Mixed</td>
+<td>moving fluidly between both</td>
+<td>print in workspace, scan with phone, update in chat, return to
+workspace for review</td>
 </tr>
 </tbody>
 </table>
-<h2 id="why-cage-centric-work-wins-in-real-vivaria">Why cage-centric
-work wins in real vivaria</h2>
-<p>Technicians act on <strong>cages</strong>, not spreadsheets.</p>
-<p>A good cage workflow should answer these questions immediately: -
-Where is the cage? - Who owns it? - Which protocol covers it? - What is
-in it biologically? - What is the next action? - Is anything abnormal or
-blocked?</p>
-<p>That is why Murisphere centers the cage card and QR scan
-workflow.</p>
-<h1 id="learning-map">Learning Map</h1>
-<h2 id="module-1-orientation-and-safe-setup">Module 1: Orientation and
-safe setup</h2>
-<p>Learn the dashboard, training users, and printing/scanning rules.</p>
-<h2 id="module-2-cage-card-literacy">Module 2: Cage card literacy</h2>
-<p>Learn how to read a cage card as both an operational label and a
-biological summary.</p>
-<h2 id="module-3-scan-to-edit-and-audit-trail">Module 3: Scan-to-edit
-and audit trail</h2>
-<p>Learn the phone workflow that matters most for daily technician
-work.</p>
-<h2 id="module-4-breeding-litters-and-pedigree">Module 4: Breeding,
-litters, and pedigree</h2>
-<p>Learn how breeders become litters, how litters become animals, and
-how lineage affects decisions.</p>
-<h2 id="module-5-samples-genotyping-and-research-readiness">Module 5:
-Samples, genotyping, and research readiness</h2>
-<p>Learn how samples move from collection to result and why that matters
-for project supply.</p>
-<h2 id="module-6-compliance-welfare-and-abnormal-conditions">Module 6:
-Compliance, welfare, and abnormal conditions</h2>
-<p>Learn how to recognize and respond to alerts that protect animal
-welfare and scientific quality.</p>
-<h2 id="module-7-planner-and-manager-workflows">Module 7: Planner and
-manager workflows</h2>
-<p>Learn how colony operations connect to project demand, cage space,
-and facility risk.</p>
-<h1 id="module-1.-orientation-and-safe-setup">Module 1. Orientation and
-Safe Setup</h1>
-<h2 id="learning-goal">Learning goal</h2>
-<p>Be able to log in, identify the main views, and prepare a
-phone-reachable QR workflow.</p>
-<h2 id="steps">Steps</h2>
-<ol type="1">
-<li>Log in as the technician.</li>
-<li>Pause on the landing dashboard before clicking anywhere else.</li>
-<li>In the <code>Start Learning</code> panel, open the full tutorial
-once so you know where it lives in the app.</li>
-<li>Note the alert count, room pressure, and overdue workload.</li>
-<li>Open the cage card center.</li>
-<li>Confirm <code>Scan Base URL</code> points to a host your phone can
-reach.</li>
-<li>Print one test card at <strong>100% scale</strong>.</li>
-<li>Scan the QR with your phone camera.</li>
-<li>Confirm the cage opens directly in the browser.</li>
-</ol>
-<h2 id="why-this-matters-biologically">Why this matters
-biologically</h2>
-<p>Bad scan setup causes delayed data entry. Delayed data entry turns
-real biological events into memory-based guesses.</p>
-<p>That is especially risky for: - plug checks - birth timing - weaning
-date - mortality and welfare observations</p>
-<h2 id="exercise">Exercise</h2>
+<h2 id="shared-rule-for-all-roles">Shared rule for all roles</h2>
+<p><strong>Print the cage card -&gt; scan the QR with a phone -&gt; open
+the cage in the browser -&gt; choose the fastest safe mode -&gt;
+complete the task immediately.</strong></p>
+<h1 id="biological-background-you-learn-along-the-way">Biological
+Background You Learn Along The Way</h1>
+<p>Murisphere is not just a logistics tool. The fields on the card and
+in the app are meaningful because they affect breeding, welfare, and
+experimental interpretation.</p>
+<h2 id="why-timing-matters">Why timing matters</h2>
 <ul>
-<li>Log in as technician.</li>
-<li>Find the dashboard tile that would make you investigate first.</li>
-<li>Write down why that item would change your room order.</li>
+<li><strong>DOB</strong> drives weaning windows, age-matched cohorts,
+and breeding readiness.</li>
+<li><strong>Date of weaning (DoW)</strong> matters because delayed or
+early weaning changes both welfare and downstream study timing.</li>
+<li><strong>Plug checks, pair setup, and breeder age</strong> change
+whether a line is actually productive.</li>
 </ul>
-<h1 id="module-2.-cage-card-literacy">Module 2. Cage Card Literacy</h1>
-<h2 id="learning-goal-1">Learning goal</h2>
-<p>Read a cage card as an at-a-glance biological and operational
-summary.</p>
-<h2 id="recommended-example">Recommended example</h2>
-<p>Use cage <code>F1-L01-C0006</code>.</p>
-<h2 id="what-to-look-for-on-the-card">What to look for on the card</h2>
+<h2 id="why-genotype-matters">Why genotype matters</h2>
+<p>A genotype is not only a label. It is an inheritance and
+experiment-readiness question.</p>
+<p>For example: - a <code>Cre/+</code> animal may be useful for one
+project but not another - a <code>fl/fl</code> animal may need to be
+paired with the right driver line - missing genotype results can stall a
+project even when the colony appears numerically healthy</p>
+<h2 id="why-pedigree-matters">Why pedigree matters</h2>
+<p>If a line behaves unexpectedly, the pedigree helps answer: - who the
+sire and dam were - whether the litter pattern is plausible - whether
+poor survival or odd genotype mix is isolated or repeated</p>
+<h2 id="why-compliance-fields-matter-biologically">Why compliance fields
+matter biologically</h2>
+<p>Protocol, welfare, veterinary, and quarantine fields are not only
+administrative: - they change what can be done to the cage - they can
+stop in-room updates or project handoffs - they protect both animal
+welfare and study validity</p>
+<figure>
+<img src="assets/screenshot_pedigree.svg" style="width:92.0%"
+alt="Pedigree and lineage view used to explain biological context" />
+<figcaption aria-hidden="true">Pedigree and lineage view used to explain
+biological context</figcaption>
+</figure>
+<h1 id="shared-foundations-for-all-roles">Shared Foundations For All
+Roles</h1>
+<h2 id="what-a-cage-card-must-do">What a cage card must do</h2>
+<p>A cage card is not decoration. It is the physical hand-off between
+room work and the database.</p>
+<p>A complete Murisphere card should show: - cage code - PI / lab -
+project codes - room / rack / slot - protocol number, description, and
+expiration date - breeding status - strain and genotype summary - male /
+female / total counts - tracked animals - litter history - QR code that
+opens the cage in the browser</p>
+<figure>
+<img src="assets/cage_card_complete.svg" style="width:95.0%"
+alt="Complete cage card with owner, protocol, animal table, litter table, and QR code" />
+<figcaption aria-hidden="true">Complete cage card with owner, protocol,
+animal table, litter table, and QR code</figcaption>
+</figure>
+<h2 id="phone-qr-workflow">Phone QR workflow</h2>
+<ol type="1">
+<li>Print the card at <strong>100% scale</strong>.</li>
+<li>Use the <strong>phone camera</strong>, not a dedicated scanner.</li>
+<li>Point at the <strong>QR square</strong>, not the 1D barcode.</li>
+<li>Open the browser link.</li>
+<li>Continue in either the workspace or the chat console.</li>
+<li>Verify cage code and location before any write.</li>
+</ol>
+<figure>
+<img src="assets/scan_phone.svg" style="width:84.0%"
+alt="Phone scanning a printed QR cage card" />
+<figcaption aria-hidden="true">Phone scanning a printed QR cage
+card</figcaption>
+</figure>
+<h2 id="common-prompts-used-across-all-roles">Common prompts used across
+all roles</h2>
+<p>The tutorial sections below show the exact seeded responses for these
+prompts: - <code>What needs attention today?</code> -
+<code>Open cage F1-L01-C0006</code> - <code>Show reports</code> -
+<code>Print cage card for F1-L01-C0006</code> -
+<code>Show project L01-PRJ-01</code></p>
+<h1 id="role-1-technician">Role 1: Technician</h1>
+<h2 id="what-a-technician-cares-about-daily">What a technician cares
+about daily</h2>
+<p>A technician is trying to move quickly without losing biological or
+compliance accuracy.</p>
+<p>Daily concerns usually are: - what cages need attention first - which
+cages are overdue for plug check or wean - whether counts and actual
+animals still match - whether a cage is blocked by protocol or welfare
+conditions - whether mortality, abnormal observations, or sample events
+were documented immediately</p>
+<h2 id="typical-technician-data-entries">Typical technician data
+entries</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Entry</th>
+<th>Why it matters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>male count / female count</td>
+<td>reflects real room state and affects downstream planning</td>
+</tr>
+<tr>
+<td>breeding status</td>
+<td>changes expected tasks and litter timing</td>
+</tr>
+<tr>
+<td>note text</td>
+<td>captures abnormal findings at the moment they occur</td>
+</tr>
+<tr>
+<td>task completion status</td>
+<td>proves work was actually done</td>
+</tr>
+<tr>
+<td>mortality record</td>
+<td>supports welfare, veterinary, and census accuracy</td>
+</tr>
+<tr>
+<td>litter / weaning values</td>
+<td>affect survival metrics and future cage load</td>
+</tr>
+<tr>
+<td>transfer destination</td>
+<td>preserves chain-of-custody and location accuracy</td>
+</tr>
+<tr>
+<td>sample collection state</td>
+<td>affects genotyping and project readiness</td>
+</tr>
+</tbody>
+</table>
+<h2 id="typical-technician-reports">Typical technician reports</h2>
 <ul>
-<li>cage code and location</li>
-<li>lab ownership and linked projects</li>
-<li>protocol number and expiration context</li>
-<li>strain and genotype summary</li>
-<li>breeding status</li>
-<li>full population counts (<code>M/F/T</code>)</li>
-<li>tracked animal rows</li>
-<li>litter rows including <code>DoW</code> when present</li>
+<li>today’s action list</li>
+<li>overdue task list</li>
+<li>cages with active alerts</li>
+<li>weaning list</li>
+<li>mortality follow-up list</li>
+<li>printable cage cards for the next room pass</li>
 </ul>
-<h2 id="biology-background">Biology background</h2>
-<p>A cage card is a compressed biological story.</p>
-<p>For <code>F1-L01-C0006</code>: - <code>Rosa26-LSL</code> tells you
-the background line is designed for conditional activation or deletion
-studies. - <code>fl/fl</code> tells you both alleles are floxed. -
-<code>Breeding</code> tells you this cage is producing future animals,
-not merely holding existing ones. - a litter row tells you there is
-recent reproductive output to evaluate.</p>
-<h2 id="exercise-1">Exercise</h2>
+<h2 id="technician-workflow-in-the-workspace">Technician workflow in the
+workspace</h2>
+<h3 id="start-from-the-dashboard-or-cages">1. Start from the dashboard
+or <code>Cages</code></h3>
+<p>In the seeded dataset, the technician sees a room-facing operational
+surface with alerts, cage density, and due work.</p>
+<figure>
+<img src="assets/screenshot_cages_alerts.svg" style="width:94.0%"
+alt="Workspace view with cage alerts and room-facing operational context" />
+<figcaption aria-hidden="true">Workspace view with cage alerts and
+room-facing operational context</figcaption>
+</figure>
+<p>Recommended first actions: 1. look for highlighted cages and alert
+badges 2. filter to the room you are entering 3. print or reprint cage
+cards if needed before rounds</p>
+<h3 id="generate-a-cage-card">2. Generate a cage card</h3>
+<p>Use the selected cage workflow to print
+<code>F1-L01-C0006</code>.</p>
+<p>Expected printed card context: - Lab: <code>Neurogenetics Lab</code>
+- Location: <code>Room A1 / Rack R1</code> - Protocol:
+<code>IACUC-2026-0101</code> - Population: <code>M3 / F3 / T6</code></p>
+<figure>
+<img src="assets/screenshot_cards.svg" style="width:94.0%"
+alt="Workspace card-printing flow" />
+<figcaption aria-hidden="true">Workspace card-printing flow</figcaption>
+</figure>
+<h3 id="scan-in-the-room-and-reopen-the-cage">3. Scan in the room and
+reopen the cage</h3>
+<p>After printing: 1. scan the QR 2. open the browser link 3. sign in if
+needed 4. continue from either mode</p>
+<figure>
+<img src="assets/screenshot_scan.svg" style="width:92.0%"
+alt="Scan landing flow after QR open" />
+<figcaption aria-hidden="true">Scan landing flow after QR
+open</figcaption>
+</figure>
+<h3 id="use-the-workspace-for-visual-review">4. Use the workspace for
+visual review</h3>
+<p>For <code>F1-L01-C0006</code>, the workspace helps the technician
+visually confirm: - strain and genotype summary - animal rows - litter
+timing - alert badges - whether a protocol or welfare issue is blocking
+edits</p>
+<h2 id="technician-workflow-in-chat">Technician workflow in chat</h2>
+<h3 id="start-the-shift-with-the-morning-brief">1. Start the shift with
+the morning brief</h3>
+<p>Prompt:</p>
+<pre class="text"><code>What needs attention today?</code></pre>
+<p>Observed response in the seeded training environment on <strong>April
+13, 2026</strong>: - message:
+<code>Here is the current operating brief. Start with the alerts and due tasks, then open a cage or report from here.</code>
+Operational snapshot: - <code>6</code> active alerts - <code>6</code>
+high alerts - <code>6</code> tasks due now - <code>6</code> overdue
+tasks - <code>42</code> scoped cages - <code>84</code> scoped animals -
+top priority alerts included: - <code>Protocol Expired</code> on
+<code>F1-L01-C0001</code> - <code>Protocol Expired</code> on
+<code>F1-L01-C0002</code> - <code>Protocol Expired</code> on
+<code>F1-L01-C0003</code> - top due tasks included: -
+<code>Task #42 · wean</code> on <code>F1-L01-C0042</code> -
+<code>Task #41 · plug_check</code> on <code>F1-L01-C0041</code> -
+<code>Task #40 · wean</code> on <code>F1-L01-C0040</code></p>
+<h3 id="open-the-same-cage-directly">2. Open the same cage directly</h3>
+<p>Prompt:</p>
+<pre class="text"><code>Open cage F1-L01-C0006</code></pre>
+<p>Observed response: - message:
+<code>Cage F1-L01-C0006 is open. You can inspect it, update counts, or add a note from here.</code>
+Cage summary: - strain: <code>Rosa26-LSL</code> - genotype summary:
+<code>fl/fl</code> - population: <code>M3 / F3 / T6</code> - location:
+<code>Room A1 / Rack R1</code> - protocol: <code>IACUC-2026-0101</code>
+- project: <code>L01-PRJ-01</code> - DOB: <code>2026-03-06</code> -
+public scan page: <code>/scan/tok_1_1_0006_4348</code></p>
+<p>Tracked animals included: - <code>F1-L01-C0006-SIRE</code> -
+<code>F1-L01-C0006-DAM</code> - <code>F1-L01-C0006-P01</code> -
+<code>F1-L01-C0006-P02</code> - <code>F1-L01-C0006-P03</code> -
+<code>F1-L01-C0006-P04</code></p>
+<h3 id="notice-the-abnormal-condition-before-editing">3. Notice the
+abnormal condition before editing</h3>
+<p>This same cage had active alerts: - <code>Protocol Expired</code> -
+<code>Open Vet Case</code> - <code>Protocol Deviation Open</code></p>
+<p>That is an important technician lesson: <strong>not every open cage
+is writable</strong>.</p>
+<h3 id="attempt-the-update-and-observe-the-hard-stop">4. Attempt the
+update and observe the hard-stop</h3>
+<p>Prompt:</p>
+<pre class="text"><code>Update cage F1-L01-C0006 males=3 females=4 status=Holding note=Tutorial walkthrough adjustment</code></pre>
+<p>Real result from the seeded dataset:</p>
+<pre class="text"><code>Protocol IACUC-2026-0101 expired on 2020-01-01</code></pre>
+<p>This is correct behavior. The app should stop room-side edits when
+protocol state blocks action.</p>
+<h3 id="still-do-useful-work-complete-the-due-task">5. Still do useful
+work: complete the due task</h3>
+<p>Prompt:</p>
+<pre class="text"><code>Complete task 6</code></pre>
+<p>Observed response: - message: <code>Task #6 is now done.</code> -
+updated task card: - task: <code>#6</code> - type: <code>wean</code> -
+cage: <code>F1-L01-C0006</code></p>
+<h3 id="re-check-the-queue">6. Re-check the queue</h3>
+<p>Prompt:</p>
+<pre class="text"><code>Show overdue tasks</code></pre>
+<p>Observed response: - message:
+<code>These are the current open tasks in your scope.</code> Task
+pressure card: - <code>20</code> open tasks - <code>20</code> overdue -
+first rows in the open-task table included: - <code>F1-L01-C0042</code>
+- <code>F1-L01-C0041</code> - <code>F1-L01-C0040</code> -
+<code>F1-L01-C0039</code> - all four were still <code>pending</code> and
+assigned to <code>Admin User</code></p>
+<h2 id="technician-overlap-you-should-not-skip">Technician overlap you
+should not skip</h2>
+<p>Even though these also matter to managers and researchers, a
+technician should practice them explicitly: - printing the card -
+scanning with the phone camera - opening the cage from QR - checking
+alerts before editing - reading protocol state before changing counts -
+completing tasks in real time rather than later</p>
+<h2 id="technician-mini-mission">Technician mini-mission</h2>
 <ol type="1">
-<li>Open <code>F1-L01-C0006</code>.</li>
-<li>Compare the card-level genotype summary to the animal-level
-genotypes.</li>
-<li>Ask yourself: if this cage were for a conditional knockout study,
-which additional genotype information would a researcher still need
-before assigning animals to an experiment?</li>
+<li>Print <code>F1-L01-C0008</code>.</li>
+<li>Scan the printed card with a phone.</li>
+<li>Open the cage in chat.</li>
+<li>Ask <code>Show overdue tasks</code>.</li>
+<li>Return to the workspace and visually confirm alerts for the same
+room.</li>
 </ol>
-<h1 id="module-3.-scan-to-edit-and-audit-trail">Module 3. Scan-To-Edit
-and Audit Trail</h1>
-<h2 id="learning-goal-2">Learning goal</h2>
-<p>Perform the main technician workflow quickly and correctly on a
-phone.</p>
-<h2 id="steps-1">Steps</h2>
-<ol type="1">
-<li>Print or open the card for <code>F1-L01-C0006</code>.</li>
-<li>Scan the QR with the phone camera.</li>
-<li>Confirm the browser opens to the correct cage.</li>
-<li>Add a note such as
-<code>Tutorial note - verified scan workflow</code>.</li>
-<li>Save.</li>
-<li>Open the audit history and verify the note was captured with the
-right user and time.</li>
-</ol>
-<h2 id="why-this-matters-biologically-1">Why this matters
-biologically</h2>
-<p>If room edits happen later at a desk, the risk rises that you lose
-precise observation timing.</p>
-<p>Examples: - a plug seen today but entered tomorrow is already
-lower-quality data - a welfare observation entered late is harder to
-interpret and escalate - a litter note entered from memory may miss real
-survival changes</p>
-<h2 id="exercise-2">Exercise</h2>
-<p>Repeat the scan workflow for <code>F1-L01-C0008</code> and compare
-how many taps it takes from card to saved update.</p>
-<h1 id="module-4.-breeding-litters-and-pedigree">Module 4. Breeding,
-Litters, and Pedigree</h1>
-<h2 id="learning-goal-3">Learning goal</h2>
-<p>Understand how Murisphere represents reproduction over time and why
-that matters.</p>
-<h2 id="recommended-examples">Recommended examples</h2>
+<h1 id="role-2-facility-manager">Role 2: Facility Manager</h1>
+<h2 id="what-a-facility-manager-cares-about-daily">What a facility
+manager cares about daily</h2>
+<p>A facility manager is less interested in one cage and more interested
+in whether the facility is controlled.</p>
+<p>They care about: - room and rack utilization - which labs are above
+quota or trending up - protocol expirations and unresolved deviations -
+mortality and necropsy backlog - request SLAs and repeated breaches -
+which reports leadership, veterinarians, or IACUC will ask for next</p>
+<h2 id="typical-manager-data-entries">Typical manager data entries</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Entry</th>
+<th>Why it matters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>request status</td>
+<td>keeps service flow and accountability visible</td>
+</tr>
+<tr>
+<td>billing adjustments</td>
+<td>affects chargeback accuracy</td>
+</tr>
+<tr>
+<td>SLA settings</td>
+<td>determines when delayed handoffs become actionable</td>
+</tr>
+<tr>
+<td>protocol follow-up state</td>
+<td>prevents non-compliant work from lingering</td>
+</tr>
+<tr>
+<td>deviation / escalation state</td>
+<td>supports corrective action and oversight</td>
+</tr>
+<tr>
+<td>project priority / closeout state</td>
+<td>helps resource allocation across labs</td>
+</tr>
+<tr>
+<td>qualification or training updates</td>
+<td>prevents blocked work from being invisible</td>
+</tr>
+</tbody>
+</table>
+<h2 id="typical-manager-reports">Typical manager reports</h2>
 <ul>
-<li>Breeding cage: <code>F1-L01-C0006</code></li>
-<li>Larger litter example: <code>F1-L01-C0008</code></li>
-<li>Sample-linked pup: <code>F1-L01-C0012-P01</code></li>
+<li>room utilization</li>
+<li>quota utilization by lab</li>
+<li>chargeback summary</li>
+<li>protocol expiration report</li>
+<li>mortality and necropsy report</li>
+<li>breeder productivity report</li>
+<li>survival report</li>
+<li>cohort handoff and closeout report</li>
 </ul>
-<h2 id="biology-background-1">Biology background</h2>
-<p>A good breeding record answers four questions: 1. Which animals were
-paired? 2. When did the breeding window start? 3. Was there evidence of
-mating or pregnancy? 4. What was the output: litter size, survival, sex
-mix, and genotype yield?</p>
-<p>In real colony management, breeder productivity is not just a
-convenience metric. It directly affects: - experimental timelines - cage
-pressure - animal cost - whether older breeders should be retired or
-replaced</p>
-<h2 id="what-the-seeded-tutorial-data-includes">What the seeded tutorial
-data includes</h2>
+<h2 id="facility-manager-workflow-in-the-workspace">Facility manager
+workflow in the workspace</h2>
+<h3 id="start-from-analytics-and-compliance">1. Start from analytics and
+compliance</h3>
+<p>The workspace is the strongest place to scan facility-wide signals
+quickly.</p>
+<figure>
+<img src="assets/screenshot_compliance.svg" style="width:94.0%"
+alt="Compliance and operations visuals for facility-wide review" />
+<figcaption aria-hidden="true">Compliance and operations visuals for
+facility-wide review</figcaption>
+</figure>
+<p>Use the workspace to review: - alert severity mix - protocol
+expiration watch list - deviation and compliance concentration - room
+and lab pressure at a glance</p>
+<h3 id="move-into-analytics-for-capacity-and-flow">2. Move into
+analytics for capacity and flow</h3>
+<p>The seeded analytics workspace shows planning and throughput context
+that is hard to absorb in pure text.</p>
+<figure>
+<img src="assets/screenshot_planner.svg" style="width:94.0%"
+alt="Planner and analytics workspace used for manager review" />
+<figcaption aria-hidden="true">Planner and analytics workspace used for
+manager review</figcaption>
+</figure>
+<p>Use this view to ask: - where is capacity tight - which cohort
+handoffs are stalling - which labs are breaching expectations repeatedly
+- what should be exported before the weekly meeting</p>
+<h3 id="generate-exports">3. Generate exports</h3>
+<p>From the workspace, a manager can generate: - closeout CSV/PDF -
+stalled handoff CSV/PDF - chargeback summaries - protocol usage and
+survival exports</p>
+<h2 id="facility-manager-workflow-in-chat">Facility manager workflow in
+chat</h2>
+<h3 id="start-with-the-morning-brief">1. Start with the morning
+brief</h3>
+<p>Prompt:</p>
+<pre class="text"><code>Give me the facility morning brief</code></pre>
+<p>Observed response in the seeded training environment on <strong>April
+13, 2026</strong>: - message:
+<code>Here is the facility morning brief. Alert load, due tasks, and scoped population are summarized first.</code>
+Operational snapshot: - <code>6</code> active alerts - <code>6</code>
+high alerts - <code>6</code> tasks due now - <code>6</code> overdue
+tasks - <code>3,000</code> scoped cages - <code>372</code> scoped
+animals - priority alerts included multiple
+<code>Protocol Expired</code> cages in
+<code>Neurogenetics Lab</code></p>
+<h3 id="ask-the-next-obvious-question">2. Ask the next obvious
+question</h3>
+<p>Prompt:</p>
+<pre class="text"><code>Show protocol alerts</code></pre>
+<p>Observed response: - message:
+<code>These protocols are expired or approaching expiration inside the alert window.</code>
+- protocol alert table included: - <code>IACUC-2026-014</code> ·
+<code>Synaptic Development Cohort</code> · expires
+<code>2020-01-01</code> - <code>IACUC-2026-0101</code> ·
+<code>Neurogenetics Lab Protocol 1</code> · expires
+<code>2020-01-01</code> - <code>IACUC-2026-0201</code> ·
+<code>Synaptic Circuits Group Protocol 1</code> · expires
+<code>2020-01-01</code> - <code>IACUC-2026-0202</code> ·
+<code>Synaptic Circuits Group Protocol 2</code> · expires
+<code>2020-01-01</code></p>
+<h3 id="check-room-pressure">3. Check room pressure</h3>
+<p>Prompt:</p>
+<pre class="text"><code>Show room utilization</code></pre>
+<p>Observed response: - message:
+<code>Here is the current facility-level utilization, quota pressure, and chargeback snapshot.</code>
+- room utilization table: - <code>Room A1</code> occupied
+<code>3000</code> cages out of <code>240</code> capacity - utilization:
+<code>1250.0%</code> - first rows in lab quota pressure: -
+<code>Cancer Models Core</code> at <code>89.6%</code> -
+<code>Aging Biology Lab</code> at <code>119.87%</code> -
+<code>Renal Physiology Unit</code> at <code>133.58%</code> -
+<code>Molecular Pathology Group</code> at <code>133.09%</code></p>
+<p>This is a good example of chat as a manager’s quick exception
+console: concise numbers first, then the manager can switch to the
+workspace if they need a wider visual picture.</p>
+<h3 id="pull-chargeback-or-sla-context">4. Pull chargeback or SLA
+context</h3>
+<p>Prompt:</p>
+<pre class="text"><code>Show chargeback summary</code></pre>
+<p>Observed response: - message:
+<code>Here is the current facility-level utilization, quota pressure, and chargeback snapshot.</code>
+- first rows in chargeback snapshot: - <code>Cancer Models Core</code> ·
+<code>362</code> cages · <code>10,860</code> cage-days · estimated
+charge <code>9231.0</code> - <code>Aging Biology Lab</code> ·
+<code>362</code> cages · <code>10,860</code> cage-days · estimated
+charge <code>9231.0</code> - <code>Renal Physiology Unit</code> ·
+<code>362</code> cages · <code>10,860</code> cage-days · estimated
+charge <code>9231.0</code></p>
+<p>Prompt:</p>
+<pre class="text"><code>Show reports</code></pre>
+<p>Observed response: - message:
+<code>These are the reports and exports currently available from chat.</code>
+- export links included: - <code>Cages CSV</code> -
+<code>Cages Excel</code> - <code>Cages PDF</code> -
+<code>Breeder productivity CSV</code> - <code>Survival CSV</code> -
+<code>Protocol usage CSV</code> - <code>Mortality CSV</code> -
+<code>Cohort closeouts CSV/PDF</code> -
+<code>Stalled handoffs CSV/PDF</code> -
+<code>Billing statements CSV</code></p>
+<h2 id="facility-manager-overlap-you-should-not-skip">Facility manager
+overlap you should not skip</h2>
+<p>Managers should still practice the same phone-based scan flow as
+technicians, because managers often verify conditions during rounds or
+incident follow-up.</p>
+<p>Do not skip: - scanning a printed card - confirming a cage’s protocol
+state on phone - using chat for a quick facility brief while away from a
+desk - returning to the workspace for a broader visual explanation</p>
+<h2 id="facility-manager-mini-mission">Facility manager
+mini-mission</h2>
+<ol type="1">
+<li>In chat, ask <code>Give me the facility morning brief</code>.</li>
+<li>Ask <code>Show room utilization</code>.</li>
+<li>Switch to the workspace and open analytics.</li>
+<li>Export a cohort or handoff report.</li>
+<li>Return to chat and ask <code>Show protocol alerts</code>.</li>
+</ol>
+<h1 id="role-3-researcher-pi">Role 3: Researcher / PI</h1>
+<h2 id="what-a-researcher-cares-about-daily">What a researcher cares
+about daily</h2>
+<p>A researcher or PI is usually asking: - do I have the right animals
+by genotype, sex, and timing - are cohorts being reserved and handed off
+correctly - are breeding lines supporting project demand - are sample
+and genotype results arriving fast enough - what story do the pedigree
+and closeout outcomes tell</p>
+<h2 id="typical-researcher-data-entries">Typical researcher data
+entries</h2>
+<table>
+<colgroup>
+<col style="width: 50%" />
+<col style="width: 50%" />
+</colgroup>
+<thead>
+<tr>
+<th>Entry</th>
+<th>Why it matters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>project target counts</td>
+<td>determines whether colony output meets study demand</td>
+</tr>
+<tr>
+<td>genotype targeting rules</td>
+<td>defines what animals are actually useful</td>
+</tr>
+<tr>
+<td>cohort reservations / releases</td>
+<td>links colony output to project planning</td>
+</tr>
+<tr>
+<td>project priority or desired date</td>
+<td>helps facility planning and breeder decisions</td>
+</tr>
+<tr>
+<td>closeout notes and outcomes</td>
+<td>captures what happened after animals were handed off</td>
+</tr>
+<tr>
+<td>sample or genotyping state</td>
+<td>ties line verification to experimental readiness</td>
+</tr>
+</tbody>
+</table>
+<h2 id="typical-researcher-reports">Typical researcher reports</h2>
 <ul>
-<li>48 breeding pairs with named sire and dam records</li>
-<li>48 litters</li>
-<li>parent-linked pups for pedigree viewing</li>
-<li>breeding events such as timed mating and plug checks</li>
+<li>genotype-ready cohort list</li>
+<li>breeder productivity by line</li>
+<li>project cage list</li>
+<li>protocol usage report</li>
+<li>cohort closeout summary</li>
+<li>stalled handoff list</li>
+<li>sample and genotype result summary</li>
 </ul>
-<h2 id="guided-walkthrough">Guided walkthrough</h2>
-<ol type="1">
-<li>Open <code>F1-L01-C0006</code>.</li>
-<li>Review the litter row and note the birth date and survival.</li>
-<li>Open the animal list and identify the sire, dam, and pups.</li>
-<li>Open the pedigree for <code>F1-L01-C0006-P01</code>.</li>
-<li>Observe that the pup links back to both seeded parents.</li>
-<li>Open breeding pair productivity for the cage and note how litter
-output connects to operational decisions.</li>
-</ol>
-<h2 id="exercise-3">Exercise</h2>
-<p>Compare <code>F1-L01-C0006</code> and <code>F1-L01-C0008</code>.</p>
-<p>Questions to answer: - Which cage currently has the larger effective
-breeding output? - Which one would you prioritize if a project urgently
-needed genotype-confirmed pups? - What extra information would help you
-decide whether to keep the pair active?</p>
-<h2 id="fun-application">Fun application</h2>
-<p>Imagine you are supporting a neuroscience lab that needs a
-balanced-sex cohort of conditional animals in four weeks.</p>
-<p>Using these cages, decide: - whether current breeder output seems
-sufficient - whether a new breeding pair should be started now - whether
-weaning pressure will become the real bottleneck before genotype
-confirmation does</p>
-<h1 id="module-5.-samples-genotyping-and-research-readiness">Module 5.
-Samples, Genotyping, and Research Readiness</h1>
-<h2 id="learning-goal-4">Learning goal</h2>
-<p>See how colony records connect to molecular confirmation and project
-assignment.</p>
-<h2 id="recommended-examples-1">Recommended examples</h2>
-<ul>
-<li><code>SMP-0001</code> on <code>F1-L01-C0006-P01</code></li>
-<li><code>SMP-0004</code> on <code>F1-L01-C0012-P01</code></li>
-</ul>
-<h2 id="biology-background-2">Biology background</h2>
-<p>A colony is only useful to research when the right animals can be
-identified confidently.</p>
-<p>Genotyping helps answer: - Is the animal a carrier, homozygote, or
-wild-type control? - Is the animal appropriate for breeding, experiment,
-or exclusion? - Are observed genotype ratios biologically plausible?</p>
-<p>Sample tracking matters because a genotype result without
-chain-of-custody confidence is weaker evidence.</p>
-<h2 id="what-to-observe">What to observe</h2>
-<p>The tutorial seed includes sample records in multiple states: -
-<code>collected</code> - <code>shipped</code> - <code>received</code> -
-<code>resulted</code></p>
-<p>That lets you learn the process as a pipeline instead of a single
-field.</p>
-<h2 id="guided-walkthrough-1">Guided walkthrough</h2>
-<ol type="1">
-<li>Open the <code>Reports</code> tab and use the <strong>Samples &amp;
-Genotyping Workspace</strong>.</li>
-<li>Pause at the overview cards first and identify which provider has
-the highest pending load.</li>
-<li>Open the provider preset cards and apply one that matches your
-workflow.</li>
-<li>Locate <code>SMP-0004</code>.</li>
-<li>Confirm it belongs to <code>F1-L01-C0012-P01</code>.</li>
-<li>Review the event history from collection to result.</li>
-<li>Compare it to <code>SMP-0001</code>, which is still only
-<code>collected</code>.</li>
-<li>Create or open a genotyping order that includes one of those
-samples.</li>
-<li>Download the provider template CSV for that order.</li>
-<li>Open the order reconciliation view and note how it distinguishes
-<code>ready to ship</code>, <code>in transit</code>,
-<code>with provider</code>, <code>missing result</code>, and
-<code>resulted</code>.</li>
-<li>Inspect the <strong>Project Cohort Readiness</strong> panel and find
-which project has the largest assignment deficit.</li>
-<li>Apply a built-in cohort template, or add a genotype target rule for
-the selected project, for example <code>Cre/+</code> or
-<code>fl/*</code>.</li>
-<li>Optionally save the current rule set as a reusable lab template for
-the next project that needs the same design.</li>
-<li>In <strong>Assignment Candidates</strong>, open one genotype-ready
-animal and confirm whether it matches the target rule.</li>
-<li>Select one or more matching animals and reserve them into the
-project cohort.</li>
-<li>Move one selected animal from <code>reserved</code> to
-<code>assigned</code>, then to <code>consumed</code>, and inspect the
-<strong>Assignment Flow</strong> chart plus the downstream
-completion/disposition summary.</li>
-<li>Review <strong>Breeder Decisions</strong> and decide whether the
-active pair should keep producing, pause soon, or be reviewed for low
-output.</li>
-<li>Open the project inspector and record a cohort closeout with a short
-outcome summary. Choose the structured outcome reason that best explains
-the result, such as <code>Met Goal</code>, <code>Partial Data</code>, or
-<code>Design Change</code>.</li>
-<li>If you have a sample file handy, attach it to the closeout
-record.</li>
-<li>In the same project inspector, set a handoff SLA for that project.
-For practice, choose a tighter <code>assigned</code> limit and a
-repeat-breach threshold that would be meaningful for a fast pilot
-study.</li>
-<li>If you are practicing as an admin, switch to <code>Analytics</code>,
-filter the cohort handoff view by outcome reason, and compare cross-lab
-cohort flow so you can see which labs still have animals in flight
-versus already completed.</li>
-<li>Use the export buttons to download a filtered closeout report and
-the current stalled-handoff report. This is the fastest way to prepare a
-PI update or operations meeting packet.</li>
-<li>Check the alert feed and confirm that stalled cohort states and
-repeated project breaches would surface there if an animal sat too long
-in <code>assigned</code> or <code>shipped</code>.</li>
-<li>If you are practicing as an admin, import a result CSV or use
-callback simulation and watch the order move toward completion.</li>
-</ol>
-<h2 id="exercise-4">Exercise</h2>
-<p>Choose one <code>resulted</code> sample and one
-<code>collected</code> sample.</p>
-<p>Write down: - which one is research-ready now - which one still
-carries operational risk - what the next handoff should be - whether the
-provider workflow is blocked by shipping, provider receipt, or missing
-result reconciliation - which project could use that animal first and
-whether breeder output should continue to meet demand - whether the
-animal actually matches the project’s genotype target rule before you
-reserve it</p>
-<h2 id="fun-application-1">Fun application</h2>
-<p>Pretend a PI needs to start a pilot cohort tomorrow. Your job is to
-identify which animals are closest to assignment.</p>
-<p>Use sample status, genotype results, provider reconciliation, and
-cage context together. This is how good colony software becomes a
-research acceleration tool rather than a record archive.</p>
-<h1 id="module-6.-compliance-welfare-and-abnormal-conditions">Module 6.
-Compliance, Welfare, and Abnormal Conditions</h1>
-<h2 id="learning-goal-5">Learning goal</h2>
-<p>Respond to alerts in a way that is biologically meaningful and
-operationally disciplined.</p>
-<h2 id="what-the-training-data-guarantees">What the training data
-guarantees</h2>
-<p>The tutorial dataset includes: - expired-protocol alerts - overdue
-task alerts - open protocol deviations - necropsy-pending mortality
-records - open vet cases</p>
-<h2 id="why-this-matters-biologically-2">Why this matters
-biologically</h2>
-<p>An abnormal condition is not just an administrative
-inconvenience.</p>
-<p>It may indicate: - an unperformed required action - a welfare problem
-- a quality problem in the breeding program - a compliance block that
-can invalidate downstream work</p>
-<h2 id="guided-walkthrough-2">Guided walkthrough</h2>
-<ol type="1">
-<li>Open the landing dashboard as the technician.</li>
-<li>Open the alert feed.</li>
-<li>Filter by high severity.</li>
-<li>Open one protocol deviation and one vet case.</li>
-<li>Identify what information is missing before closure would be
-defensible.</li>
-<li>Acknowledge one alert and note the state change.</li>
-</ol>
-<h2 id="exercise-5">Exercise</h2>
-<p>The seeded dataset contains both <code>high</code> and
-<code>moderate</code> deviations.</p>
-<p>Practice triage by answering: - Which conditions need immediate room
-action? - Which need documentation and owner assignment? - Which should
-stop breeding or experimental assignment until resolved?</p>
-<h2 id="fun-application-2">Fun application</h2>
-<p>Treat this as a case-based learning session: - a welfare concern
-appears in one cage - a necropsy is pending in another - a protocol
-deviation exists in the same lab</p>
-<p>Ask whether these are independent events or a pattern worth
-escalating.</p>
-<h1 id="module-7.-planner-capacity-and-facility-thinking">Module 7.
-Planner, Capacity, and Facility Thinking</h1>
-<h2 id="learning-goal-6">Learning goal</h2>
-<p>Understand how colony data supports forecasting and facility-level
+<h2 id="researcher-workflow-in-the-workspace">Researcher workflow in the
+workspace</h2>
+<h3 id="use-the-workspace-for-samples-cohorts-and-planning">1. Use the
+workspace for samples, cohorts, and planning</h3>
+<p>The visual workspace is especially strong for researchers when they
+need to compare several things at once.</p>
+<figure>
+<img src="assets/screenshot_samples_genotyping.svg" style="width:94.0%"
+alt="Samples and genotyping workspace with provider and result context" />
+<figcaption aria-hidden="true">Samples and genotyping workspace with
+provider and result context</figcaption>
+</figure>
+<p>From the workspace, a researcher can: - review sample
+chain-of-custody - inspect provider workflow and results - review
+genotype-ready animals - apply or inspect project genotype target rules
+- reserve animals into a cohort - review handoff status and closeout
+history</p>
+<h3 id="use-pedigree-when-the-biology-matters">2. Use pedigree when the
+biology matters</h3>
+<p>If a line behaves unexpectedly, open the pedigree explorer to see
+sire, dam, and pup relationships before making breeding or assignment
 decisions.</p>
-<h2 id="recommended-example-scenarios">Recommended example
-scenarios</h2>
-<ul>
-<li><code>Neurogenetics Lab Cohort Plan</code></li>
-<li><code>Synaptic Circuits Group Cohort Plan</code></li>
-<li><code>Behavioral Neuroscience Team Cohort Plan</code></li>
-</ul>
-<h2 id="biology-background-3">Biology background</h2>
-<p>Research demand planning is really a timing problem.</p>
-<p>You need to know: - how many animals are active now - how many
-litters are likely soon - whether breeder output can meet the needed-by
-date - whether cage space can absorb that plan without stressing the
-facility</p>
-<h2 id="guided-walkthrough-3">Guided walkthrough</h2>
+<h3 id="use-planner-views-when-demand-is-changing">3. Use planner views
+when demand is changing</h3>
+<p>A researcher should understand not just today’s available animals,
+but whether next month’s demand is realistic.</p>
+<h2 id="researcher-workflow-in-chat">Researcher workflow in chat</h2>
+<h3 id="open-the-main-project">1. Open the main project</h3>
+<p>Prompt:</p>
+<pre class="text"><code>Show project L01-PRJ-01</code></pre>
+<p>Observed response: - message:
+<code>Project L01-PRJ-01 is open. You can review handoffs, closeouts, and reporting from here.</code>
+Project card values: - title: <code>Neurogenetics Lab Project 1</code> -
+lab: <code>Neurogenetics Lab</code> - target animals: <code>588</code> -
+assigned cages: <code>22</code> - active handoffs: <code>0</code>
+Handoff SLA card: - assigned max days: <code>2</code> - shipped max
+days: <code>5</code> - repeat breach threshold: <code>2</code> - source:
+<code>default</code></p>
+<h3 id="move-from-project-to-a-specific-cage">2. Move from project to a
+specific cage</h3>
+<p>Prompt:</p>
+<pre class="text"><code>Open cage F1-L01-C0012</code></pre>
+<p>Observed response: - message:
+<code>Cage F1-L01-C0012 is open. You can inspect it, update counts, or add a note from here.</code>
+Cage summary: - strain: <code>C57BL/6J</code> - genotype summary:
+<code>Pending</code> - population: <code>M3 / F4 / T7</code> - location:
+<code>Room A1 / Rack R1</code> - protocol: <code>IACUC-2026-014</code> -
+project: <code>L01-PRJ-02</code> - DOB: <code>2026-02-25</code> -
+tracked animals included <code>F1-L01-C0012-P01</code> through
+<code>P05</code> plus sire and dam - active cage alerts included
+<code>Protocol Expired</code>, <code>Open Vet Case</code>,
+<code>Protocol Deviation Open</code>, and <code>Task Overdue</code></p>
+<p>This seeded example is useful because it connects a project to a
+sample/result workflow.</p>
+<h3 id="ask-about-reports-or-readiness">3. Ask about reports or
+readiness</h3>
+<p>Prompt:</p>
+<pre class="text"><code>Show reports</code></pre>
+<p>Observed response: - message:
+<code>These are the reports and exports currently available from chat.</code>
+- report links included: - <code>Cages CSV/Excel/PDF</code> -
+<code>Breeder productivity CSV</code> - <code>Survival CSV</code> -
+<code>Protocol usage CSV</code> - <code>Mortality CSV</code> -
+<code>Cohort closeouts CSV/PDF</code> -
+<code>Stalled handoffs CSV/PDF</code> -
+<code>Billing statements CSV</code></p>
+<p>Prompt:</p>
+<pre class="text"><code>Show genotype-ready animals</code></pre>
+<p>Observed response: - message:
+<code>These are the current genotype-ready animals and project matches in your scope.</code>
+Genotype-ready snapshot: - <code>1</code> visible project -
+<code>20</code> ready animals in the returned table - <code>84</code>
+unassigned ready animals in scope Project readiness table: -
+<code>L01-PRJ-01</code> in <code>Neurogenetics Lab</code> -
+<code>84</code> matching ready animals - <code>0</code> reserved -
+target <code>588</code> - recommended action: <code>assign_now</code>
+First ready animals returned: - <code>F1-L01-C0042-P06</code> ·
+<code>fl/+</code> - <code>F1-L01-C0042-P05</code> · <code>WT/WT</code> -
+<code>F1-L01-C0042-P04</code> · <code>tg/tg</code> - each matched
+<code>L01-PRJ-01</code> and was currently <code>unassigned</code></p>
+<p>Prompt:</p>
+<pre class="text"><code>Show stalled cohort handoffs</code></pre>
+<p>Observed response: - message:
+<code>These are the current stalled cohort handoffs in your scope.</code>
+Stalled handoff snapshot: - <code>0</code> stalled assignments -
+<code>0</code> repeat-breach projects - <code>0</code> items in the
+<code>8d+</code> bucket - the <code>Stalled handoffs</code> and
+<code>Repeat breach watchlist</code> tables were empty in this seeded
+run</p>
+<h3 id="use-the-sampleresult-example">4. Use the sample/result
+example</h3>
+<p>The tutorial-ready seed includes: - sample <code>SMP-0004</code> -
+animal <code>F1-L01-C0012-P01</code> - cage
+<code>F1-L01-C0012</code></p>
+<p>Use that chain to practice moving from colony context to sample
+context and back again.</p>
+<h2 id="researcher-overlap-you-should-not-skip">Researcher overlap you
+should not skip</h2>
+<p>Researchers should still be able to: - read a printed cage card -
+scan a QR from a phone during a lab conversation - switch from chat to
+the workspace when they need visual cohort or pedigree detail -
+understand why a protocol or welfare block changes the meaning of
+“available animals”</p>
+<h2 id="researcher-mini-mission">Researcher mini-mission</h2>
 <ol type="1">
-<li>Open the <code>Analytics</code> tab and use the planner workspace
-under the charts.</li>
-<li>Start with <code>Neurogenetics Lab Cohort Plan</code>.</li>
-<li>Review needed-by date, target animals, and linked projects.</li>
-<li>Review the generated risk level and projected deficit.</li>
-<li>Compare it with
-<code>Behavioral Neuroscience Team Cohort Plan</code>, which requests
-more animals.</li>
-<li>Ask whether the limiting factor is breeders, cages, or time.</li>
+<li>In chat, ask <code>Show project L01-PRJ-01</code>.</li>
+<li>Open <code>F1-L01-C0012</code>.</li>
+<li>In the workspace, inspect samples/genotyping.</li>
+<li>Review <code>SMP-0004</code> and the linked animal context.</li>
+<li>Return to chat and ask <code>Show reports</code>.</li>
 </ol>
-<h2 id="exercise-6">Exercise</h2>
-<p>Pick two planner scenarios and answer: - Which one is the higher
-operational risk? - Which one is the better candidate for immediate
-breeder expansion? - Which one might be solved by better project
-prioritization instead of more cages?</p>
-<h2 id="fun-application-3">Fun application</h2>
-<p>Pretend your institute just approved a new pilot study. Use
-Murisphere to estimate whether the colony can support it
-<strong>without</strong> compromising existing commitments. This is the
-bridge between facility management and scientific program
-management.</p>
-<h1 id="role-based-learning-paths">Role-Based Learning Paths</h1>
-<h2 id="technician-path">Technician path</h2>
-<p>If you have only 45 minutes: 1. Module 1 2. Module 2 3. Module 3 4.
-Module 6</p>
-<h2 id="pi-researcher-path">PI / Researcher path</h2>
-<p>If your focus is study readiness: 1. Mouse Colony Biology Primer 2.
-Module 4 3. Module 5 4. Module 7</p>
-<h2 id="facility-manager-path">Facility manager path</h2>
-<p>If your focus is operational control: 1. Module 1 2. Module 6 3.
-Module 7 4. Review the visual walkthrough sections for dashboard and
-compliance views</p>
-<h1 id="visual-walkthrough">Visual Walkthrough</h1>
-<h2 id="login-screen">Login Screen</h2>
-<p><img src="assets/screenshot_login.svg" style="width:95.0%"
-alt="Login screen with role-aware access controls" /> Use the seeded
-tutorial database so the examples in this guide match what you see.</p>
-<h2 id="landing-dashboard-cage-alerts-and-density-view">Landing
-Dashboard, Cage Alerts, and Density View</h2>
-<p><img src="assets/screenshot_cages_alerts.svg" style="width:95.0%"
-alt="Dashboard-style cage alerts and room density visualization" /> Use
-this view first every session. It teaches prioritization, not just
-navigation.</p>
-<h2 id="cage-card-center-and-batch-printing">Cage Card Center and Batch
-Printing</h2>
-<p><img src="assets/screenshot_cards.svg" style="width:95.0%"
-alt="Card center and printing workflow" /> The tutorial workflow begins
-with correct print setup.</p>
-<h2 id="complete-cage-card">Complete Cage Card</h2>
-<p><img src="assets/cage_card_complete.svg" style="width:95.0%"
-alt="Complete cage card with owner, protocol, animal table, litter table, QR and barcode" />
-Population is the cage-level total. The animal and litter rows explain
-where that population came from biologically.</p>
-<h2 id="scan-base-url-setup">Scan Base URL Setup</h2>
-<p><img src="assets/scan_base_url.svg" style="width:95.0%"
-alt="Scan base URL configuration" /> A perfect QR image still fails
-operationally if it points to the wrong host.</p>
-<h2 id="phone-camera-scan-of-printed-qr">Phone Camera Scan of Printed
-QR</h2>
-<p><img src="assets/scan_phone.svg" style="width:95.0%"
-alt="Phone scanning a printed QR cage card" /> The phone should open the
-browser directly. No mobile app is required.</p>
-<h2 id="scan-to-edit-cage-workflow">Scan-to-Edit Cage Workflow</h2>
-<p><img src="assets/screenshot_scan.svg" style="width:95.0%"
-alt="Phone scan flow from printed QR to cage browser view" /> This is
-the most important high-frequency workflow in the product.</p>
-<h2 id="breeding-pair-productivity">Breeding Pair Productivity</h2>
-<p><img src="assets/screenshot_breeding_pairs.svg" style="width:95.0%"
-alt="Breeding pair management and productivity tracking" /> Use this
-after learning the breeding and litter modules.</p>
-<h2 id="samples-and-genotyping-workflow">Samples and Genotyping
-Workflow</h2>
-<p><img src="assets/screenshot_samples_genotyping.svg"
-style="width:95.0%"
-alt="Sample chain-of-custody and genotyping result workflow" /> This
-connects colony operations to actual research assignment.</p>
-<h2 id="recommendations-and-outcomes">Recommendations and Outcomes</h2>
-<p><img src="assets/screenshot_recommendations.svg" style="width:95.0%"
-alt="Recommendation lifecycle and decision outcomes" /> Use
-recommendations as discussion starters, not autopilot.</p>
-<h2 id="planner-scenario-evaluation">Planner Scenario Evaluation</h2>
-<p><img src="assets/screenshot_planner.svg" style="width:95.0%"
-alt="Planner scenario risk and deficit evaluation" /> Good planners help
-labs avoid both shortages and avoidable cage growth.</p>
-<h2 id="compliance-dashboard">Compliance Dashboard</h2>
-<p><img src="assets/screenshot_compliance.svg" style="width:95.0%"
-alt="Compliance dashboard with alerts and open actions" /> The best
-compliance workflow is fast, visible, and routine.</p>
-<h2 id="pedigree-explorer">Pedigree Explorer</h2>
-<p><img src="assets/screenshot_pedigree.svg" style="width:95.0%"
-alt="Multi-generation pedigree explorer" /> Pedigree is where breeding
-history becomes biologically interpretable.</p>
-<h2 id="scan-troubleshooting-reference">Scan Troubleshooting
-Reference</h2>
-<p><img src="assets/scan_troubleshooting.svg" style="width:95.0%"
-alt="Scan troubleshooting reference" /> Keep this reference near any
-cage-card printing station.</p>
-<h1 id="mini-missions-you-can-learn-together">Mini Missions You Can
-Learn Together</h1>
-<p>These are good for paired learning, onboarding, or team huddles.</p>
-<h2 id="mission-1-rescue-a-delayed-cohort">Mission 1: Rescue a delayed
-cohort</h2>
-<p>A lab needs animals in four weeks. Use
-<code>Neurogenetics Lab Cohort Plan</code> and the breeder cages in lab
-1 to decide whether current supply is enough, which genotype template
-best fits the study, whether any reserved animals are already stuck in
-<code>assigned</code> or <code>shipped</code>, and whether that project
-needs a tighter handoff SLA than the facility default.</p>
-<h2 id="mission-2-find-the-highest-risk-welfare-pattern">Mission 2: Find
-the highest-risk welfare pattern</h2>
-<p>Review high-severity alerts and decide whether the issue is isolated
-or repeated across one lab or room.</p>
-<h2 id="mission-3-trace-inheritance-from-card-to-pedigree">Mission 3:
-Trace inheritance from card to pedigree</h2>
-<p>Start at <code>F1-L01-C0006</code>, open a pup, and follow the
-lineage back to sire and dam.</p>
-<h2 id="mission-4-choose-a-sample-that-is-experiment-ready">Mission 4:
-Choose a sample that is experiment-ready</h2>
-<p>Compare <code>SMP-0001</code> and <code>SMP-0004</code>. Explain why
-one is still operationally incomplete.</p>
-<h2 id="mission-5-explain-a-genotype-to-a-new-trainee">Mission 5:
-Explain a genotype to a new trainee</h2>
-<p>Use a real seeded example such as <code>fl/fl</code>,
-<code>Cre/+</code>, or <code>WT/WT</code> and explain what experiment or
-breeding decision it could support.</p>
-<h1 id="glossary-for-new-learners">Glossary for New Learners</h1>
-<ul>
-<li><strong>Breeder productivity:</strong> how effectively a pair or
-cage generates usable litters over time</li>
-<li><strong>Cohort:</strong> a group of animals assembled for one
-experimental purpose</li>
-<li><strong>Conditional allele:</strong> an allele designed to change
-function only under a specific genetic trigger such as Cre</li>
-<li><strong>Hard-stop:</strong> a workflow block that prevents action
-until a compliance problem is fixed</li>
-<li><strong>Pedigree:</strong> parent-child lineage map</li>
-<li><strong>Protocol deviation:</strong> a documented departure from
-approved procedure or protocol expectations</li>
-<li><strong>Self-paced learning:</strong> a training style in which the
-learner can stop after any module and resume later without losing
-context</li>
-</ul>
-<h1 id="end-of-shift-and-end-of-day-checklists">End-of-Shift and
-End-of-Day Checklists</h1>
-<h2 id="technician">Technician</h2>
+<h1 id="shared-cross-role-workflows">Shared Cross-Role Workflows</h1>
+<h2 id="workflow-print-a-cage-card">Workflow: Print a cage card</h2>
+<p>You can start this in either mode.</p>
+<h3 id="workspace-path">Workspace path</h3>
 <ol type="1">
-<li>Confirm all queued writes are synced.</li>
-<li>Confirm new notes, welfare events, and mortality records are
-saved.</li>
-<li>Close open room tasks or hand them off.</li>
-<li>Leave a clear audit trail for anything unresolved.</li>
+<li>Open <code>Cages</code>.</li>
+<li>Select a cage or filtered set of cages.</li>
+<li>Choose <code>Generate + Print</code>.</li>
+<li>Print at <code>100% scale</code>.</li>
 </ol>
-<h2 id="pi-facility-manager-admin">PI / Facility Manager / Admin</h2>
+<h3 id="chat-path">Chat path</h3>
+<p>Prompt:</p>
+<pre class="text"><code>Print cage card for F1-L01-C0006</code></pre>
+<p>Observed response: - message:
+<code>Cage card for F1-L01-C0006 is ready. Open the print view on a desktop or tablet, print at 100% scale, then scan the QR with a phone camera.</code>
+Print card returned: - badge: <code>Breeding</code> - lab:
+<code>Neurogenetics Lab</code> - location:
+<code>Room A1 / Rack R1</code> - protocol: <code>IACUC-2026-0101</code>
+- population: <code>M3 / F3</code> Links: - print view:
+<code>/print/cards?ids=8</code> - scan page:
+<code>/scan/tok_1_1_0006_4348</code></p>
+<h2 id="workflow-scan-a-printed-card-with-a-phone">Workflow: Scan a
+printed card with a phone</h2>
 <ol type="1">
-<li>Assign owners for high-severity alerts.</li>
-<li>Review scenario risk that may affect study timing.</li>
-<li>Review unresolved deviations and necropsy items.</li>
-<li>Export any summaries needed for handoff, audit, or PI
-discussion.</li>
-<li>If a project keeps slipping between <code>assigned</code> and
-<code>shipped</code>, set or review its SLA before the next day
-starts.</li>
+<li>Scan the QR square.</li>
+<li>Open the browser link.</li>
+<li>Verify cage code and location.</li>
+<li>Continue in workspace or chat.</li>
+<li>Save changes immediately.</li>
 </ol>
-<h1 id="troubleshooting-and-learning-support">Troubleshooting and
-Learning Support</h1>
+<h2 id="workflow-move-between-modes-without-losing-context">Workflow:
+Move between modes without losing context</h2>
+<p>Recommended pattern: 1. use chat to open or update a cage quickly 2.
+jump into the workspace when you need lists, visuals, pedigree, or
+exports 3. come back to chat when you know the next direct action</p>
+<p>This is not a compromise. It is the intended operating model.</p>
+<h1 id="fun-applications-to-learn-together">Fun Applications To Learn
+Together</h1>
+<p>These scenarios make good team exercises because they combine
+biology, operations, and data quality.</p>
+<h2 id="weekly-colony-huddle">1. Weekly colony huddle</h2>
+<p>Ask each learner to answer: - which cages are risky this week - which
+litters will drive next week’s wean workload - which genotype results
+are still blocking the project</p>
+<h2 id="facility-operations-check-in">2. Facility operations
+check-in</h2>
+<p>Use the workspace to identify pressure visually, then ask chat for
+the concise version: - <code>Give me the facility morning brief</code> -
+<code>Show stalled cohort handoffs</code> -
+<code>Show protocol alerts</code></p>
+<h2 id="research-planning-conversation">3. Research planning
+conversation</h2>
+<p>Stand by a rack, scan a printed card, and ask: - is this cage
+actually useful for <code>L01-PRJ-01</code> - what genotype do we still
+need - what breeder or sample action is next</p>
+<h2 id="pedigree-teaching-moment">4. Pedigree teaching moment</h2>
+<p>Open a breeding cage and compare: - what the card shows - what the
+pedigree view shows - what the genotype rule for the project
+requires</p>
+<h1 id="troubleshooting">Troubleshooting</h1>
 <ul>
-<li><strong>The QR opens the wrong host:</strong> fix
-<code>Scan Base URL</code>, then reprint cards.</li>
-<li><strong>The phone camera does not react:</strong> improve lighting,
-flatten the card, and scan the QR square rather than the 1D
-barcode.</li>
-<li><strong>The tutorial data does not match this guide:</strong> reseed
-with <code>seed_tutorial_demo.py --db training_demo.db --force</code>
-and relaunch the app with
-<code>MURISPHERE_DB=training_demo.db</code>.</li>
-<li><strong>You cannot find pedigree/sample/planner examples:</strong>
-you are probably using the scale-only seed instead of the tutorial-ready
-seed.</li>
-<li><strong>A workflow feels biologically confusing:</strong> return to
-the Mouse Colony Biology Primer, then repeat the module using a named
-example cage.</li>
-<li><strong>You are training with another person:</strong> read the
-exercise question aloud before clicking the next screen. Murisphere
-becomes much easier to understand when the biological reason for each
-action is spoken, not just performed.</li>
+<li>Tutorial examples missing: you are likely using the scale-only seed
+instead of <code>seed_tutorial_demo.py</code>.</li>
+<li>Scan opens the wrong host: set <code>Scan Base URL</code> to a
+phone-reachable host or LAN IP, never <code>localhost</code> on printed
+cards.</li>
+<li>Phone camera cannot detect the code: make sure the printed card
+contains a QR square with enough contrast.</li>
+<li>Camera detects only a barcode app, not a browser link: scan the QR
+square, not the CODE128 bars.</li>
+<li>Report export fails: re-login and retry the endpoint.</li>
+<li>Card images missing: confirm the server is running and reload the
+print page.</li>
+<li>Edit blocked by protocol: the protocol is expired or otherwise not
+valid for direct cage edits.</li>
+<li>Same scan reopens repeatedly: refresh once after the latest build;
+scan tokens are now cleared from the URL after capture.</li>
 </ul>
+<figure>
+<img src="assets/scan_troubleshooting.svg" style="width:84.0%"
+alt="Troubleshooting visual for QR scan and print quality" />
+<figcaption aria-hidden="true">Troubleshooting visual for QR scan and
+print quality</figcaption>
+</figure>
+<h1 id="final-checklist">Final Checklist</h1>
+<p>A learner is ready to use Murisphere when they can: - read a cage
+card accurately - print and scan a cage card without help - explain when
+to use workspace versus chat - open a cage in both modes - recognize a
+protocol hard-stop - complete at least one role-specific write action -
+retrieve the report that matters for their role - explain why pedigree,
+genotype, litter timing, and protocol state all change operational
+decisions</p>
 </body>
 </html>
