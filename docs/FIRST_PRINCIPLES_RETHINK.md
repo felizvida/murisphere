@@ -303,13 +303,22 @@ We should instead:
 - “Show recent sample results.” — implemented.
 - “Generate a project closeout report.” — implemented with table summary and export links.
 
-## Current Dual-Mode Parity Checkpoint
-As of `v0.4.x` development, the chat layer now covers the first-principles daily prompts above while the traditional workspace remains the visual/batch surface.
+## Current Multi-Mode Parity Checkpoint
+As of `v0.4.x` development, the chat layer covers the first-principles daily prompts above while the traditional workspace remains the visual/batch surface.
+
+Room Mode now adds the missing phone-first technician loop:
+- choose a room
+- start a room pass
+- scan cages by QR token or cage code
+- see a compact STOP / ACTION / WATCH / INFO state
+- perform common cage-side actions through large touch cards
+- complete an end-of-shift reconciliation summary
 
 Design guardrails:
 - chat write actions must be explicit, role-scoped, and audit-logged
 - scan, cage, project, and report links should let the user jump between chat and the workspace
 - chat should summarize the next decision, not replace rich visual review when a large table or chart is better
+- Room Mode should be the default place for in-room phone work, not a scaled-down admin dashboard
 
 ## Recommendation
 Keep both lines active and deliberate:

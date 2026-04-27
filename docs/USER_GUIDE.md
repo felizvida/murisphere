@@ -16,7 +16,17 @@ Keep these documents open together while you learn:
 - `docs/USER_GUIDE.md`
 
 ## Choose Your Mode
-Murisphere supports two complete ways to work.
+Murisphere supports three complete ways to work.
+
+### Room Mode
+Best for:
+- phone-first room passes
+- QR scan-to-cage work
+- one-cage-at-a-time action cards
+- common cage-side writes: count/status, notes, mortality, weaning, and task closure
+- end-of-shift reconciliation
+
+Room Mode uses `STOP / ACTION / WATCH / INFO` tiers so a technician can quickly tell whether a cage may be changed, needs action, should be watched, or is informational.
 
 ### Traditional workspace
 Best for:
@@ -34,8 +44,8 @@ Best for:
 
 ### Mixed use
 The intended pattern is often mixed:
-- print in the workspace, then scan and continue in chat
-- scan into a cage in chat, then switch into the workspace for richer visuals
+- print in the workspace, then scan and continue in Room Mode
+- scan into a cage in Room Mode, then switch into chat or workspace for richer follow-up
 - review alerts visually, then clear specific work by chat command
 
 ## Roles
@@ -78,6 +88,7 @@ Notes:
 - printable cage cards for the next room pass
 
 ### Recommended mode usage
+- Use **Room Mode** for the in-room phone loop: choose room, start pass, scan cages, act, complete reconciliation
 - Use **chat** for `Open cage ...`, `Update cage ...`, `Complete task ...`, `Show overdue tasks`
 - Use **chat** for `What needs weaning this week?`, `Show mortality follow-up`, and `Generate cage cards for Room A1`
 - Use **workspace** for visual cage review, alert color scanning, pedigree inspection, and batch card printing

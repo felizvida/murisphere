@@ -1,0 +1,118 @@
+<!doctype html>
+<!--
+  Copyright 2026 Murisphere Contributors
+
+  Licensed under the Apache License, Version 2.0 (the "License");
+  you may not use this file except in compliance with the License.
+  You may obtain a copy of the License at
+
+      http://www.apache.org/licenses/LICENSE-2.0
+
+  Unless required by applicable law or agreed to in writing, software
+  distributed under the License is distributed on an "AS IS" BASIS,
+  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  See the License for the specific language governing permissions and
+  limitations under the License.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#173f35" />
+    <title>{{ app_name }} | Room Mode</title>
+    <link rel="icon" href="data:," />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/room.css" />
+  </head>
+  <body>
+    <div class="grain"></div>
+    <header class="room-topbar">
+      <div>
+        <p class="eyebrow">Room Mode</p>
+        <h1>{{ app_name }}</h1>
+        <p class="tagline">Scan a cage, do the next safe action, move on.</p>
+      </div>
+      <div id="sessionChip" class="session-chip hidden"></div>
+    </header>
+
+    <main class="room-shell">
+      <section id="loginPanel" class="panel login-card">
+        <div>
+          <p class="eyebrow">Phone-first room pass</p>
+          <h2>Sign in before entering the room.</h2>
+          <p class="muted">Built for cage-side updates, QR scans, task closure, and end-of-shift reconciliation.</p>
+        </div>
+        <form id="loginForm" class="stack-form">
+          <label>Email<input type="email" id="email" autocomplete="username" required /></label>
+          <label>Password<input type="password" id="password" autocomplete="current-password" required /></label>
+          <button id="loginSubmitBtn" type="button">Enter Room Mode</button>
+        </form>
+        <div class="link-row">
+          <a href="/">Workspace</a>
+          <a href="/chat/">Chat</a>
+          <a href="/learn/">Tutorial</a>
+        </div>
+        <p class="hint">Demo technician: <code>tech@murisphere.local</code> / <code>tech1234</code></p>
+      </section>
+
+      <section id="appPanel" class="hidden">
+        <section class="mission-card">
+          <div>
+            <p class="eyebrow">Today</p>
+            <h2 id="roomTitle">Choose a room</h2>
+            <p id="roomSubtitle" class="muted">Your pass summary appears here.</p>
+          </div>
+          <button id="logoutBtn" type="button" class="quiet-button">Sign Out</button>
+        </section>
+
+        <section class="panel room-picker">
+          <div id="roomList" class="room-list"></div>
+          <button id="startPassBtn" type="button">Start Room Pass</button>
+        </section>
+
+        <section id="activePassPanel" class="pass-strip hidden"></section>
+
+        <section class="scan-card">
+          <div class="scan-orb">QR</div>
+          <div>
+            <p class="eyebrow">Scan or type</p>
+            <h2>Open cage at hand</h2>
+          </div>
+          <form id="scanForm" class="scan-form">
+            <input id="scanCode" placeholder="Cage code or QR token" autocomplete="off" />
+            <button id="scanBtn" type="button">Open</button>
+          </form>
+        </section>
+
+        <section id="missionStats" class="stats-grid"></section>
+
+        <section class="panel">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Queue</p>
+              <h2>Needs attention</h2>
+            </div>
+            <button id="refreshBtn" type="button" class="quiet-button">Refresh</button>
+          </div>
+          <div id="actionQueue" class="queue-list"></div>
+        </section>
+
+        <section id="cageDetail" class="cage-detail hidden"></section>
+
+        <section id="passSummaryPanel" class="panel hidden"></section>
+
+        <nav class="bottom-nav">
+          <button id="navMissionBtn" type="button">Mission</button>
+          <button id="navScanBtn" type="button">Scan</button>
+          <a href="/chat/">Chat</a>
+          <a href="/">Workspace</a>
+        </nav>
+      </section>
+    </main>
+
+    <div id="globalMessage" class="global-message hidden"></div>
+    <script src="/static/room.js"></script>
+  </body>
+</html>

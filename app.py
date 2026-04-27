@@ -1732,6 +1732,16 @@ def chat_page() -> str:
     return render_template("chat.html", app_name=APP_NAME)
 
 
+@app.route("/room")
+def room_redirect() -> Response:
+    return redirect("/room/", code=308)
+
+
+@app.route("/room/")
+def room_page() -> str:
+    return render_template("room.html", app_name=APP_NAME)
+
+
 @app.route("/learn")
 def tutorial_redirect() -> Response:
     return redirect("/learn/", code=308)
@@ -3778,6 +3788,651 @@ def chat_console() -> Response:
     reply["role"] = g.user.role
     reply["timestamp"] = now_iso()
     return jsonify(reply)
+
+
+ROOM_TIER_RANK = {"INFO": 1, "WATCH": 2, "ACTION": 3, "STOP": 4}
+
+
+def room_mode_alert_tier(row: dict[str, Any] | storage.Row) -> str:
+    category = str(row["category"] or "").lower()
+    severity = str(row["severity"] or "").lower()
+    title = str(row["title"] or "").lower()
+    if category == "protocol" or "protocol expired" in title:
+        return "STOP"
+    if severity == "high" or category in {"mortality", "veterinary", "task"}:
+        return "ACTION"
+    if severity == "medium" or category in {"deviation", "cohort"}:
+        return "WATCH"
+    return "INFO"
+
+
+def room_mode_task_tier(due_on: str | None) -> str:
+    if not due_on:
+        return "WATCH"
+    today = date.today().isoformat()
+    return "ACTION" if due_on <= today else "WATCH"
+
+
+def room_mode_worst_tier(tiers: list[str]) -> str:
+    if not tiers:
+        return "INFO"
+    return max(tiers, key=lambda tier: ROOM_TIER_RANK.get(tier, 0))
+
+
+def room_mode_rooms(user: AuthContext) -> list[dict[str, Any]]:
+    scope = "" if is_admin(user) else "WHERE c.lab_id = ?"
+    params: tuple[Any, ...] = () if is_admin(user) else (user.lab_id,)
+    rows = db().execute(
+        f"""
+        SELECT r.id, r.name, r.capacity,
+               COUNT(c.id) AS cage_count,
+               COALESCE(SUM(c.male_count), 0) AS male_count,
+               COALESCE(SUM(c.female_count), 0) AS female_count
+        FROM rooms r
+        JOIN cages c ON c.room_id = r.id
+        {scope}
+        GROUP BY r.id, r.name, r.capacity
+        ORDER BY r.name
+        """,
+        params,
+    ).fetchall()
+    return [
+        {
+            "id": int(row["id"]),
+            "name": row["name"],
+            "capacity": int(row["capacity"] or 0),
+            "cageCount": int(row["cage_count"] or 0),
+            "maleCount": int(row["male_count"] or 0),
+            "femaleCount": int(row["female_count"] or 0),
+        }
+        for row in rows
+    ]
+
+
+def room_mode_selected_room(user: AuthContext, room_id: int | None = None) -> dict[str, Any] | None:
+    rooms = room_mode_rooms(user)
+    if not rooms:
+        return None
+    if room_id:
+        for room in rooms:
+            if int(room["id"]) == int(room_id):
+                return room
+    return rooms[0]
+
+
+def room_mode_latest_active_pass(user: AuthContext, room_id: int | None) -> storage.Row | None:
+    params: list[Any] = [user.user_id]
+    room_filter = ""
+    if room_id is not None:
+        room_filter = " AND room_id = ?"
+        params.append(room_id)
+    return db().execute(
+        f"""
+        SELECT id, room_id, started_by, started_at, ended_at, status, notes
+        FROM cage_census_sessions
+        WHERE started_by = ? AND status = 'active'
+        {room_filter}
+        ORDER BY id DESC
+        LIMIT 1
+        """,
+        params,
+    ).fetchone()
+
+
+def ensure_room_pass_scope(session_id: int, user: AuthContext) -> storage.Row | None:
+    row = db().execute(
+        "SELECT id, room_id, started_by, started_at, ended_at, status, notes FROM cage_census_sessions WHERE id = ?",
+        (session_id,),
+    ).fetchone()
+    if not row:
+        return None
+    if is_admin(user) or int(row["started_by"] or 0) == int(user.user_id):
+        return row
+    if user.lab_id is None or row["room_id"] is None:
+        return None
+    room_has_scope = db().execute(
+        "SELECT 1 FROM cages WHERE room_id = ? AND lab_id = ? LIMIT 1",
+        (row["room_id"], user.lab_id),
+    ).fetchone()
+    return row if room_has_scope else None
+
+
+def room_mode_pass_summary(session_id: int, user: AuthContext) -> dict[str, Any] | None:
+    session = ensure_room_pass_scope(session_id, user)
+    if not session:
+        return None
+    room_id = session["room_id"]
+    scope = "" if is_admin(user) else " AND lab_id = ?"
+    params: list[Any] = [room_id]
+    if not is_admin(user):
+        params.append(user.lab_id)
+    expected_rows = db().execute(
+        f"""
+        SELECT id, cage_code
+        FROM cages
+        WHERE room_id = ?
+        {scope}
+        ORDER BY cage_code
+        """,
+        params,
+    ).fetchall()
+    scan_rows = db().execute(
+        """
+        SELECT s.id, s.cage_id, s.scanned_at, s.observed_male_count, s.observed_female_count,
+               s.observed_status, c.cage_code
+        FROM cage_census_scans s
+        JOIN cages c ON c.id = s.cage_id
+        WHERE s.session_id = ?
+        ORDER BY s.scanned_at DESC
+        """,
+        (session_id,),
+    ).fetchall()
+    scanned_ids = {int(row["cage_id"]) for row in scan_rows}
+    not_scanned = [row["cage_code"] for row in expected_rows if int(row["id"]) not in scanned_ids]
+    action_row = db().execute(
+        """
+        SELECT COUNT(*) AS n
+        FROM audit_logs
+        WHERE actor_user_id = ?
+          AND created_at >= ?
+        """,
+        (user.user_id, session["started_at"]),
+    ).fetchone()
+    return {
+        "id": int(session["id"]),
+        "roomId": int(room_id) if room_id is not None else None,
+        "startedAt": session["started_at"],
+        "endedAt": session["ended_at"],
+        "status": session["status"],
+        "notes": session["notes"],
+        "expectedCages": len(expected_rows),
+        "scannedCages": len(scanned_ids),
+        "remainingCages": len(not_scanned),
+        "notScannedPreview": not_scanned[:12],
+        "recentScans": [
+            {
+                "cageId": int(row["cage_id"]),
+                "cageCode": row["cage_code"],
+                "scannedAt": row["scanned_at"],
+                "maleCount": row["observed_male_count"],
+                "femaleCount": row["observed_female_count"],
+                "status": row["observed_status"],
+            }
+            for row in scan_rows[:12]
+        ],
+        "actionsLoggedByUser": int(action_row["n"] or 0) if action_row else 0,
+    }
+
+
+def room_mode_cage_row(code: str, user: AuthContext) -> storage.Row | None:
+    scope_clause = "" if is_admin(user) else " AND c.lab_id = ?"
+    params: list[Any] = [code, code]
+    if not is_admin(user):
+        params.append(user.lab_id)
+    return db().execute(
+        f"""
+        SELECT
+            c.*,
+            r.name AS room_name,
+            k.name AS rack_name,
+            l.name AS lab_name,
+            p.protocol_number,
+            p.expires_on AS protocol_expires_on,
+            (
+              SELECT {PROJECT_CODE_LIST_SQL}
+              FROM project_cages pc_j
+              JOIN projects pj ON pj.id = pc_j.project_id
+              WHERE pc_j.cage_id = c.id
+            ) AS project_codes
+        FROM cages c
+        LEFT JOIN rooms r ON c.room_id = r.id
+        LEFT JOIN racks k ON c.rack_id = k.id
+        LEFT JOIN labs l ON c.lab_id = l.id
+        LEFT JOIN iacuc_protocols p ON c.protocol_id = p.id
+        WHERE (c.cage_code = ? OR c.qr_token = ?)
+        {scope_clause}
+        """,
+        params,
+    ).fetchone()
+
+
+def room_mode_cage_payload(code: str, user: AuthContext) -> dict[str, Any] | None:
+    upsert_active_alerts(user)
+    row = room_mode_cage_row(code, user)
+    if not row:
+        return None
+    cage_id = int(row["id"])
+    alerts = db().execute(
+        """
+        SELECT id, severity, category, title, message, status, first_seen_at, last_seen_at
+        FROM alert_notifications
+        WHERE cage_id = ? AND status IN ('active', 'acknowledged')
+        ORDER BY CASE severity WHEN 'high' THEN 3 WHEN 'medium' THEN 2 ELSE 1 END DESC, last_seen_at DESC
+        LIMIT 12
+        """,
+        (cage_id,),
+    ).fetchall()
+    tasks = db().execute(
+        """
+        SELECT id, task_type, due_on, status, required_qualification
+        FROM task_assignments
+        WHERE cage_id = ? AND status IN ('pending', 'in_progress')
+        ORDER BY due_on ASC, id DESC
+        LIMIT 12
+        """,
+        (cage_id,),
+    ).fetchall()
+    litters = db().execute(
+        """
+        SELECT id, birth_date, litter_size, survived_count, weaned_on
+        FROM litters
+        WHERE cage_id = ?
+        ORDER BY birth_date DESC, id DESC
+        LIMIT 8
+        """,
+        (cage_id,),
+    ).fetchall()
+    animals = db().execute(
+        """
+        SELECT id, animal_code, sex, dob, genotype, status
+        FROM animals
+        WHERE cage_id = ?
+        ORDER BY id DESC
+        LIMIT 10
+        """,
+        (cage_id,),
+    ).fetchall()
+    notes = db().execute(
+        """
+        SELECT text, created_at
+        FROM notes
+        WHERE entity_type = 'cage' AND entity_id = ?
+        ORDER BY id DESC
+        LIMIT 4
+        """,
+        (str(cage_id),),
+    ).fetchall()
+
+    tiers = [room_mode_alert_tier(alert) for alert in alerts]
+    task_items = []
+    today = date.today()
+    horizon = today + timedelta(days=7)
+    for task in tasks:
+        tier = room_mode_task_tier(task["due_on"])
+        tiers.append(tier)
+        task_items.append(
+            {
+                "id": int(task["id"]),
+                "type": task["task_type"],
+                "dueOn": task["due_on"],
+                "status": task["status"],
+                "tier": tier,
+                "requiredQualification": task["required_qualification"],
+            }
+        )
+
+    litter_items = []
+    weaning_due = []
+    for litter in litters:
+        due_on = None
+        due_tier = "INFO"
+        try:
+            birth = date.fromisoformat(str(litter["birth_date"]))
+            due = birth + timedelta(days=21)
+            due_on = due.isoformat()
+            if not litter["weaned_on"] and due <= horizon:
+                due_tier = "ACTION" if due <= today else "WATCH"
+                tiers.append(due_tier)
+                weaning_due.append(
+                    {
+                        "id": int(litter["id"]),
+                        "birthDate": litter["birth_date"],
+                        "dueOn": due_on,
+                        "survivedCount": int(litter["survived_count"] or 0),
+                        "tier": due_tier,
+                    }
+                )
+        except (TypeError, ValueError):
+            due_on = None
+        litter_items.append(
+            {
+                "id": int(litter["id"]),
+                "birthDate": litter["birth_date"],
+                "litterSize": int(litter["litter_size"] or 0),
+                "survivedCount": int(litter["survived_count"] or 0),
+                "weanedOn": litter["weaned_on"],
+                "dueToWeanOn": due_on,
+                "tier": due_tier,
+            }
+        )
+
+    expired, protocol_message = cage_protocol_expired(cage_id)
+    if expired:
+        tiers.append("STOP")
+
+    primary_actions = []
+    if expired:
+        primary_actions.append({"key": "stop", "label": "Stop and escalate", "tone": "stop", "reason": protocol_message})
+    else:
+        if weaning_due:
+            primary_actions.append({"key": "wean", "label": "Record weaning", "tone": "action"})
+        primary_actions.extend(
+            [
+                {"key": "count", "label": "Update count/status", "tone": "action"},
+                {"key": "note", "label": "Add room note", "tone": "watch"},
+                {"key": "mortality", "label": "Record mortality", "tone": "stop"},
+            ]
+        )
+        if task_items:
+            primary_actions.append({"key": "tasks", "label": "Close task", "tone": "action"})
+
+    return {
+        "cage": {
+            **cage_payload(row),
+            "roomId": int(row["room_id"]),
+            "rackId": int(row["rack_id"]),
+            "protocolExpiresOn": row["protocol_expires_on"],
+            "populationTotal": int(row["male_count"] or 0) + int(row["female_count"] or 0),
+        },
+        "tier": room_mode_worst_tier(tiers),
+        "protocolStop": expired,
+        "protocolMessage": protocol_message,
+        "alerts": [
+            {
+                "id": int(alert["id"]),
+                "severity": alert["severity"],
+                "category": alert["category"],
+                "title": alert["title"],
+                "message": alert["message"],
+                "status": alert["status"],
+                "tier": room_mode_alert_tier(alert),
+            }
+            for alert in alerts
+        ],
+        "tasks": task_items,
+        "litters": litter_items,
+        "weaningDue": weaning_due,
+        "animals": [dict(animal) for animal in animals],
+        "notes": [dict(note) for note in notes],
+        "primaryActions": primary_actions,
+    }
+
+
+def room_mode_queue(room_id: int, user: AuthContext) -> list[dict[str, Any]]:
+    upsert_active_alerts(user)
+    queue: dict[int, dict[str, Any]] = {}
+
+    def add_item(cage_id: int, cage_code: str, room_name: str, rack_name: str | None, tier: str, reason: str, action: str) -> None:
+        item = queue.setdefault(
+            cage_id,
+            {
+                "cageId": cage_id,
+                "cageCode": cage_code,
+                "room": room_name,
+                "rack": rack_name,
+                "tier": tier,
+                "reasons": [],
+                "primaryAction": action,
+            },
+        )
+        if ROOM_TIER_RANK.get(tier, 0) > ROOM_TIER_RANK.get(str(item["tier"]), 0):
+            item["tier"] = tier
+            item["primaryAction"] = action
+        if reason not in item["reasons"]:
+            item["reasons"].append(reason)
+
+    scope = "" if is_admin(user) else " AND c.lab_id = ?"
+    scope_params: list[Any] = [] if is_admin(user) else [user.lab_id]
+    alert_rows = db().execute(
+        f"""
+        SELECT a.severity, a.category, a.title, a.message, c.id AS cage_id, c.cage_code,
+               r.name AS room_name, k.name AS rack_name
+        FROM alert_notifications a
+        JOIN cages c ON c.id = a.cage_id
+        JOIN rooms r ON r.id = c.room_id
+        LEFT JOIN racks k ON k.id = c.rack_id
+        WHERE a.status IN ('active', 'acknowledged') AND c.room_id = ?
+        {scope}
+        ORDER BY CASE a.severity WHEN 'high' THEN 3 WHEN 'medium' THEN 2 ELSE 1 END DESC, a.last_seen_at DESC
+        LIMIT 80
+        """,
+        [room_id, *scope_params],
+    ).fetchall()
+    for row in alert_rows:
+        tier = room_mode_alert_tier(row)
+        add_item(int(row["cage_id"]), row["cage_code"], row["room_name"], row["rack_name"], tier, row["title"], row["title"])
+
+    today = date.today().isoformat()
+    task_rows = db().execute(
+        f"""
+        SELECT t.id, t.task_type, t.due_on, c.id AS cage_id, c.cage_code,
+               r.name AS room_name, k.name AS rack_name
+        FROM task_assignments t
+        JOIN cages c ON c.id = t.cage_id
+        JOIN rooms r ON r.id = c.room_id
+        LEFT JOIN racks k ON k.id = c.rack_id
+        WHERE t.status IN ('pending', 'in_progress') AND t.due_on <= ? AND c.room_id = ?
+        {scope}
+        ORDER BY t.due_on ASC, t.id DESC
+        LIMIT 80
+        """,
+        [today, room_id, *scope_params],
+    ).fetchall()
+    for row in task_rows:
+        add_item(
+            int(row["cage_id"]),
+            row["cage_code"],
+            row["room_name"],
+            row["rack_name"],
+            "ACTION",
+            f"{row['task_type']} due {row['due_on']}",
+            "Complete task",
+        )
+
+    litter_rows = db().execute(
+        f"""
+        SELECT l.id, l.birth_date, l.survived_count, c.id AS cage_id, c.cage_code,
+               r.name AS room_name, k.name AS rack_name
+        FROM litters l
+        JOIN cages c ON c.id = l.cage_id
+        JOIN rooms r ON r.id = c.room_id
+        LEFT JOIN racks k ON k.id = c.rack_id
+        WHERE l.weaned_on IS NULL AND c.room_id = ?
+        {scope}
+        ORDER BY l.birth_date ASC, c.cage_code ASC
+        LIMIT 120
+        """,
+        [room_id, *scope_params],
+    ).fetchall()
+    today_date = date.today()
+    horizon = today_date + timedelta(days=7)
+    for row in litter_rows:
+        try:
+            due = date.fromisoformat(str(row["birth_date"])) + timedelta(days=21)
+        except (TypeError, ValueError):
+            continue
+        if due > horizon:
+            continue
+        tier = "ACTION" if due <= today_date else "WATCH"
+        add_item(
+            int(row["cage_id"]),
+            row["cage_code"],
+            row["room_name"],
+            row["rack_name"],
+            tier,
+            f"Wean due {due.isoformat()} ({int(row['survived_count'] or 0)} survived)",
+            "Record weaning",
+        )
+
+    return sorted(
+        queue.values(),
+        key=lambda item: (-ROOM_TIER_RANK.get(str(item["tier"]), 0), str(item["cageCode"])),
+    )[:80]
+
+
+@app.get("/api/room-mode/summary")
+@require_auth()
+def room_mode_summary() -> Response:
+    raw_room_id = request.args.get("roomId")
+    room_id = int(raw_room_id) if raw_room_id else None
+    rooms = room_mode_rooms(g.user)
+    selected = room_mode_selected_room(g.user, room_id)
+    if not selected:
+        return jsonify(
+            {
+                "rooms": [],
+                "selectedRoom": None,
+                "stats": {
+                    "cageCount": 0,
+                    "queueCount": 0,
+                    "stopCount": 0,
+                    "actionCount": 0,
+                    "watchCount": 0,
+                    "scannedCount": 0,
+                    "remainingCount": 0,
+                },
+                "actionQueue": [],
+                "activePass": None,
+            }
+        )
+    queue = room_mode_queue(int(selected["id"]), g.user)
+    active = room_mode_latest_active_pass(g.user, int(selected["id"]))
+    active_summary = room_mode_pass_summary(int(active["id"]), g.user) if active else None
+    return jsonify(
+        {
+            "rooms": rooms,
+            "selectedRoom": selected,
+            "stats": {
+                "cageCount": int(selected["cageCount"]),
+                "queueCount": len(queue),
+                "stopCount": sum(1 for item in queue if item["tier"] == "STOP"),
+                "actionCount": sum(1 for item in queue if item["tier"] == "ACTION"),
+                "watchCount": sum(1 for item in queue if item["tier"] == "WATCH"),
+                "scannedCount": active_summary["scannedCages"] if active_summary else 0,
+                "remainingCount": active_summary["remainingCages"] if active_summary else int(selected["cageCount"]),
+            },
+            "actionQueue": queue,
+            "activePass": active_summary,
+        }
+    )
+
+
+@app.get("/api/room-mode/cage/<code>")
+@require_auth()
+def room_mode_cage(code: str) -> Response:
+    payload = room_mode_cage_payload(code, g.user)
+    if not payload:
+        return jsonify({"error": "Cage not found"}), 404
+    return jsonify(payload)
+
+
+@app.post("/api/room-mode/pass/start")
+@require_auth(("Technician", "PI", "Admin"))
+def room_mode_start_pass() -> Response:
+    payload = request.get_json(force=True) or {}
+    room_id = int(payload.get("roomId") or 0)
+    if room_id <= 0:
+        return jsonify({"error": "roomId is required"}), 400
+    selected = room_mode_selected_room(g.user, room_id)
+    if not selected:
+        return jsonify({"error": "Room not found"}), 404
+    existing = room_mode_latest_active_pass(g.user, room_id)
+    if existing:
+        summary = room_mode_pass_summary(int(existing["id"]), g.user)
+        return jsonify({"id": int(existing["id"]), "existing": True, "summary": summary})
+    cur = db().execute(
+        "INSERT INTO cage_census_sessions (room_id, started_by, started_at, status, notes) VALUES (?, ?, ?, 'active', ?)",
+        (room_id, g.user.user_id, now_iso(), payload.get("notes") or "Room Mode pass"),
+    )
+    db().commit()
+    audit_log(g.user.user_id, "room_pass", cur.lastrowid, "start", None, {"roomId": room_id})
+    summary = room_mode_pass_summary(int(cur.lastrowid), g.user)
+    return jsonify({"id": int(cur.lastrowid), "existing": False, "summary": summary}), 201
+
+
+@app.post("/api/room-mode/pass/<int:session_id>/scan")
+@require_auth(("Technician", "PI", "Admin"))
+def room_mode_scan_pass(session_id: int) -> Response:
+    session = ensure_room_pass_scope(session_id, g.user)
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+    if session["status"] != "active":
+        return jsonify({"error": "Session is not active"}), 409
+    payload = request.get_json(force=True) or {}
+    code = str(payload.get("code") or "").strip()
+    if not code:
+        return jsonify({"error": "code is required"}), 400
+    cage_payload_detail = room_mode_cage_payload(code, g.user)
+    if not cage_payload_detail:
+        return jsonify({"error": "Cage not found"}), 404
+    cage = cage_payload_detail["cage"]
+    db().execute(
+        storage.sql_upsert(
+            "cage_census_scans",
+            [
+                "session_id",
+                "cage_id",
+                "scanned_at",
+                "scanned_by",
+                "observed_male_count",
+                "observed_female_count",
+                "observed_status",
+            ],
+            ["session_id", "cage_id"],
+            [
+                "scanned_at",
+                "scanned_by",
+                "observed_male_count",
+                "observed_female_count",
+                "observed_status",
+            ],
+        ),
+        (
+            session_id,
+            int(cage["id"]),
+            now_iso(),
+            g.user.user_id,
+            payload.get("maleCount", cage["maleCount"]),
+            payload.get("femaleCount", cage["femaleCount"]),
+            payload.get("breedingStatus", cage["breedingStatus"]),
+        ),
+    )
+    db().commit()
+    out_of_room = session["room_id"] is not None and int(cage["roomId"]) != int(session["room_id"])
+    return jsonify(
+        {
+            "ok": True,
+            "outOfRoom": out_of_room,
+            "cage": cage_payload_detail,
+            "summary": room_mode_pass_summary(session_id, g.user),
+        }
+    )
+
+
+@app.get("/api/room-mode/pass/<int:session_id>/summary")
+@require_auth()
+def get_room_mode_pass_summary(session_id: int) -> Response:
+    summary = room_mode_pass_summary(session_id, g.user)
+    if not summary:
+        return jsonify({"error": "Session not found"}), 404
+    return jsonify(summary)
+
+
+@app.post("/api/room-mode/pass/<int:session_id>/complete")
+@require_auth(("Technician", "PI", "Admin"))
+def room_mode_complete_pass(session_id: int) -> Response:
+    session = ensure_room_pass_scope(session_id, g.user)
+    if not session:
+        return jsonify({"error": "Session not found"}), 404
+    payload = request.get_json(silent=True) or {}
+    if session["status"] != "completed":
+        db().execute(
+            "UPDATE cage_census_sessions SET status = 'completed', ended_at = ?, notes = COALESCE(?, notes) WHERE id = ?",
+            (now_iso(), payload.get("notes"), session_id),
+        )
+        db().commit()
+        audit_log(g.user.user_id, "room_pass", session_id, "complete", {"status": session["status"]}, {"status": "completed"})
+    return jsonify({"ok": True, "summary": room_mode_pass_summary(session_id, g.user)})
 
 
 @app.get("/api/projects")

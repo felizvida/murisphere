@@ -2,7 +2,8 @@
 
 Murisphere is a cage-first mouse colony and vivarium management platform for technicians, researchers, and animal facility managers. It is designed around the real workflow of a printed cage card in the room, a phone in hand, and a shared operational record that has to stay biologically accurate, audit-ready, and fast.
 
-The product intentionally supports **two complete operating modes**:
+The product intentionally supports **three complete operating modes**:
+- **Room Mode** for phone-first technician room passes, QR scans, action queues, and end-of-shift reconciliation.
 - **Traditional workspace** for visual review, dashboards, batch operations, reporting, and admin workflows.
 - **Chat-first console** for intent-driven work on phone, tablet, or desktop, especially when someone already knows what they need to ask, change, or print.
 
@@ -21,9 +22,10 @@ Mouse colony work is full of high-frequency, low-tolerance tasks:
 
 Murisphere is built so the same system can support room-speed work, facility oversight, and research planning without forcing everyone into the same interaction style.
 
-## Two Ways To Work
+## Three Ways To Work
 | Mode | Best for | Typical users |
 |---|---|---|
+| Room Mode | phone scan loop, room pass, cage-side updates, task closure, shift reconciliation | technicians and managers on rounds |
 | Traditional workspace | visual triage, dashboards, cohorts, analytics, reports, batch operations | facility managers, admins, PIs, technicians on tablets/desktops |
 | Chat-first console | quick questions, direct updates, phone workflows, print-and-scan loops | technicians, researchers, managers on rounds |
 | Mixed use | scan in chat, continue in workspace; review in workspace, finish in chat | everyone |
@@ -51,12 +53,13 @@ A complete Murisphere cage card includes:
 - Facility operations for capacity, quotas, requests, SLAs, chargeback, and room/rack monitoring.
 - Compliance coverage for protocol expiry hard-stops, deviations, quarantine, signatures, and audit history.
 - Research support for pedigree, genotyping orders/callbacks, cohort planning, reservations, handoffs, and closeouts.
-- Dual-mode UI so users can work visually in the workspace or conversationally in chat.
+- Room Mode for phone-first room passes: choose room, start pass, scan cages, see STOP/ACTION/WATCH/INFO signals, record common cage-side actions, and complete reconciliation.
+- Multi-mode UI so users can work phone-first in Room Mode, visually in the workspace, or conversationally in chat.
 - Chat-first daily workflows for weaning queues, mortality follow-up, room batch cage-card printing, quota pressure, request SLA review, sample results, matching animal reservations, and closeout report shortcuts.
 
 ## Technology
 - Backend: Flask + SQLite today, with explicit PostgreSQL runtime support through `storage.py`, `storage_sqlite.py`, and `storage_postgres.py`
-- Frontend: responsive HTML/CSS/JS with both workspace and chat-first interfaces
+- Frontend: responsive HTML/CSS/JS with Room Mode, workspace, and chat-first interfaces
 - Desktop companion: Tauri shell for centralized Murisphere deployments
 - Automation: GitHub Actions CI/CD with container smoke checks and artifact quality gates
 
@@ -78,6 +81,8 @@ python3 app.py
 ```
 
 Open [http://localhost:8000](http://localhost:8000).
+
+Phone-first Room Mode is available at [http://localhost:8000/room/](http://localhost:8000/room/).
 
 ## Tutorial-Ready Demo Seed
 For onboarding, screenshots, and role-based walkthroughs, use the dedicated training seed:

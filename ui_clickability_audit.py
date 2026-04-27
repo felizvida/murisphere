@@ -16,8 +16,9 @@
 
 """UI clickability contract audit.
 
-Checks whether interactive UI items in templates/index.html are actually wired as clickable
-or submit-capable in static/app.js, and whether local links map to Flask routes.
+Checks whether interactive UI items in core templates are actually wired as clickable
+or submit-capable in their paired JavaScript files, and whether local links map to
+Flask routes.
 
 Outputs:
 - docs/test_reports/UI_CLICKABILITY_RESULT.json
@@ -38,8 +39,10 @@ import app as appmod
 from werkzeug.exceptions import MethodNotAllowed, NotFound
 
 ROOT = Path(__file__).resolve().parent
-INDEX_HTML = ROOT / "templates" / "index.html"
-APP_JS = ROOT / "static" / "app.js"
+AUDITED_PAGES = [
+    ("workspace", ROOT / "templates" / "index.html", ROOT / "static" / "app.js"),
+    ("room-mode", ROOT / "templates" / "room.html", ROOT / "static" / "room.js"),
+]
 OUT_DIR = ROOT / "docs" / "test_reports"
 OUT_JSON = OUT_DIR / "UI_CLICKABILITY_RESULT.json"
 OUT_HTML = OUT_DIR / "UI_CLICKABILITY_REPORT.html"
@@ -64,7 +67,7 @@ class Link:
     id: str | None
 
 
-class IndexParser(HTMLParser):
+class UiParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
         self.forms: list[Form] = []
@@ -227,104 +230,105 @@ def build_html_report(summary: dict[str, Any], results: list[dict[str, Any]]) ->
 def main() -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    parser = IndexParser()
-    parser.feed(INDEX_HTML.read_text(encoding="utf-8"))
-
-    js_text = APP_JS.read_text(encoding="utf-8")
-    event_map, tabs_wired = parse_js_wiring(js_text)
-
     results: list[dict[str, Any]] = []
 
-    # Form submission wiring
-    for f in parser.forms:
-        if not f.id:
-            continue
-        wired = "submit" in event_map.get(f.id, set())
-        results.append(
-            {
-                "category": "form",
-                "item": f"#{f.id}",
-                "status": "pass" if wired else "fail",
-                "detail": "submit listener found" if wired else "missing submit listener in static/app.js",
-            }
-        )
+    for page_name, template_path, js_path in AUDITED_PAGES:
+        parser = UiParser()
+        parser.feed(template_path.read_text(encoding="utf-8"))
 
-    # Button wiring
-    for b in parser.buttons:
-        if b.data_tab:
-            section_ok = f"tab-{b.data_tab}" in parser.sections
-            status = "pass" if tabs_wired and section_ok else "fail"
-            detail = "tab click delegation + section present" if status == "pass" else "tab button missing delegation or target section"
+        js_text = js_path.read_text(encoding="utf-8")
+        event_map, tabs_wired = parse_js_wiring(js_text)
+
+        # Form submission wiring
+        for f in parser.forms:
+            if not f.id:
+                continue
+            wired = "submit" in event_map.get(f.id, set())
             results.append(
                 {
-                    "category": "tab",
-                    "item": f"data-tab={b.data_tab}",
-                    "status": status,
-                    "detail": detail,
+                    "category": f"{page_name}:form",
+                    "item": f"#{f.id}",
+                    "status": "pass" if wired else "fail",
+                    "detail": f"submit listener found in {js_path.name}" if wired else f"missing submit listener in {js_path.name}",
                 }
             )
-            continue
 
-        if not b.id:
+        # Button wiring
+        for b in parser.buttons:
+            if b.data_tab:
+                section_ok = f"tab-{b.data_tab}" in parser.sections
+                status = "pass" if tabs_wired and section_ok else "fail"
+                detail = "tab click delegation + section present" if status == "pass" else "tab button missing delegation or target section"
+                results.append(
+                    {
+                        "category": f"{page_name}:tab",
+                        "item": f"data-tab={b.data_tab}",
+                        "status": status,
+                        "detail": detail,
+                    }
+                )
+                continue
+
+            if not b.id:
+                results.append(
+                    {
+                        "category": f"{page_name}:button",
+                        "item": "<button(no-id)>",
+                        "status": "skip",
+                        "detail": "no stable id; skipped explicit wiring check",
+                    }
+                )
+                continue
+
+            events = event_map.get(b.id, set())
+            wired = "click" in events or "submit" in events or "change" in events
+            if not wired and b.kind == "submit" and b.parent_form_id:
+                wired = "submit" in event_map.get(b.parent_form_id, set())
             results.append(
                 {
-                    "category": "button",
-                    "item": "<button(no-id)>",
-                    "status": "skip",
-                    "detail": "no stable id; skipped explicit wiring check",
+                    "category": f"{page_name}:button",
+                    "item": f"#{b.id}",
+                    "status": "pass" if wired else "fail",
+                    "detail": (
+                        f"clickable via direct or form submit listener in {js_path.name}"
+                        if wired
+                        else f"missing click/submit/change listener (or form submit handler) in {js_path.name}"
+                    ),
                 }
             )
-            continue
 
-        events = event_map.get(b.id, set())
-        wired = "click" in events or "submit" in events or "change" in events
-        if not wired and b.kind == "submit" and b.parent_form_id:
-            wired = "submit" in event_map.get(b.parent_form_id, set())
-        results.append(
-            {
-                "category": "button",
-                "item": f"#{b.id}",
-                "status": "pass" if wired else "fail",
-                "detail": (
-                    "clickable via direct or form submit listener"
-                    if wired
-                    else "missing click/submit/change listener (or form submit handler)"
-                ),
-            }
-        )
-
-    # Link routability for local links
-    for link in parser.links:
-        href = link.href.strip()
-        if href.startswith("http://") or href.startswith("https://") or href.startswith("#"):
+        # Link routability for local links
+        for link in parser.links:
+            href = link.href.strip()
+            if href.startswith("http://") or href.startswith("https://") or href.startswith("#"):
+                results.append(
+                    {
+                        "category": f"{page_name}:link",
+                        "item": href,
+                        "status": "pass",
+                        "detail": "external/anchor link",
+                    }
+                )
+                continue
+            if not href.startswith("/"):
+                results.append(
+                    {
+                        "category": f"{page_name}:link",
+                        "item": href,
+                        "status": "skip",
+                        "detail": "relative link not audited",
+                    }
+                )
+                continue
+            exists = route_exists_for_get(href)
             results.append(
                 {
-                    "category": "link",
+                    "category": f"{page_name}:link",
                     "item": href,
-                    "status": "pass",
-                    "detail": "external/anchor link",
+                    "status": "pass" if exists else "fail",
+                    "detail": "matched Flask route map" if exists else "no matching GET route",
                 }
             )
-            continue
-        if not href.startswith("/"):
-            results.append(
-                {
-                    "category": "link",
-                    "item": href,
-                    "status": "skip",
-                    "detail": "relative link not audited",
-                }
-            )
-            continue
-        exists = route_exists_for_get(href)
-        results.append(
-            {
-                "category": "link",
-                "item": href,
-                "status": "pass" if exists else "fail",
-                "detail": "matched Flask route map" if exists else "no matching GET route",
-            }
-        )
 
     summary = grade_results(results)
     payload = {

@@ -7,11 +7,14 @@ This document enumerates routine workflows for:
 It maps each workflow to implemented features and identifies remaining roadmap gaps.
 Release baseline: `v0.3.0` (2026-03-05).
 
+Room Mode update: the phone-first room-pass loop is now implemented as `/room/` with `/api/room-mode/*` endpoints.
+
 ## Mouse Technician Typical Routine Workflows
 
 1. Start-of-shift room rounds and cage checks  
 Features:
 - Scan card to open cage: `GET /api/scan/<code>`, `GET /api/public/scan/<token>`
+- Phone-first Room Mode: `/room/`, `GET /api/room-mode/summary`, `GET /api/room-mode/cage/<code>`
 - Mobile UI visual cage alert overlay (row highlight + alert badge)
 - Cage health rounds: `POST /api/health/rounds`, `POST /api/health/rounds/<id>/observe`, `POST /api/health/rounds/<id>/complete`
 - Fast cage updates and notes: `PATCH /api/cages/<id>`, `POST /api/cages/<id>/note`
@@ -25,6 +28,7 @@ Features:
 3. Census and reconciliation  
 Features:
 - Census session start/scan/complete: `/api/census/sessions*`
+- Room Mode pass start/scan/complete: `/api/room-mode/pass/start`, `/api/room-mode/pass/<id>/scan`, `/api/room-mode/pass/<id>/complete`
 - Reconciliation reports via cage detail + audit logs
 
 4. Husbandry support and room logistics  

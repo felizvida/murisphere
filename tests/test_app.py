@@ -488,6 +488,93 @@ class AppIntegrationTests(unittest.TestCase):
         self.assertIn("${esc(e.message)}", body)
         self.assertIn("/?scanToken=${encodeURIComponent(token)}", body)
         self.assertIn("/chat/?scanToken=${encodeURIComponent(token)}", body)
+        self.assertIn("/room/?scanToken=${encodeURIComponent(token)}", body)
+
+    def test_room_mode_page_and_phone_pass_workflow(self) -> None:
+        token = self.login("tech@murisphere.local", "tech1234")
+        page = self.client.get("/room/")
+        self.assertEqual(page.status_code, 200)
+        body = page.data.decode("utf-8")
+        self.assertIn("Room Mode", body)
+        self.assertIn('id="startPassBtn"', body)
+        self.assertIn("/static/room.js", body)
+
+        with sqlite3.connect(appmod.DB_PATH) as conn:
+            now = datetime.now(UTC).isoformat()
+            tech_id = conn.execute("SELECT id FROM users WHERE email = 'tech@murisphere.local'").fetchone()[0]
+            conn.execute(
+                """
+                INSERT INTO task_assignments (task_type, cage_id, due_on, assigned_to, status, created_by, created_at)
+                VALUES ('wean', 1, ?, ?, 'pending', ?, ?)
+                """,
+                ((date.today() - timedelta(days=1)).isoformat(), tech_id, tech_id, now),
+            )
+            conn.execute(
+                """
+                INSERT INTO litters (cage_id, birth_date, litter_size, survived_count, weaned_on, created_at)
+                VALUES (1, ?, 6, 5, NULL, ?)
+                """,
+                ((date.today() - timedelta(days=24)).isoformat(), now),
+            )
+            conn.commit()
+
+        summary = self.client.get("/api/room-mode/summary", headers=self.auth_headers(token))
+        self.assertEqual(summary.status_code, 200)
+        summary_payload = summary.get_json()
+        self.assertTrue(summary_payload["rooms"])
+        self.assertEqual(summary_payload["selectedRoom"]["id"], 1)
+        self.assertGreaterEqual(summary_payload["stats"]["queueCount"], 1)
+        self.assertTrue(any(item["cageCode"] == "C-A1-001" for item in summary_payload["actionQueue"]))
+
+        start = self.client.post(
+            "/api/room-mode/pass/start",
+            headers=self.auth_headers(token),
+            json={"roomId": 1},
+        )
+        self.assertEqual(start.status_code, 201)
+        pass_id = start.get_json()["id"]
+
+        detail = self.client.get("/api/room-mode/cage/C-A1-001", headers=self.auth_headers(token))
+        self.assertEqual(detail.status_code, 200)
+        detail_payload = detail.get_json()
+        self.assertEqual(detail_payload["cage"]["cageCode"], "C-A1-001")
+        self.assertIn(detail_payload["tier"], {"ACTION", "STOP", "WATCH", "INFO"})
+        self.assertTrue(detail_payload["primaryActions"])
+        self.assertTrue(detail_payload["weaningDue"])
+
+        scan = self.client.post(
+            f"/api/room-mode/pass/{pass_id}/scan",
+            headers=self.auth_headers(token),
+            json={"code": "C-A1-001", "maleCount": 1, "femaleCount": 2, "breedingStatus": "Breeding"},
+        )
+        self.assertEqual(scan.status_code, 200)
+        scan_payload = scan.get_json()
+        self.assertFalse(scan_payload["outOfRoom"])
+        self.assertEqual(scan_payload["summary"]["scannedCages"], 1)
+
+        complete = self.client.post(
+            f"/api/room-mode/pass/{pass_id}/complete",
+            headers=self.auth_headers(token),
+            json={"notes": "Room pass complete"},
+        )
+        self.assertEqual(complete.status_code, 200)
+        self.assertEqual(complete.get_json()["summary"]["status"], "completed")
+
+    def test_room_mode_frontend_contract(self) -> None:
+        template = Path("templates/room.html").read_text(encoding="utf-8")
+        script = Path("static/room.js").read_text(encoding="utf-8")
+        combined = template + script
+        for required in [
+            'id="roomList"',
+            'id="scanForm"',
+            'id="actionQueue"',
+            'id="cageDetail"',
+            'id="completePassBtn"',
+        ]:
+            self.assertIn(required, combined)
+        self.assertIn("/api/room-mode/summary", script)
+        self.assertIn("/api/room-mode/pass/start", script)
+        self.assertIn("/api/room-mode/cage/", script)
 
     def test_frontend_handles_session_expiry_contract(self) -> None:
         workspace_js = Path("static/app.js").read_text(encoding="utf-8")
